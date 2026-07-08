@@ -246,5 +246,30 @@
       "Vali „Lisa avakuvale\"",
       "Vajuta „Lisa\""
     ]
+  },
+  "voice": {
+    "speak": "Räägi",
+    "stop": "Peata",
+    "processing": "Töötlen…",
+    "filled": "AI täitis vormi — kontrolli ja salvesta.",
+    "tooShort": "Salvestus liiga lühike, proovi uuesti.",
+    "micDenied": "Mikrofoni ligipääs puudub."
+  },
+  "dateRange": {
+    "period": "Periood",
+    "from": "Alates",
+    "to": "Kuni",
+    "presets": {
+      "today": "Täna",
+      "yesterday": "Eile",
+      "thisWeek": "See nädal",
+      "lastWeek": "Eelmine nädal",
+      "thisMonth": "See kuu",
+      "lastMonth": "Eelmine kuu",
+      "thisYear": "See aasta",
+      "lastYear": "Eelmine aasta",
+      "all": "Kõik",
+      "custom": "Kohandatud"
+    }
   }
 }
