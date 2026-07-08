@@ -8,7 +8,7 @@ export function Logo({ className = "h-11 sm:h-12 md:h-14" }: { className?: strin
       width="auto"
       height="auto"
       className={`w-auto object-contain ${className}`}
-      style={{ maxHeight: 56 }}
+      style={{ maxHeight: 72 }}
     />
   );
 }
