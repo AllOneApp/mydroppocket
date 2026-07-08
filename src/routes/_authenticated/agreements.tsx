@@ -17,6 +17,7 @@ import { RecordActions } from "@/components/RecordActions";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
 import { extractDocument } from "@/lib/ocr.functions";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_authenticated/agreements")({
   head: () => ({ meta: [{ title: "Agreements — DropPocket" }] }),
@@ -40,6 +41,7 @@ type Row = {
 
 function AgreementsPage() {
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
 
@@ -53,28 +55,28 @@ function AgreementsPage() {
   });
 
   async function del(r: Row) {
-    if (!confirm("Delete this agreement?")) return;
+    if (!confirm(t("agreements.confirmDelete"))) return;
     if (r.file_path) await deleteFile(r.file_path);
     await supabase.from("agreements").delete().eq("id", r.id);
     qc.invalidateQueries({ queryKey: ["agreements"] });
-    toast.success("Deleted");
+    toast.success(t("common.deleted"));
   }
 
   return (
     <AppShell>
       <div className="mb-8 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-3xl font-bold">Agreements</h1>
-          <p className="mt-1 text-muted-foreground">Installments, warranty extensions, contracts and service plans.</p>
+          <h1 className="text-3xl font-bold">{t("agreements.title")}</h1>
+          <p className="mt-1 text-muted-foreground">{t("agreements.desc")}</p>
         </div>
-        <Button onClick={() => { setEditing(null); setOpen(true); }} className="shrink-0 brand-gradient-bg text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" />Add</Button>
+        <Button onClick={() => { setEditing(null); setOpen(true); }} className="shrink-0 brand-gradient-bg text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" />{t("common.add")}</Button>
       </div>
 
       {data?.length === 0 ? (
         <div className="card-soft flex flex-col items-center p-12 text-center">
           <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-accent"><FileText className="h-6 w-6 text-primary" /></div>
-          <h3 className="text-lg font-semibold">No agreements yet</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Upload your first contract to keep it safe.</p>
+          <h3 className="text-lg font-semibold">{t("agreements.empty.title")}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{t("agreements.empty.desc")}</p>
         </div>
       ) : (
         <div className="grid gap-3">
@@ -84,13 +86,13 @@ function AgreementsPage() {
                 <button onClick={() => { setEditing(r); setOpen(true); }} className="min-w-0 text-left">
                   <h3 className="truncate font-semibold hover:text-primary">{r.title}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {r.company ?? "—"} · {TYPES.find((t) => t.value === r.agreement_type)?.label ?? r.agreement_type}
+                    {r.company ?? "—"} · {t(`agreements.types.${r.agreement_type}` as const, { defaultValue: r.agreement_type })}
                     {r.agreement_number ? ` · #${r.agreement_number}` : ""}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {r.start_date ?? "—"} → {r.end_date ?? "—"}
-                    {r.monthly_payment ? ` · ${formatCurrency(Number(r.monthly_payment), r.currency ?? "EUR")}/mo` : ""}
-                    {r.total_amount ? ` · Total ${formatCurrency(Number(r.total_amount), r.currency ?? "EUR")}` : ""}
+                    {r.monthly_payment ? ` · ${formatCurrency(Number(r.monthly_payment), r.currency ?? "EUR")}${t("agreements.perMonth")}` : ""}
+                    {r.total_amount ? ` · ${t("agreements.totalPrefix", { amount: formatCurrency(Number(r.total_amount), r.currency ?? "EUR") })}` : ""}
                   </p>
                 </button>
               </div>
@@ -107,6 +109,7 @@ function AgreementsPage() {
 
 function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null }) {
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const extract = useServerFn(extractDocument);
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -143,9 +146,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           currency: (d.currency as string) || f.currency,
           title: f.title || (d.company as string) || "",
         }));
-        toast.success("Fields auto-filled");
+        toast.success(t("common.autoFilled"));
       } else toast.error(res.error);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Scan failed"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("common.scanFailed")); }
     finally { setScanning(false); }
   }
 
@@ -175,39 +178,39 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       else await supabase.from("agreements").insert(payload);
       qc.invalidateQueries({ queryKey: ["agreements"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success(row ? "Updated" : "Agreement added");
+      toast.success(row ? t("common.updated") : t("agreements.added"));
       onOpenChange(false);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("common.failed")); }
     finally { setSaving(false); }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle>{row ? "Edit agreement" : "Add agreement"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{row ? t("agreements.editTitle") : t("agreements.addTitle")}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="space-y-4">
           <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
-          <div><Label>Title *</Label><Input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-          <div><Label>Type</Label>
+          <div><Label>{t("agreements.titleField")} *</Label><Input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
+          <div><Label>{t("agreements.type")}</Label>
             <Select value={form.agreement_type} onValueChange={(v) => setForm({ ...form, agreement_type: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+              <SelectContent>{TYPES.map((ty) => <SelectItem key={ty.value} value={ty.value}>{t(`agreements.types.${ty.value}` as const, { defaultValue: ty.label })}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Company</Label><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} /></div>
-            <div><Label>Agreement #</Label><Input value={form.agreement_number} onChange={(e) => setForm({ ...form, agreement_number: e.target.value })} /></div>
+            <div><Label>{t("agreements.company")}</Label><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} /></div>
+            <div><Label>{t("agreements.number")}</Label><Input value={form.agreement_number} onChange={(e) => setForm({ ...form, agreement_number: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Start date</Label><Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></div>
-            <div><Label>End date</Label><Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
+            <div><Label>{t("agreements.startDate")}</Label><Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></div>
+            <div><Label>{t("agreements.endDate")}</Label><Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Monthly</Label><Input type="number" step="0.01" value={form.monthly_payment} onChange={(e) => setForm({ ...form, monthly_payment: e.target.value })} /></div>
-            <div><Label>Total</Label><Input type="number" step="0.01" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} /></div>
+            <div><Label>{t("agreements.monthly")}</Label><Input type="number" step="0.01" value={form.monthly_payment} onChange={(e) => setForm({ ...form, monthly_payment: e.target.value })} /></div>
+            <div><Label>{t("agreements.total")}</Label><Input type="number" step="0.01" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} /></div>
           </div>
-          <div><Label>Notes</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? "Saving…" : "Save"}</Button>
+          <div><Label>{t("agreements.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
       </DialogContent>
     </Dialog>
