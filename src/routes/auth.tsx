@@ -10,6 +10,7 @@ import { Logo } from "@/components/Logo";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Sign in — DropPocket" }] }),
@@ -60,7 +61,10 @@ function AuthPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex max-w-md flex-col items-center px-6 pt-12">
-        <Link to="/" className="mb-8"><Logo /></Link>
+        <div className="mb-8 flex w-full items-center justify-between">
+          <Link to="/"><Logo /></Link>
+          <LanguageSwitcher />
+        </div>
         <div className="card-soft w-full p-8">
           <h1 className="mb-1 text-2xl font-semibold">{t("auth.welcome")}</h1>
           <p className="mb-6 text-sm text-muted-foreground">{t("auth.subtitle")}</p>

@@ -209,5 +209,26 @@
     "title": "See leht ei laadinud",
     "desc": "Meie poolt läks midagi valesti. Proovi värskendada või mine avalehele.",
     "tryAgain": "Proovi uuesti"
+  },
+  "install": {
+    "title": "📱 Lisa DropPocket oma avakuvale",
+    "desc": "Lisa DropPocket oma telefoni avakuvale ja kasuta seda nagu päris mobiilirakendust.",
+    "benefit1": "Kiirem avamine",
+    "benefit2": "Täisekraan",
+    "benefit3": "Mugavam kasutamine",
+    "benefit4": "Kiirem ligipääs dokumentidele",
+    "installNow": "✔ Installi kohe",
+    "showHow": "Näita juhiseid",
+    "later": "Hiljem",
+    "androidSteps": [
+      "Vajuta paremas ülanurgas ⋮",
+      "Vali „Installi rakendus\" või „Lisa avakuvale\"",
+      "Kinnita installimine"
+    ],
+    "iosSteps": [
+      "Vajuta Safari allosas „Jaga\"",
+      "Vali „Lisa avakuvale\"",
+      "Vajuta „Lisa\""
+    ]
   }
 }

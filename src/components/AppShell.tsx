@@ -6,6 +6,7 @@ import { Logo } from "./Logo";
 import { Button } from "./ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 const nav = [
   { to: "/dashboard", icon: LayoutDashboard, key: "dashboard" },
@@ -32,7 +33,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const Sidebar = (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-4">
-      <div className="mb-8 px-2 pt-2"><Logo className="h-11" /></div>
+      <div className="mb-8 px-2 pt-2"><Logo className="h-12" /></div>
       <nav className="flex-1 space-y-1">
         {nav.map(({ to, icon: Icon, key }) => {
           const active = location.pathname === to;
@@ -52,9 +53,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           );
         })}
       </nav>
-      <Button variant="ghost" onClick={signOut} className="mt-4 justify-start gap-3">
-        <LogOut className="h-4 w-4" /> {t("common.signOut")}
-      </Button>
+      <div className="mt-4 flex flex-col gap-2">
+        <LanguageSwitcher className="self-start" />
+        <Button variant="ghost" onClick={signOut} className="justify-start gap-3">
+          <LogOut className="h-4 w-4" /> {t("common.signOut")}
+        </Button>
+      </div>
     </aside>
   );
 
@@ -70,7 +74,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-2 border-b border-border bg-card/50 px-3 py-3 backdrop-blur md:hidden">
           <Button variant="ghost" size="icon" onClick={() => setOpen(true)}><Menu className="h-5 w-5" /></Button>
-          <Logo className="h-9 sm:h-[42px]" />
+          <Logo className="h-11" />
+          <div className="ml-auto"><LanguageSwitcher /></div>
         </header>
         <main className="min-w-0 flex-1 p-6 md:p-10">
           <div className="mx-auto max-w-6xl">{children}</div>

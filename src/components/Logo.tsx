@@ -1,6 +1,6 @@
 import logoAsset from "@/assets/droppocket-logo.png.asset.json";
 
-export function Logo({ className = "h-9 sm:h-[42px] md:h-12" }: { className?: string }) {
+export function Logo({ className = "h-11 sm:h-12 md:h-14" }: { className?: string }) {
   return (
     <img
       src={logoAsset.url}
@@ -8,7 +8,7 @@ export function Logo({ className = "h-9 sm:h-[42px] md:h-12" }: { className?: st
       width="auto"
       height="auto"
       className={`w-auto object-contain ${className}`}
-      style={{ maxHeight: 48 }}
+      style={{ maxHeight: 56 }}
     />
   );
 }

@@ -3,6 +3,7 @@ import { ShieldCheck, Wallet, FileText, ArrowRight, Sparkles, Lock, Search } fro
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -16,7 +17,8 @@ function Landing() {
         <Link to="/" className="flex shrink-0 items-center" aria-label="DropPocket">
           <Logo />
         </Link>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          <LanguageSwitcher />
           <Link to="/auth"><Button variant="ghost" size="sm" className="px-2 sm:px-3">{t("common.signIn")}</Button></Link>
           <Link to="/auth"><Button size="sm" className="brand-gradient-bg px-3 text-primary-foreground sm:px-4">{t("common.getStarted")}</Button></Link>
         </div>

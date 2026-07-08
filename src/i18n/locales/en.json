@@ -209,5 +209,26 @@
     "title": "This page didn't load",
     "desc": "Something went wrong on our end. You can try refreshing or head back home.",
     "tryAgain": "Try again"
+  },
+  "install": {
+    "title": "📱 Add DropPocket to your home screen",
+    "desc": "Add DropPocket to your phone's home screen and use it like a real mobile app.",
+    "benefit1": "Faster launch",
+    "benefit2": "Full screen",
+    "benefit3": "Smoother experience",
+    "benefit4": "Quicker access to your documents",
+    "installNow": "✔ Install now",
+    "showHow": "Show instructions",
+    "later": "Later",
+    "androidSteps": [
+      "Tap the ⋮ menu in the top-right",
+      "Choose \"Install app\" or \"Add to Home screen\"",
+      "Confirm the installation"
+    ],
+    "iosSteps": [
+      "Tap the Share button at the bottom of Safari",
+      "Choose \"Add to Home Screen\"",
+      "Tap \"Add\""
+    ]
   }
 }
