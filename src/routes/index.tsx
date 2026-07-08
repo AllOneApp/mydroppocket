@@ -12,30 +12,32 @@ export const Route = createFileRoute("/")({
 function Landing() {
   const { t } = useTranslation();
   return (
-    <div className="min-h-screen bg-background">
-      <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5 sm:py-6">
-        <Link to="/" className="flex shrink-0 items-center" aria-label="DropPocket">
-          <Logo className="h-14 sm:h-16" />
+    <div className="min-h-screen overflow-x-clip bg-background">
+      <header className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 sm:px-6 sm:py-5">
+        <Link to="/" className="flex min-w-0 items-center" aria-label="DropPocket">
+          <Logo className="h-10 sm:h-14 md:h-16" />
         </Link>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <LanguageSwitcher />
-          <Link to="/auth"><Button variant="ghost" size="sm" className="px-2 sm:px-3">{t("common.signIn")}</Button></Link>
+          <Link to="/auth" className="hidden sm:inline-flex"><Button variant="ghost" size="sm" className="px-3">{t("common.signIn")}</Button></Link>
           <Link to="/auth"><Button size="sm" className="brand-gradient-bg px-3 text-primary-foreground sm:px-4">{t("common.getStarted")}</Button></Link>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6">
-        <section className="pt-14 pb-24 text-center sm:pt-24">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6">
+        <section className="pt-10 pb-20 text-center sm:pt-20 sm:pb-24">
           <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5 text-primary" /> {t("landing.badge")}
           </div>
-          <h1 className="mx-auto max-w-3xl text-5xl font-bold tracking-tight sm:text-6xl">
+          <h1 className="mx-auto max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
             {t("landing.titleA")}<span className="bg-gradient-to-br from-primary to-blue-800 bg-clip-text text-transparent">{t("landing.titleB")}</span>.
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-foreground">
-            Garantiitšekid ei pea enam seisma sahtlis ega pleekima aja jooksul. MyDropPocket aitab sul kõik ostutšekid, garantiid ja järelmaksulepingud turvaliselt ühte kohta salvestada. Leia vajalik dokument sekunditega otsingu või häälkäskluse abil ning prindi või saada see e-postiga edasi alati siis, kui seda vajad. Nii on sinu olulised ostudokumendid alati alles ja käepärast.
-          </p>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">{t("landing.subtitle")}</p>
+          <div className="card-soft mx-auto mt-8 max-w-4xl px-6 py-6 sm:px-10 sm:py-8">
+            <p className="text-base leading-relaxed text-foreground sm:text-lg">
+              Garantiitšekid ei pea enam seisma sahtlis ega pleekima aja jooksul. MyDropPocket aitab sul kõik ostutšekid, garantiid ja järelmaksulepingud turvaliselt ühte kohta salvestada. Leia vajalik dokument sekunditega otsingu või häälkäskluse abil ning prindi või saada see e-postiga edasi alati siis, kui seda vajad. Nii on sinu olulised ostudokumendid alati alles ja käepärast.
+            </p>
+          </div>
+          <p className="mx-auto mt-6 max-w-xl text-base text-muted-foreground sm:text-lg">{t("landing.subtitle")}</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link to="/auth">
               <Button size="lg" className="brand-gradient-bg text-primary-foreground shadow-lg">

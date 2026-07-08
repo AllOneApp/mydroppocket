@@ -153,6 +153,12 @@
   }
 }
 
+html, body {
+  overflow-x: clip;
+  max-width: 100%;
+}
+img, svg, video { max-width: 100%; height: auto; }
+
 @utility card-soft {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
