@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, ShieldCheck, Wallet, FileText, Search, Settings, LogOut, Menu } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Wallet, FileText, Search, Settings, LogOut, Menu, ArrowLeft } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "./Logo";
@@ -23,6 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const { t } = useTranslation();
+  const showBack = location.pathname !== "/dashboard" && location.pathname !== "/";
 
   async function signOut() {
     await qc.cancelQueries();
@@ -72,9 +73,26 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 border-b border-border bg-card/50 px-3 py-3 backdrop-blur md:hidden">
-          <Button variant="ghost" size="icon" onClick={() => setOpen(true)}><Menu className="h-5 w-5" /></Button>
-          <Logo className="h-11" />
+        <header className="flex items-center gap-1 border-b border-border bg-card/50 px-2 py-2 backdrop-blur md:hidden">
+          <Button
+            variant="ghost"
+            onClick={() => setOpen(true)}
+            aria-label="Menu"
+            className="h-11 w-11 shrink-0 p-0"
+          >
+            <Menu style={{ width: 28, height: 28 }} />
+          </Button>
+          {showBack && (
+            <Button
+              variant="ghost"
+              onClick={() => window.history.back()}
+              aria-label="Back"
+              className="h-11 w-11 shrink-0 p-0"
+            >
+              <ArrowLeft style={{ width: 26, height: 26 }} />
+            </Button>
+          )}
+          <Logo className="h-10" />
           <div className="ml-auto"><LanguageSwitcher /></div>
         </header>
         <main className="min-w-0 flex-1 p-6 md:p-10">
