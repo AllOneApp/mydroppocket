@@ -17,7 +17,7 @@ function Landing() {
         <Link to="/" className="flex min-w-0 items-center" aria-label="DropPocket">
           <Logo className="h-10 sm:h-14 md:h-16" />
         </Link>
-        <div className="flex shrink-0 items-center gap-1.5 pb-1 sm:gap-2 sm:pb-2">
+        <div className="flex shrink-0 items-center gap-1.5 pb-3 sm:gap-2 sm:pb-4">
           <LanguageSwitcher />
           <Link to="/auth" className="hidden sm:inline-flex"><Button variant="ghost" size="sm" className="px-3">{t("common.signIn")}</Button></Link>
           <Link to="/auth"><Button size="sm" className="brand-gradient-bg px-3 text-primary-foreground sm:px-4">{t("common.getStarted")}</Button></Link>
