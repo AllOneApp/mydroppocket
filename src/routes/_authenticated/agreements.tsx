@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileDrop } from "@/components/FileDrop";
 import { RecordActions } from "@/components/RecordActions";
+import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
 import { extractDocument } from "@/lib/ocr.functions";
@@ -189,6 +190,23 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("agreements.editTitle") : t("agreements.addTitle")}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="space-y-4">
+          <div className="flex justify-end">
+            <VoiceInput
+              context="agreement"
+              onResult={(d) => setForm((f) => ({
+                ...f,
+                title: (d.title as string) || f.title,
+                company: (d.company as string) || f.company,
+                agreement_number: (d.agreement_number as string) || f.agreement_number,
+                start_date: (d.start_date as string) || f.start_date,
+                end_date: (d.end_date as string) || f.end_date,
+                monthly_payment: d.monthly_payment != null ? String(d.monthly_payment) : f.monthly_payment,
+                total_amount: d.total_amount != null ? String(d.total_amount) : f.total_amount,
+                currency: (d.currency as string) || f.currency,
+                notes: (d.notes as string) || f.notes,
+              }))}
+            />
+          </div>
           <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
           <div><Label>{t("agreements.titleField")} *</Label><Input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
           <div><Label>{t("agreements.type")}</Label>
