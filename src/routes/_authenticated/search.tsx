@@ -29,12 +29,6 @@ function SearchPage() {
       const like = `%${kw}%`;
       const asNum = Number(term);
       const numFilter = !Number.isNaN(asNum) && term ? `,amount.eq.${asNum}` : "";
-      const mod = filters?.module ?? "all";
-
-      const wantW = mod === "all" || mod === "warranties";
-      const wantE = mod === "all" || mod === "expenses";
-      const wantA = mod === "all" || mod === "agreements";
-
       const wq = supabase.from("warranties").select("*").limit(20);
       const eq = supabase.from("expenses").select("*").limit(20);
       const aq = supabase.from("agreements").select("*").limit(20);
@@ -48,12 +42,13 @@ function SearchPage() {
       if (filters?.date_from) { wq.gte("purchase_date", filters.date_from); eq.gte("expense_date", filters.date_from); aq.gte("start_date", filters.date_from); }
       if (filters?.date_to) { wq.lte("purchase_date", filters.date_to); eq.lte("expense_date", filters.date_to); aq.lte("start_date", filters.date_to); }
 
-      const [w, e, a] = await Promise.all([
-        wantW ? wq : Promise.resolve({ data: [] as unknown[] }),
-        wantE ? eq : Promise.resolve({ data: [] as unknown[] }),
-        wantA ? aq : Promise.resolve({ data: [] as unknown[] }),
-      ]);
-      return { warranties: w.data ?? [], expenses: e.data ?? [], agreements: a.data ?? [] };
+      const [w, e, a] = await Promise.all([wq, eq, aq]);
+      const mod = filters?.module ?? "all";
+      return {
+        warranties: mod === "all" || mod === "warranties" ? (w.data ?? []) : [],
+        expenses: mod === "all" || mod === "expenses" ? (e.data ?? []) : [],
+        agreements: mod === "all" || mod === "agreements" ? (a.data ?? []) : [],
+      };
     },
   });
 
