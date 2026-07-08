@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FileDrop } from "@/components/FileDrop";
 import { RecordActions } from "@/components/RecordActions";
+import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile, warrantyStatus } from "@/lib/records";
 import { extractDocument } from "@/lib/ocr.functions";
@@ -193,6 +194,21 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("warranties.editTitle") : t("warranties.addTitle")}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="space-y-4">
+          <div className="flex justify-end">
+            <VoiceInput
+              context="warranty"
+              onResult={(d) => setForm((f) => ({
+                ...f,
+                product_name: (d.product_name as string) || f.product_name,
+                store: (d.store as string) || f.store,
+                purchase_date: (d.purchase_date as string) || f.purchase_date,
+                warranty_expiry: (d.warranty_expiry as string) || f.warranty_expiry,
+                amount: d.amount != null ? String(d.amount) : f.amount,
+                currency: (d.currency as string) || f.currency,
+                notes: (d.notes as string) || f.notes,
+              }))}
+            />
+          </div>
           <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
           <div><Label>{t("warranties.productName")} *</Label><Input required value={form.product_name} onChange={(e) => setForm({ ...form, product_name: e.target.value })} /></div>
           <div className="grid grid-cols-2 gap-3">
