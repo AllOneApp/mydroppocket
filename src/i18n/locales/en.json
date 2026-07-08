@@ -110,7 +110,7 @@
   },
   "expenses": {
     "title": "Income & expenses",
-    "desc": "Log income and spending with or without a receipt.",
+    "desc": "Log income and spending with or without a receipt. Speak to add income or expenses.",
     "add": "Add entry",
     "addExpense": "Add expense",
     "addIncome": "Add income",

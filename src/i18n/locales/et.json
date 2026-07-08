@@ -110,7 +110,7 @@
   },
   "expenses": {
     "title": "Tulud ja kulud",
-    "desc": "Salvesta oma tulud ja kulud koos või ilma tšekita.",
+    "desc": "Salvesta oma tulud ja kulud koos või ilma tšekita. Räägi ja lisa tulu või kulu.",
     "add": "Lisa kirje",
     "addExpense": "Lisa kulu",
     "addIncome": "Lisa tulu",
