@@ -17,6 +17,7 @@ import { RecordActions } from "@/components/RecordActions";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
 import { extractDocument } from "@/lib/ocr.functions";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_authenticated/expenses")({
   head: () => ({ meta: [{ title: "Expenses — DropPocket" }] }),
@@ -33,6 +34,7 @@ type Row = {
 
 function ExpensesPage() {
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
 
@@ -52,33 +54,33 @@ function ExpensesPage() {
   const weekTotal = (data ?? []).filter((r) => new Date(r.expense_date) >= weekStart).reduce((s, r) => s + Number(r.amount), 0);
 
   async function del(r: Row) {
-    if (!confirm("Delete this expense?")) return;
+    if (!confirm(t("expenses.confirmDelete"))) return;
     if (r.file_path) await deleteFile(r.file_path);
     await supabase.from("expenses").delete().eq("id", r.id);
     qc.invalidateQueries({ queryKey: ["expenses"] });
-    toast.success("Deleted");
+    toast.success(t("common.deleted"));
   }
 
   return (
     <AppShell>
       <div className="mb-8 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-3xl font-bold">Expenses</h1>
-          <p className="mt-1 text-muted-foreground">Log everyday spending with or without a receipt.</p>
+          <h1 className="text-3xl font-bold">{t("expenses.title")}</h1>
+          <p className="mt-1 text-muted-foreground">{t("expenses.desc")}</p>
         </div>
-        <Button onClick={() => { setEditing(null); setOpen(true); }} className="shrink-0 brand-gradient-bg text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" />Add expense</Button>
+        <Button onClick={() => { setEditing(null); setOpen(true); }} className="shrink-0 brand-gradient-bg text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" />{t("expenses.add")}</Button>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <div className="card-soft p-6"><p className="text-sm text-muted-foreground">This month</p><p className="mt-1 text-3xl font-bold">{formatCurrency(monthTotal)}</p></div>
-        <div className="card-soft p-6"><p className="text-sm text-muted-foreground">This week</p><p className="mt-1 text-3xl font-bold">{formatCurrency(weekTotal)}</p></div>
+        <div className="card-soft p-6"><p className="text-sm text-muted-foreground">{t("expenses.thisMonth")}</p><p className="mt-1 text-3xl font-bold">{formatCurrency(monthTotal)}</p></div>
+        <div className="card-soft p-6"><p className="text-sm text-muted-foreground">{t("expenses.thisWeek")}</p><p className="mt-1 text-3xl font-bold">{formatCurrency(weekTotal)}</p></div>
       </div>
 
       {data?.length === 0 ? (
         <div className="card-soft flex flex-col items-center p-12 text-center">
           <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-accent"><Wallet className="h-6 w-6 text-primary" /></div>
-          <h3 className="text-lg font-semibold">No expenses yet</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Log your first expense to see totals.</p>
+          <h3 className="text-lg font-semibold">{t("expenses.empty.title")}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{t("expenses.empty.desc")}</p>
         </div>
       ) : (
         <div className="card-soft divide-y divide-border">
@@ -86,8 +88,8 @@ function ExpensesPage() {
             <div key={r.id} className="p-5">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
                 <button onClick={() => { setEditing(r); setOpen(true); }} className="min-w-0 text-left">
-                  <p className="truncate font-medium hover:text-primary">{r.description || r.category}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{r.expense_date} · {r.category}{r.store ? ` · ${r.store}` : ""}</p>
+                  <p className="truncate font-medium hover:text-primary">{r.description || t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{r.expense_date} · {t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}{r.store ? ` · ${r.store}` : ""}</p>
                 </button>
                 <p className="shrink-0 text-lg font-semibold">{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
               </div>
@@ -104,6 +106,7 @@ function ExpensesPage() {
 
 function ExpenseDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null }) {
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const extract = useServerFn(extractDocument);
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -135,9 +138,9 @@ function ExpenseDialog({ open, onOpenChange, row }: { open: boolean; onOpenChang
           category: (d.category as string) && CATEGORIES.includes(d.category as string) ? (d.category as string) : f.category,
           description: (d.description as string) || f.description,
         }));
-        toast.success("Fields auto-filled");
+        toast.success(t("common.autoFilled"));
       } else toast.error(res.error);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Scan failed"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("common.scanFailed")); }
     finally { setScanning(false); }
   }
 
@@ -164,32 +167,32 @@ function ExpenseDialog({ open, onOpenChange, row }: { open: boolean; onOpenChang
       else await supabase.from("expenses").insert(payload);
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success(row ? "Updated" : "Expense added");
+      toast.success(row ? t("common.updated") : t("expenses.added"));
       onOpenChange(false);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("common.failed")); }
     finally { setSaving(false); }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle>{row ? "Edit expense" : "Add expense"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{row ? t("expenses.editTitle") : t("expenses.addTitle")}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="space-y-4">
           <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Amount *</Label><Input type="number" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
-            <div><Label>Date *</Label><Input type="date" required value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} /></div>
+            <div><Label>{t("expenses.amount")} *</Label><Input type="number" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
+            <div><Label>{t("expenses.date")} *</Label><Input type="date" required value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} /></div>
           </div>
-          <div><Label>Category *</Label>
+          <div><Label>{t("expenses.category")} *</Label>
             <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{t(`expenses.categories.${c}` as const, { defaultValue: c })}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div><Label>Store</Label><Input value={form.store} onChange={(e) => setForm({ ...form, store: e.target.value })} /></div>
-          <div><Label>Description</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-          <div><Label>Notes</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? "Saving…" : "Save"}</Button>
+          <div><Label>{t("expenses.store")}</Label><Input value={form.store} onChange={(e) => setForm({ ...form, store: e.target.value })} /></div>
+          <div><Label>{t("expenses.description")}</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+          <div><Label>{t("expenses.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
       </DialogContent>
     </Dialog>

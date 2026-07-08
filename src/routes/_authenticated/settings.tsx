@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { useTranslation } from "react-i18next";
+import { pickLang, setLang, type Lang } from "@/i18n";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — DropPocket" }] }),
@@ -16,6 +18,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 function SettingsPage() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [profile, setProfile] = useState({ display_name: "", language: "en", theme: "light", notifications_enabled: true });
   const [saving, setSaving] = useState(false);
@@ -37,42 +40,53 @@ function SettingsPage() {
   async function save() {
     setSaving(true);
     const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from("profiles").upsert({ id: u.user!.id, ...profile });
+    const normalized = { ...profile, language: pickLang(profile.language) };
+    const { error } = await supabase.from("profiles").upsert({ id: u.user!.id, ...normalized });
     setSaving(false);
     if (error) toast.error(error.message);
-    else { toast.success("Saved"); applyTheme(profile.theme); }
+    else {
+      toast.success(t("common.saved"));
+      applyTheme(profile.theme);
+      await setLang(normalized.language as Lang);
+    }
   }
 
   return (
     <AppShell>
-      <h1 className="text-3xl font-bold">Settings</h1>
-      <p className="mt-1 text-muted-foreground">Manage your profile and preferences.</p>
+      <h1 className="text-3xl font-bold">{t("settings.title")}</h1>
+      <p className="mt-1 text-muted-foreground">{t("settings.subtitle")}</p>
 
       <div className="mt-8 grid gap-6">
         <section className="card-soft p-6">
-          <h2 className="mb-4 text-lg font-semibold">Profile</h2>
+          <h2 className="mb-4 text-lg font-semibold">{t("settings.profile")}</h2>
           <div className="grid gap-4">
-            <div><Label>Email</Label><Input value={email} disabled /></div>
-            <div><Label>Display name</Label><Input value={profile.display_name} onChange={(e) => setProfile({ ...profile, display_name: e.target.value })} /></div>
+            <div><Label>{t("settings.email")}</Label><Input value={email} disabled /></div>
+            <div><Label>{t("settings.displayName")}</Label><Input value={profile.display_name} onChange={(e) => setProfile({ ...profile, display_name: e.target.value })} /></div>
           </div>
         </section>
 
         <section className="card-soft p-6">
-          <h2 className="mb-4 text-lg font-semibold">Appearance</h2>
+          <h2 className="mb-4 text-lg font-semibold">{t("settings.appearance")}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label>Theme</Label>
+              <Label>{t("settings.theme")}</Label>
               <Select value={profile.theme} onValueChange={(v) => setProfile({ ...profile, theme: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="light">Light</SelectItem>
-                  <SelectItem value="dark">Dark</SelectItem>
+                  <SelectItem value="light">{t("settings.light")}</SelectItem>
+                  <SelectItem value="dark">{t("settings.dark")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label>Language</Label>
-              <Select value={profile.language} onValueChange={(v) => setProfile({ ...profile, language: v })}>
+              <Label>{t("settings.language")}</Label>
+              <Select
+                value={profile.language}
+                onValueChange={(v) => {
+                  setProfile({ ...profile, language: v });
+                  void setLang(v as Lang);
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="en">English</SelectItem>
@@ -84,17 +98,17 @@ function SettingsPage() {
         </section>
 
         <section className="card-soft p-6">
-          <h2 className="mb-2 text-lg font-semibold">Notifications</h2>
+          <h2 className="mb-2 text-lg font-semibold">{t("settings.notifications")}</h2>
           <div className="flex items-center justify-between gap-4 pt-2">
             <div>
-              <p className="font-medium">Warranty expiry alerts</p>
-              <p className="text-sm text-muted-foreground">Get notified when a warranty expires within 30 days.</p>
+              <p className="font-medium">{t("settings.warrantyAlerts")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.warrantyAlertsDesc")}</p>
             </div>
             <Switch checked={profile.notifications_enabled} onCheckedChange={(v) => setProfile({ ...profile, notifications_enabled: v })} />
           </div>
         </section>
 
-        <Button onClick={save} disabled={saving} className="w-full brand-gradient-bg text-primary-foreground sm:w-auto">{saving ? "Saving…" : "Save changes"}</Button>
+        <Button onClick={save} disabled={saving} className="w-full brand-gradient-bg text-primary-foreground sm:w-auto">{saving ? t("common.saving") : t("common.saveChanges")}</Button>
       </div>
     </AppShell>
   );

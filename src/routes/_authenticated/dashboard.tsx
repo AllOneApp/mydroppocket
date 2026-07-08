@@ -5,6 +5,7 @@ import { ShieldCheck, Wallet, FileText, ArrowRight, Bell } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency, warrantyStatus } from "@/lib/records";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — DropPocket" }] }),
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 });
 
 function Dashboard() {
+  const { t } = useTranslation();
   const { data } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
@@ -44,31 +46,31 @@ function Dashboard() {
   return (
     <AppShell>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Welcome back</h1>
-        <p className="mt-1 text-muted-foreground">A quick look at everything in your pocket.</p>
+        <h1 className="text-3xl font-bold">{t("dashboard.welcome")}</h1>
+        <p className="mt-1 text-muted-foreground">{t("dashboard.subtitle")}</p>
       </div>
 
       {data?.expiring && data.expiring.length > 0 && (
         <div className="card-soft mb-6 flex items-start gap-3 border-orange-200 bg-orange-50 p-4 dark:border-orange-900/40 dark:bg-orange-950/30">
           <Bell className="mt-0.5 h-5 w-5 text-orange-600" />
           <div>
-            <p className="font-medium">{data.expiring.length} warranty{data.expiring.length === 1 ? "" : "ies"} expiring soon</p>
-            <p className="text-sm text-muted-foreground">Check your warranties tab for details.</p>
+            <p className="font-medium">{t("dashboard.expiring", { count: data.expiring.length })}</p>
+            <p className="text-sm text-muted-foreground">{t("dashboard.expiringDesc")}</p>
           </div>
         </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <ModuleCard to="/warranties" icon={ShieldCheck} title="Warranties" value={`${data?.warranties.length ?? 0} tracked`} sub={`${data?.expiring.length ?? 0} expiring soon`} />
-        <ModuleCard to="/expenses" icon={Wallet} title="Expenses" value={formatCurrency(data?.monthTotal ?? 0)} sub={`This week: ${formatCurrency(data?.weekTotal ?? 0)}`} />
-        <ModuleCard to="/agreements" icon={FileText} title="Agreements" value={`${data?.agreements.length ?? 0} on file`} sub="Contracts & installments" />
+        <ModuleCard to="/warranties" icon={ShieldCheck} title={t("nav.warranties")} value={t("dashboard.warrantiesTracked", { count: data?.warranties.length ?? 0 })} sub={t("dashboard.expiringSoon", { count: data?.expiring.length ?? 0 })} />
+        <ModuleCard to="/expenses" icon={Wallet} title={t("nav.expenses")} value={formatCurrency(data?.monthTotal ?? 0)} sub={t("dashboard.thisWeek", { amount: formatCurrency(data?.weekTotal ?? 0) })} />
+        <ModuleCard to="/agreements" icon={FileText} title={t("nav.agreements")} value={t("dashboard.onFile", { count: data?.agreements.length ?? 0 })} sub={t("dashboard.contractsInstallments")} />
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="card-soft p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Recent expenses</h3>
-            <Link to="/expenses" className="text-sm text-primary hover:underline">View all</Link>
+            <h3 className="text-lg font-semibold">{t("dashboard.recentExpenses")}</h3>
+            <Link to="/expenses" className="text-sm text-primary hover:underline">{t("dashboard.viewAll")}</Link>
           </div>
           {data?.expenses.length ? (
             <ul className="divide-y divide-border">
@@ -82,13 +84,13 @@ function Dashboard() {
                 </li>
               ))}
             </ul>
-          ) : <EmptyState msg="No expenses yet" />}
+          ) : <EmptyState msg={t("dashboard.noExpenses")} />}
         </div>
 
         <div className="card-soft p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Upcoming warranties</h3>
-            <Link to="/warranties" className="text-sm text-primary hover:underline">View all</Link>
+            <h3 className="text-lg font-semibold">{t("dashboard.upcomingWarranties")}</h3>
+            <Link to="/warranties" className="text-sm text-primary hover:underline">{t("dashboard.viewAll")}</Link>
           </div>
           {data?.warranties.length ? (
             <ul className="divide-y divide-border">
@@ -106,7 +108,7 @@ function Dashboard() {
                 );
               })}
             </ul>
-          ) : <EmptyState msg="No warranties yet" />}
+          ) : <EmptyState msg={t("dashboard.noWarranties")} />}
         </div>
       </div>
     </AppShell>

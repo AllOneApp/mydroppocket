@@ -5,14 +5,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "./Logo";
 import { Button } from "./ui/button";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 const nav = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/warranties", icon: ShieldCheck, label: "Warranties" },
-  { to: "/expenses", icon: Wallet, label: "Expenses" },
-  { to: "/agreements", icon: FileText, label: "Agreements" },
-  { to: "/search", icon: Search, label: "Search" },
-  { to: "/settings", icon: Settings, label: "Settings" },
+  { to: "/dashboard", icon: LayoutDashboard, key: "dashboard" },
+  { to: "/warranties", icon: ShieldCheck, key: "warranties" },
+  { to: "/expenses", icon: Wallet, key: "expenses" },
+  { to: "/agreements", icon: FileText, key: "agreements" },
+  { to: "/search", icon: Search, key: "search" },
+  { to: "/settings", icon: Settings, key: "settings" },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -20,6 +21,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const { t } = useTranslation();
 
   async function signOut() {
     await qc.cancelQueries();
@@ -32,7 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-4">
       <div className="mb-8 px-2 pt-2"><Logo className="h-8" /></div>
       <nav className="flex-1 space-y-1">
-        {nav.map(({ to, icon: Icon, label }) => {
+        {nav.map(({ to, icon: Icon, key }) => {
           const active = location.pathname === to;
           return (
             <Link
@@ -45,13 +47,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
               }`}
             >
-              <Icon className="h-4 w-4" /> {label}
+              <Icon className="h-4 w-4" /> {t(`nav.${key}`)}
             </Link>
           );
         })}
       </nav>
       <Button variant="ghost" onClick={signOut} className="mt-4 justify-start gap-3">
-        <LogOut className="h-4 w-4" /> Sign out
+        <LogOut className="h-4 w-4" /> {t("common.signOut")}
       </Button>
     </aside>
   );
