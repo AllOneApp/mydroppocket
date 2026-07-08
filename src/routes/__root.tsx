@@ -120,6 +120,12 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="et">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var m=window.matchMedia('(prefers-color-scheme: dark)');function s(){document.documentElement.classList.toggle('dark',m.matches);}s();m.addEventListener&&m.addEventListener('change',s);}catch(e){}",
+          }}
+        />
       </head>
       <body>
         {children}
