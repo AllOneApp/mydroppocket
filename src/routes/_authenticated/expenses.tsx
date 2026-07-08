@@ -78,15 +78,16 @@ function ExpensesPage() {
 
   return (
     <AppShell>
-      <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-3xl font-bold">{t("expenses.title")}</h1>
-          <p className="mt-1 text-muted-foreground">{t("expenses.desc")}</p>
+          <h1 className="text-2xl font-bold sm:text-3xl">{t("expenses.title")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground sm:text-base">{t("expenses.desc")}</p>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
           <VoiceInput
             context="expense_or_income"
-            variant="outline"
+            variant="destructive"
+            className="h-11 w-full justify-center sm:w-auto"
             onResult={(d) => {
               setEditing(null);
               setPrefill({
@@ -101,8 +102,18 @@ function ExpensesPage() {
               setOpen(true);
             }}
           />
-          <Button variant="outline" onClick={() => openAdd("income")}><TrendingUp className="mr-1.5 h-4 w-4" />{t("expenses.addIncome")}</Button>
-          <Button onClick={() => openAdd("expense")} className="brand-gradient-bg text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" />{t("expenses.addExpense")}</Button>
+          <Button
+            onClick={() => openAdd("income")}
+            className="h-11 w-full justify-center bg-sky-500 text-white hover:bg-sky-500/90 sm:w-auto"
+          >
+            <TrendingUp className="mr-1.5 h-4 w-4" />{t("expenses.addIncome")}
+          </Button>
+          <Button
+            onClick={() => openAdd("expense")}
+            className="brand-gradient-bg h-11 w-full justify-center text-primary-foreground sm:w-auto"
+          >
+            <Plus className="mr-1.5 h-4 w-4" />{t("expenses.addExpense")}
+          </Button>
         </div>
       </div>
 
