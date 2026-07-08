@@ -13,9 +13,9 @@ function Landing() {
   const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-background">
-      <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4 sm:py-5">
+      <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5 sm:py-6">
         <Link to="/" className="flex shrink-0 items-center" aria-label="DropPocket">
-          <Logo />
+          <Logo className="h-14 sm:h-16" />
         </Link>
         <div className="flex shrink-0 items-center gap-2">
           <LanguageSwitcher />
