@@ -147,7 +147,7 @@ export const parseVoiceCommand = createServerFn({ method: "POST" })
           { role: "user", content: data.text },
         ],
       });
-      return { ok: true as const, data: output as Record<string, unknown> };
+      return { ok: true as const, data: output as Record<string, string | number | null> };
     } catch (err) {
       if (NoObjectGeneratedError.isInstance(err)) {
         return { ok: false as const, error: "Could not parse voice command" };
