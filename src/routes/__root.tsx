@@ -16,6 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 import "@/i18n";
 import { useTranslation } from "react-i18next";
 import { pickLang, setLang, type Lang } from "@/i18n";
+import { registerPwa } from "@/pwa/register";
+import { InstallPrompt } from "@/components/InstallPrompt";
 
 function NotFoundComponent() {
   const { t } = useTranslation();
@@ -77,12 +79,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "DropPocket — Receipts, warranties & documents in one place" },
-      { name: "description", content: "Your receipts, warranties and purchase documents — safely stored in one place. Snap, save and never lose a receipt again." },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      { title: "DropPocket — Tšekid, garantiid ja dokumendid ühes taskus" },
+      { name: "description", content: "Sinu tšekid, garantiid ja ostudokumendid — turvaliselt ühes taskus. Tee pilt, salvesta ja ära kaota enam ühtegi tšekki." },
       { name: "author", content: "DropPocket" },
+      { name: "theme-color", content: "#1d4ed8" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "apple-mobile-web-app-title", content: "DropPocket" },
+      { name: "mobile-web-app-capable", content: "yes" },
       { property: "og:title", content: "DropPocket" },
-      { property: "og:description", content: "Your receipts, warranties and purchase documents — safely stored in one place." },
+      { property: "og:description", content: "Sinu tšekid, garantiid ja ostudokumendid — turvaliselt ühes taskus." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -91,7 +98,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.png", type: "image/png" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" },
@@ -105,7 +114,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="et">
       <head>
         <HeadContent />
       </head>
@@ -122,6 +131,7 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
+    registerPwa();
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       router.invalidate();
@@ -158,6 +168,7 @@ function RootComponent() {
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Toaster position="top-right" richColors closeButton />
+      <InstallPrompt />
     </QueryClientProvider>
   );
 }
