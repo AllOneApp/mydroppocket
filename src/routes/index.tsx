@@ -13,14 +13,14 @@ function Landing() {
   const { t } = useTranslation();
   return (
     <div className="min-h-screen overflow-x-clip bg-background">
-      <header className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-end gap-3 px-4 py-4 sm:px-6 sm:py-5">
-        <Link to="/" className="flex min-w-0 items-center" aria-label="DropPocket">
-          <Logo className="h-10 sm:h-14 md:h-16" />
+      <header className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5">
+        <Link to="/" className="flex min-w-0 shrink items-center" aria-label="DropPocket">
+          <Logo className="h-9 sm:h-14 md:h-16" />
         </Link>
-        <div className="flex shrink-0 items-center gap-1.5 pb-3 sm:gap-2 sm:pb-4">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <LanguageSwitcher />
-          <Link to="/auth" className="hidden sm:inline-flex"><Button variant="ghost" size="sm" className="px-3">{t("common.signIn")}</Button></Link>
-          <Link to="/auth"><Button size="sm" className="brand-gradient-bg px-3 text-primary-foreground sm:px-4">{t("common.getStarted")}</Button></Link>
+          <Link to="/auth"><Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm">{t("common.signIn")}</Button></Link>
+          <Link to="/auth"><Button size="sm" className="brand-gradient-bg px-2.5 text-xs text-primary-foreground sm:px-4 sm:text-sm">{t("common.getStarted")}</Button></Link>
         </div>
       </header>
 
