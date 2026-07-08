@@ -13,7 +13,7 @@ type Props = {
   context: Context;
   onResult: (data: Record<string, string | number | null>, transcript: string) => void;
   size?: "sm" | "default" | "icon";
-  variant?: "default" | "outline" | "ghost" | "secondary";
+  variant?: "default" | "outline" | "ghost" | "secondary" | "destructive";
   className?: string;
   label?: string;
 };
