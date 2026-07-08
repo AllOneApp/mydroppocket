@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -157,8 +157,7 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => makeForm(row, prefill));
 
-  // Re-initialize form when a new row/prefill opens the dialog
-  useMemo(() => { if (open) setForm(makeForm(row, prefill)); return null; }, [open, row, prefill]);
+  useEffect(() => { if (open) setForm(makeForm(row, prefill)); }, [open, row, prefill]);
 
   const isIncome = form.type === "income";
   const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
