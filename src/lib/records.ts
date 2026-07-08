@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import i18n from "@/i18n";
 
 export type RecordKind = "warranty" | "expense" | "agreement";
 export const tableFor: Record<RecordKind, "warranties" | "expenses" | "agreements"> = {
@@ -41,12 +42,12 @@ export function fileToBase64(file: File): Promise<string> {
 }
 
 export function warrantyStatus(expiry: string | null): { label: string; tone: "green" | "orange" | "red" | "muted"; days: number | null } {
-  if (!expiry) return { label: "No expiry", tone: "muted", days: null };
+  if (!expiry) return { label: i18n.t("warranties.status.noExpiry"), tone: "muted", days: null };
   const d = new Date(expiry);
   const diff = Math.ceil((d.getTime() - Date.now()) / 86400000);
-  if (diff < 0) return { label: `Expired ${-diff}d ago`, tone: "red", days: diff };
-  if (diff <= 30) return { label: `${diff}d left`, tone: "orange", days: diff };
-  return { label: `${diff}d left`, tone: "green", days: diff };
+  if (diff < 0) return { label: i18n.t("warranties.status.expiredAgo", { days: -diff }), tone: "red", days: diff };
+  if (diff <= 30) return { label: i18n.t("warranties.status.daysLeft", { days: diff }), tone: "orange", days: diff };
+  return { label: i18n.t("warranties.status.daysLeft", { days: diff }), tone: "green", days: diff };
 }
 
 export function formatCurrency(amount: number | null | undefined, currency = "EUR") {
