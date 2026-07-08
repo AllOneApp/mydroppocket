@@ -1,4 +1,4 @@
-import logoAsset from "@/assets/droppocket-logo.png.asset.json";
+import logoAsset from "@/assets/mydroppocket-logo.png.asset.json";
 
 export function Logo({ className = "h-11 sm:h-12 md:h-14" }: { className?: string }) {
   return (
