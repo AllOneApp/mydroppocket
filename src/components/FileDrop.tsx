@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { UploadCloud, FileText as FileIcon, X } from "lucide-react";
 import { Button } from "./ui/button";
+import { useTranslation } from "react-i18next";
 
 export function FileDrop({
   file, onFile, onScan, scanning,
@@ -12,6 +13,7 @@ export function FileDrop({
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+  const { t } = useTranslation();
   return (
     <div>
       <div
@@ -38,8 +40,8 @@ export function FileDrop({
         ) : (
           <>
             <UploadCloud className="mb-2 h-6 w-6 text-muted-foreground" />
-            <p className="text-sm font-medium">Drop a file or click to upload</p>
-            <p className="text-xs text-muted-foreground">Photo, image or PDF</p>
+            <p className="text-sm font-medium">{t("file.drop")}</p>
+            <p className="text-xs text-muted-foreground">{t("file.types")}</p>
           </>
         )}
         <input
@@ -52,7 +54,7 @@ export function FileDrop({
       </div>
       {file && onScan && (
         <Button type="button" variant="outline" size="sm" onClick={onScan} disabled={scanning} className="mt-2 w-full">
-          {scanning ? "Scanning with AI…" : "✨ Auto-fill from document"}
+          {scanning ? t("file.scanning") : t("file.autoFill")}
         </Button>
       )}
     </div>
