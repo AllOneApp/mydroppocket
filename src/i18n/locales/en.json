@@ -32,7 +32,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "warranties": "Warranties",
-    "expenses": "Expenses",
+    "expenses": "Income & expenses",
     "agreements": "Agreements",
     "search": "Search",
     "settings": "Settings"
@@ -109,23 +109,33 @@
     "status.daysLeft": "{{days}}d left"
   },
   "expenses": {
-    "title": "Expenses",
-    "desc": "Log everyday spending with or without a receipt.",
-    "add": "Add expense",
-    "editTitle": "Edit expense",
-    "addTitle": "Add expense",
+    "title": "Income & expenses",
+    "desc": "Log income and spending with or without a receipt.",
+    "add": "Add entry",
+    "addExpense": "Add expense",
+    "addIncome": "Add income",
+    "editTitle": "Edit entry",
+    "addTitle": "Add entry",
+    "type": "Type",
+    "typeExpense": "Expense",
+    "typeIncome": "Income",
+    "income": "Income",
+    "expense": "Expenses",
+    "balance": "Balance",
+    "today": "Today",
     "thisMonth": "This month",
     "thisWeek": "This week",
-    "empty.title": "No expenses yet",
-    "empty.desc": "Log your first expense to see totals.",
+    "thisYear": "This year",
+    "empty.title": "Nothing here yet",
+    "empty.desc": "Log your first expense or income to see totals.",
     "amount": "Amount",
     "date": "Date",
     "category": "Category",
     "store": "Store",
     "description": "Description",
     "notes": "Notes",
-    "confirmDelete": "Delete this expense?",
-    "added": "Expense added",
+    "confirmDelete": "Delete this entry?",
+    "added": "Entry added",
     "categories": {
       "Groceries": "Groceries",
       "Fuel": "Fuel",
@@ -137,7 +147,13 @@
       "Healthcare": "Healthcare",
       "Travel": "Travel",
       "Pets": "Pets",
-      "Other": "Other"
+      "Other": "Other",
+      "Salary": "Salary",
+      "Sale": "Sale",
+      "Gift": "Gift",
+      "Investment": "Investment",
+      "Refund": "Refund",
+      "OtherIncome": "Other income"
     }
   },
   "agreements": {
@@ -230,5 +246,30 @@
       "Choose \"Add to Home Screen\"",
       "Tap \"Add\""
     ]
+  },
+  "voice": {
+    "speak": "Speak",
+    "stop": "Stop",
+    "processing": "Processing…",
+    "filled": "AI filled the form — review and save.",
+    "tooShort": "Recording too short, try again.",
+    "micDenied": "Microphone access denied."
+  },
+  "dateRange": {
+    "period": "Period",
+    "from": "From",
+    "to": "To",
+    "presets": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "thisWeek": "This week",
+      "lastWeek": "Last week",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "thisYear": "This year",
+      "lastYear": "Last year",
+      "all": "All time",
+      "custom": "Custom"
+    }
   }
 }

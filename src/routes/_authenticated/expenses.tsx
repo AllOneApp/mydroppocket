@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Plus, Wallet } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 
@@ -14,20 +14,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileDrop } from "@/components/FileDrop";
 import { RecordActions } from "@/components/RecordActions";
+import { VoiceInput } from "@/components/VoiceInput";
+import { DateRangeFilter, computeRange, type DateRange } from "@/components/DateRangeFilter";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_authenticated/expenses")({
-  head: () => ({ meta: [{ title: "Expenses — DropPocket" }] }),
+  head: () => ({ meta: [{ title: "Income & expenses — MyDropPocket" }] }),
   component: ExpensesPage,
 });
 
-const CATEGORIES = ["Groceries", "Fuel", "Restaurant", "Coffee", "Hairdresser", "Nails", "Shopping", "Healthcare", "Travel", "Pets", "Other"];
+const EXPENSE_CATEGORIES = ["Groceries", "Fuel", "Restaurant", "Coffee", "Hairdresser", "Nails", "Shopping", "Healthcare", "Travel", "Pets", "Other"];
+const INCOME_CATEGORIES = ["Salary", "Sale", "Gift", "Investment", "Refund", "OtherIncome"];
 
+type EntryType = "expense" | "income";
 type Row = {
-  id: string; amount: number; currency: string | null; category: string; expense_date: string;
+  id: string; type: EntryType; amount: number; currency: string | null; category: string; expense_date: string;
   description: string | null; notes: string | null; store: string | null;
   file_path: string | null; file_name: string | null;
 };
@@ -37,6 +41,11 @@ function ExpensesPage() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
+  const [prefill, setPrefill] = useState<Partial<Row> | null>(null);
+  const [range, setRange] = useState<DateRange>(() => {
+    const r = computeRange("thisMonth");
+    return { preset: "thisMonth", from: r.from, to: r.to };
+  });
 
   const { data } = useQuery({
     queryKey: ["expenses"],
@@ -47,36 +56,65 @@ function ExpensesPage() {
     },
   });
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
-  const monthTotal = (data ?? []).filter((r) => new Date(r.expense_date) >= monthStart).reduce((s, r) => s + Number(r.amount), 0);
-  const weekTotal = (data ?? []).filter((r) => new Date(r.expense_date) >= weekStart).reduce((s, r) => s + Number(r.amount), 0);
+  const filtered = useMemo(() => (data ?? []).filter((r) => r.expense_date >= range.from && r.expense_date <= range.to), [data, range]);
+  const income = filtered.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
+  const expense = filtered.filter((r) => r.type === "expense").reduce((s, r) => s + Number(r.amount), 0);
+  const balance = income - expense;
 
   async function del(r: Row) {
     if (!confirm(t("expenses.confirmDelete"))) return;
     if (r.file_path) await deleteFile(r.file_path);
     await supabase.from("expenses").delete().eq("id", r.id);
     qc.invalidateQueries({ queryKey: ["expenses"] });
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
     toast.success(t("common.deleted"));
+  }
+
+  function openAdd(type: EntryType) {
+    setEditing(null);
+    setPrefill({ type });
+    setOpen(true);
   }
 
   return (
     <AppShell>
-      <div className="mb-8 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:items-center sm:justify-between">
+      <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 sm:flex sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-3xl font-bold">{t("expenses.title")}</h1>
           <p className="mt-1 text-muted-foreground">{t("expenses.desc")}</p>
         </div>
-        <Button onClick={() => { setEditing(null); setOpen(true); }} className="shrink-0 brand-gradient-bg text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" />{t("expenses.add")}</Button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <VoiceInput
+            context="expense_or_income"
+            variant="outline"
+            onResult={(d) => {
+              setEditing(null);
+              setPrefill({
+                type: (d.type as EntryType) || "expense",
+                amount: d.amount != null ? Number(d.amount) : undefined as unknown as number,
+                currency: (d.currency as string) || "EUR",
+                store: (d.store as string) || null,
+                category: (d.category as string) || "Other",
+                expense_date: (d.expense_date as string) || new Date().toISOString().slice(0, 10),
+                description: (d.description as string) || null,
+              });
+              setOpen(true);
+            }}
+          />
+          <Button variant="outline" onClick={() => openAdd("income")}><TrendingUp className="mr-1.5 h-4 w-4" />{t("expenses.addIncome")}</Button>
+          <Button onClick={() => openAdd("expense")} className="brand-gradient-bg text-primary-foreground"><Plus className="mr-1.5 h-4 w-4" />{t("expenses.addExpense")}</Button>
+        </div>
       </div>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <div className="card-soft p-6"><p className="text-sm text-muted-foreground">{t("expenses.thisMonth")}</p><p className="mt-1 text-3xl font-bold">{formatCurrency(monthTotal)}</p></div>
-        <div className="card-soft p-6"><p className="text-sm text-muted-foreground">{t("expenses.thisWeek")}</p><p className="mt-1 text-3xl font-bold">{formatCurrency(weekTotal)}</p></div>
+      <div className="card-soft mb-6 p-4"><DateRangeFilter value={range} onChange={setRange} /></div>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <div className="card-soft p-6"><p className="text-sm text-muted-foreground">{t("expenses.income")}</p><p className="mt-1 text-2xl font-bold text-green-600">{formatCurrency(income)}</p></div>
+        <div className="card-soft p-6"><p className="text-sm text-muted-foreground">{t("expenses.expense")}</p><p className="mt-1 text-2xl font-bold text-red-600">{formatCurrency(expense)}</p></div>
+        <div className="card-soft p-6"><p className="text-sm text-muted-foreground">{t("expenses.balance")}</p><p className={`mt-1 text-2xl font-bold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>{formatCurrency(balance)}</p></div>
       </div>
 
-      {data?.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="card-soft flex flex-col items-center p-12 text-center">
           <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-accent"><Wallet className="h-6 w-6 text-primary" /></div>
           <h3 className="text-lg font-semibold">{t("expenses.empty.title")}</h3>
@@ -84,42 +122,45 @@ function ExpensesPage() {
         </div>
       ) : (
         <div className="card-soft divide-y divide-border">
-          {data?.map((r) => (
-            <div key={r.id} className="p-5">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
-                <button onClick={() => { setEditing(r); setOpen(true); }} className="min-w-0 text-left">
-                  <p className="truncate font-medium hover:text-primary">{r.description || t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{r.expense_date} · {t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}{r.store ? ` · ${r.store}` : ""}</p>
-                </button>
-                <p className="shrink-0 text-lg font-semibold">{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
+          {filtered.map((r) => {
+            const isIncome = r.type === "income";
+            return (
+              <div key={r.id} className="p-5">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+                  <button onClick={() => { setEditing(r); setPrefill(null); setOpen(true); }} className="min-w-0 text-left">
+                    <p className="flex items-center gap-2 truncate font-medium hover:text-primary">
+                      {isIncome ? <TrendingUp className="h-3.5 w-3.5 text-green-600" /> : <TrendingDown className="h-3.5 w-3.5 text-red-600" />}
+                      {r.description || t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">{r.expense_date} · {t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}{r.store ? ` · ${r.store}` : ""}</p>
+                  </button>
+                  <p className={`shrink-0 text-lg font-semibold ${isIncome ? "text-green-600" : ""}`}>{isIncome ? "+" : "−"}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
+                </div>
+                <div className="mt-3"><RecordActions filePath={r.file_path} fileName={r.file_name} onDelete={() => del(r)} /></div>
               </div>
-              <div className="mt-3"><RecordActions filePath={r.file_path} fileName={r.file_name} onDelete={() => del(r)} /></div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <ExpenseDialog open={open} onOpenChange={setOpen} row={editing} />
+      <ExpenseDialog open={open} onOpenChange={setOpen} row={editing} prefill={prefill} />
     </AppShell>
   );
 }
 
-function ExpenseDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null }) {
+function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null; prefill: Partial<Row> | null }) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const extract = useServerFn(extractDocument);
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState(() => ({
-    amount: row?.amount?.toString() ?? "",
-    currency: row?.currency ?? "EUR",
-    category: row?.category ?? "Other",
-    expense_date: row?.expense_date ?? new Date().toISOString().slice(0, 10),
-    description: row?.description ?? "",
-    store: row?.store ?? "",
-    notes: row?.notes ?? "",
-  }));
+  const [form, setForm] = useState(() => makeForm(row, prefill));
+
+  useEffect(() => { if (open) setForm(makeForm(row, prefill)); }, [open, row, prefill]);
+
+  const isIncome = form.type === "income";
+  const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
   async function scan() {
     if (!file) return;
@@ -135,7 +176,7 @@ function ExpenseDialog({ open, onOpenChange, row }: { open: boolean; onOpenChang
           currency: (d.currency as string) || f.currency,
           store: (d.store as string) || f.store,
           expense_date: (d.expense_date as string) || f.expense_date,
-          category: (d.category as string) && CATEGORIES.includes(d.category as string) ? (d.category as string) : f.category,
+          category: (d.category as string) && EXPENSE_CATEGORIES.includes(d.category as string) ? (d.category as string) : f.category,
           description: (d.description as string) || f.description,
         }));
         toast.success(t("common.autoFilled"));
@@ -154,6 +195,7 @@ function ExpenseDialog({ open, onOpenChange, row }: { open: boolean; onOpenChang
       if (file) fileInfo = await uploadFile(uid, "expense", file);
       const payload = {
         user_id: uid,
+        type: form.type,
         amount: Number(form.amount),
         currency: form.currency,
         category: form.category,
@@ -178,6 +220,25 @@ function ExpenseDialog({ open, onOpenChange, row }: { open: boolean; onOpenChang
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("expenses.editTitle") : t("expenses.addTitle")}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="inline-flex rounded-lg border border-border p-0.5">
+              <button type="button" onClick={() => setForm({ ...form, type: "expense", category: EXPENSE_CATEGORIES.includes(form.category) ? form.category : "Other" })} className={`rounded-md px-3 py-1.5 text-sm ${!isIncome ? "bg-red-500 text-white" : "text-muted-foreground"}`}>{t("expenses.typeExpense")}</button>
+              <button type="button" onClick={() => setForm({ ...form, type: "income", category: INCOME_CATEGORIES.includes(form.category) ? form.category : "Salary" })} className={`rounded-md px-3 py-1.5 text-sm ${isIncome ? "bg-green-500 text-white" : "text-muted-foreground"}`}>{t("expenses.typeIncome")}</button>
+            </div>
+            <VoiceInput
+              context={isIncome ? "income" : "expense"}
+              onResult={(d) => setForm((f) => ({
+                ...f,
+                type: (d.type as EntryType) || f.type,
+                amount: d.amount != null ? String(d.amount) : f.amount,
+                currency: (d.currency as string) || f.currency,
+                store: (d.store as string) || f.store,
+                expense_date: (d.expense_date as string) || f.expense_date,
+                category: (d.category as string) || f.category,
+                description: (d.description as string) || f.description,
+              }))}
+            />
+          </div>
           <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
           <div className="grid grid-cols-2 gap-3">
             <div><Label>{t("expenses.amount")} *</Label><Input type="number" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
@@ -186,7 +247,7 @@ function ExpenseDialog({ open, onOpenChange, row }: { open: boolean; onOpenChang
           <div><Label>{t("expenses.category")} *</Label>
             <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{t(`expenses.categories.${c}` as const, { defaultValue: c })}</SelectItem>)}</SelectContent>
+              <SelectContent>{categories.map((c) => <SelectItem key={c} value={c}>{t(`expenses.categories.${c}` as const, { defaultValue: c })}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div><Label>{t("expenses.store")}</Label><Input value={form.store} onChange={(e) => setForm({ ...form, store: e.target.value })} /></div>
@@ -197,4 +258,18 @@ function ExpenseDialog({ open, onOpenChange, row }: { open: boolean; onOpenChang
       </DialogContent>
     </Dialog>
   );
+}
+
+function makeForm(row: Row | null, prefill: Partial<Row> | null) {
+  const type = (row?.type ?? prefill?.type ?? "expense") as EntryType;
+  return {
+    type,
+    amount: row?.amount?.toString() ?? (prefill?.amount != null ? String(prefill.amount) : ""),
+    currency: row?.currency ?? prefill?.currency ?? "EUR",
+    category: row?.category ?? prefill?.category ?? (type === "income" ? "Salary" : "Other"),
+    expense_date: row?.expense_date ?? prefill?.expense_date ?? new Date().toISOString().slice(0, 10),
+    description: row?.description ?? prefill?.description ?? "",
+    store: row?.store ?? prefill?.store ?? "",
+    notes: row?.notes ?? "",
+  };
 }

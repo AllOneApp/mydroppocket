@@ -32,7 +32,7 @@
   "nav": {
     "dashboard": "Töölaud",
     "warranties": "Garantiid",
-    "expenses": "Kulud",
+    "expenses": "Tulud ja kulud",
     "agreements": "Lepingud",
     "search": "Otsing",
     "settings": "Seaded"
@@ -109,23 +109,33 @@
     "status.daysLeft": "{{days}} p jäänud"
   },
   "expenses": {
-    "title": "Kulud",
-    "desc": "Salvesta igapäevased kulud koos või ilma tšekita.",
-    "add": "Lisa kulu",
-    "editTitle": "Muuda kulu",
-    "addTitle": "Lisa kulu",
+    "title": "Tulud ja kulud",
+    "desc": "Salvesta oma tulud ja kulud koos või ilma tšekita.",
+    "add": "Lisa kirje",
+    "addExpense": "Lisa kulu",
+    "addIncome": "Lisa tulu",
+    "editTitle": "Muuda kirjet",
+    "addTitle": "Lisa kirje",
+    "type": "Tüüp",
+    "typeExpense": "Kulu",
+    "typeIncome": "Tulu",
+    "income": "Tulud",
+    "expense": "Kulud",
+    "balance": "Saldo",
+    "today": "Täna",
     "thisMonth": "See kuu",
     "thisWeek": "See nädal",
-    "empty.title": "Kulusid pole veel",
-    "empty.desc": "Sisesta oma esimene kulu, et näha kokkuvõtteid.",
+    "thisYear": "See aasta",
+    "empty.title": "Kirjeid pole veel",
+    "empty.desc": "Lisa oma esimene kulu või tulu, et näha kokkuvõtteid.",
     "amount": "Summa",
     "date": "Kuupäev",
     "category": "Kategooria",
     "store": "Pood",
     "description": "Kirjeldus",
     "notes": "Märkmed",
-    "confirmDelete": "Kustutada see kulu?",
-    "added": "Kulu lisatud",
+    "confirmDelete": "Kustutada see kirje?",
+    "added": "Kirje lisatud",
     "categories": {
       "Groceries": "Toidukaubad",
       "Fuel": "Kütus",
@@ -137,7 +147,13 @@
       "Healthcare": "Tervishoid",
       "Travel": "Reisimine",
       "Pets": "Lemmikloomad",
-      "Other": "Muu"
+      "Other": "Muu",
+      "Salary": "Palk",
+      "Sale": "Müük",
+      "Gift": "Kingitus",
+      "Investment": "Investeering",
+      "Refund": "Tagastus",
+      "OtherIncome": "Muu tulu"
     }
   },
   "agreements": {
@@ -230,5 +246,30 @@
       "Vali „Lisa avakuvale\"",
       "Vajuta „Lisa\""
     ]
+  },
+  "voice": {
+    "speak": "Räägi",
+    "stop": "Peata",
+    "processing": "Töötlen…",
+    "filled": "AI täitis vormi — kontrolli ja salvesta.",
+    "tooShort": "Salvestus liiga lühike, proovi uuesti.",
+    "micDenied": "Mikrofoni ligipääs puudub."
+  },
+  "dateRange": {
+    "period": "Periood",
+    "from": "Alates",
+    "to": "Kuni",
+    "presets": {
+      "today": "Täna",
+      "yesterday": "Eile",
+      "thisWeek": "See nädal",
+      "lastWeek": "Eelmine nädal",
+      "thisMonth": "See kuu",
+      "lastMonth": "Eelmine kuu",
+      "thisYear": "See aasta",
+      "lastYear": "Eelmine aasta",
+      "all": "Kõik",
+      "custom": "Kohandatud"
+    }
   }
 }
