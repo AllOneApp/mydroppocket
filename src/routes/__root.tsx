@@ -120,6 +120,12 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="et">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var m=window.matchMedia('(prefers-color-scheme: dark)');function s(){document.documentElement.classList.toggle('dark',m.matches);}s();m.addEventListener&&m.addEventListener('change',s);}catch(e){}",
+          }}
+        />
       </head>
       <body>
         {children}
@@ -135,6 +141,16 @@ function RootComponent() {
 
   useEffect(() => {
     registerPwa();
+    // Auto sync .dark class with system preference so tokens (and dark logo) switch automatically.
+    if (typeof window !== "undefined" && window.matchMedia) {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      const apply = (dark: boolean) => {
+        document.documentElement.classList.toggle("dark", dark);
+      };
+      apply(mq.matches);
+      const onChange = (e: MediaQueryListEvent) => apply(e.matches);
+      mq.addEventListener?.("change", onChange);
+    }
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       router.invalidate();
