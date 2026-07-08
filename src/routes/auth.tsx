@@ -60,7 +60,7 @@ function AuthPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex max-w-md flex-col items-center px-6 pt-12">
-        <Link to="/" className="mb-8"><Logo className="h-10" /></Link>
+        <Link to="/" className="mb-8"><Logo /></Link>
         <div className="card-soft w-full p-8">
           <h1 className="mb-1 text-2xl font-semibold">{t("auth.welcome")}</h1>
           <p className="mb-6 text-sm text-muted-foreground">{t("auth.subtitle")}</p>
