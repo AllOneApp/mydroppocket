@@ -246,5 +246,30 @@
       "Choose \"Add to Home Screen\"",
       "Tap \"Add\""
     ]
+  },
+  "voice": {
+    "speak": "Speak",
+    "stop": "Stop",
+    "processing": "Processing…",
+    "filled": "AI filled the form — review and save.",
+    "tooShort": "Recording too short, try again.",
+    "micDenied": "Microphone access denied."
+  },
+  "dateRange": {
+    "period": "Period",
+    "from": "From",
+    "to": "To",
+    "presets": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "thisWeek": "This week",
+      "lastWeek": "Last week",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "thisYear": "This year",
+      "lastYear": "Last year",
+      "all": "All time",
+      "custom": "Custom"
+    }
   }
 }
