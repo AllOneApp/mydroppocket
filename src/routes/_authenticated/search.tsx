@@ -4,6 +4,7 @@ import { Search as SearchIcon, ShieldCheck, Wallet, FileText } from "lucide-reac
 
 import { AppShell } from "@/components/AppShell";
 import { Input } from "@/components/ui/input";
+import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/records";
 import { useQuery } from "@tanstack/react-query";
@@ -17,19 +18,40 @@ export const Route = createFileRoute("/_authenticated/search")({
 function SearchPage() {
   const { t } = useTranslation();
   const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<{ module?: string | null; type?: string | null; store?: string | null; category?: string | null; date_from?: string | null; date_to?: string | null } | null>(null);
   const term = q.trim();
 
   const { data, isFetching } = useQuery({
-    queryKey: ["search", term],
-    enabled: term.length > 0,
+    queryKey: ["search", term, filters],
+    enabled: term.length > 0 || !!filters,
     queryFn: async () => {
-      const like = `%${term}%`;
+      const kw = (filters?.store || filters?.category || term).trim();
+      const like = `%${kw}%`;
       const asNum = Number(term);
-      const numFilter = !Number.isNaN(asNum) ? `,amount.eq.${asNum}` : "";
+      const numFilter = !Number.isNaN(asNum) && term ? `,amount.eq.${asNum}` : "";
+      const mod = filters?.module ?? "all";
+
+      const wantW = mod === "all" || mod === "warranties";
+      const wantE = mod === "all" || mod === "expenses";
+      const wantA = mod === "all" || mod === "agreements";
+
+      const wq = supabase.from("warranties").select("*").limit(20);
+      const eq = supabase.from("expenses").select("*").limit(20);
+      const aq = supabase.from("agreements").select("*").limit(20);
+      if (kw) {
+        wq.or(`product_name.ilike.${like},store.ilike.${like},notes.ilike.${like}${numFilter}`);
+        eq.or(`description.ilike.${like},category.ilike.${like},store.ilike.${like},notes.ilike.${like}${numFilter}`);
+        aq.or(`title.ilike.${like},company.ilike.${like},agreement_number.ilike.${like},notes.ilike.${like}`);
+      }
+      if (filters?.type) eq.eq("type", filters.type);
+      if (filters?.category) eq.eq("category", filters.category);
+      if (filters?.date_from) { wq.gte("purchase_date", filters.date_from); eq.gte("expense_date", filters.date_from); aq.gte("start_date", filters.date_from); }
+      if (filters?.date_to) { wq.lte("purchase_date", filters.date_to); eq.lte("expense_date", filters.date_to); aq.lte("start_date", filters.date_to); }
+
       const [w, e, a] = await Promise.all([
-        supabase.from("warranties").select("*").or(`product_name.ilike.${like},store.ilike.${like},notes.ilike.${like}${numFilter}`).limit(20),
-        supabase.from("expenses").select("*").or(`description.ilike.${like},category.ilike.${like},store.ilike.${like},notes.ilike.${like}${numFilter}`).limit(20),
-        supabase.from("agreements").select("*").or(`title.ilike.${like},company.ilike.${like},agreement_number.ilike.${like},notes.ilike.${like}`).limit(20),
+        wantW ? wq : Promise.resolve({ data: [] as unknown[] }),
+        wantE ? eq : Promise.resolve({ data: [] as unknown[] }),
+        wantA ? aq : Promise.resolve({ data: [] as unknown[] }),
       ]);
       return { warranties: w.data ?? [], expenses: e.data ?? [], agreements: a.data ?? [] };
     },
@@ -40,15 +62,41 @@ function SearchPage() {
       <h1 className="text-3xl font-bold">{t("search.title")}</h1>
       <p className="mt-1 text-muted-foreground">{t("search.subtitle")}</p>
 
-      <div className="relative mt-6">
-        <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input autoFocus placeholder={t("search.placeholder")} value={q} onChange={(e) => setQ(e.target.value)} className="h-12 pl-11 text-base" />
+      <div className="mt-6 flex gap-2">
+        <div className="relative flex-1">
+          <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input autoFocus placeholder={t("search.placeholder")} value={q} onChange={(e) => { setQ(e.target.value); setFilters(null); }} className="h-12 pl-11 text-base" />
+        </div>
+        <VoiceInput
+          context="search"
+          size="default"
+          onResult={(d, transcript) => {
+            setQ(transcript);
+            setFilters({
+              module: (d.module as string) || "all",
+              type: (d.type as string) || null,
+              store: (d.store as string) || null,
+              category: (d.category as string) || null,
+              date_from: (d.date_from as string) || null,
+              date_to: (d.date_to as string) || null,
+            });
+          }}
+        />
       </div>
+      {filters && (
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          {filters.module && filters.module !== "all" && <span className="rounded-full bg-accent px-2.5 py-1">{filters.module}</span>}
+          {filters.type && <span className="rounded-full bg-accent px-2.5 py-1">{filters.type}</span>}
+          {filters.store && <span className="rounded-full bg-accent px-2.5 py-1">{filters.store}</span>}
+          {filters.category && <span className="rounded-full bg-accent px-2.5 py-1">{filters.category}</span>}
+          {(filters.date_from || filters.date_to) && <span className="rounded-full bg-accent px-2.5 py-1">{filters.date_from ?? "…"} → {filters.date_to ?? "…"}</span>}
+        </div>
+      )}
 
-      {term.length === 0 && <p className="mt-10 text-center text-sm text-muted-foreground">{t("search.hint")}</p>}
-      {term.length > 0 && isFetching && <p className="mt-10 text-center text-sm text-muted-foreground">{t("search.searching")}</p>}
+      {term.length === 0 && !filters && <p className="mt-10 text-center text-sm text-muted-foreground">{t("search.hint")}</p>}
+      {(term.length > 0 || filters) && isFetching && <p className="mt-10 text-center text-sm text-muted-foreground">{t("search.searching")}</p>}
 
-      {term.length > 0 && data && (
+      {(term.length > 0 || filters) && data && (
         <div className="mt-8 grid gap-6">
           <Group icon={ShieldCheck} title={t("search.warrantiesN", { count: data.warranties.length })} to="/warranties">
             {data.warranties.map((r) => (
