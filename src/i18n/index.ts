@@ -15,10 +15,11 @@ export function pickLang(input: string | null | undefined): Lang {
 }
 
 if (!i18n.isInitialized) {
-  const initialLang =
+  // Estonian is the default. Only saved user preference in localStorage overrides it.
+  const initialLang: Lang =
     typeof window !== "undefined"
-      ? pickLang(localStorage.getItem("dp_lang") ?? window.navigator.language)
-      : "en";
+      ? (localStorage.getItem("dp_lang") === "en" ? "en" : "et")
+      : "et";
 
   void i18n
     .use(LanguageDetector)
@@ -29,11 +30,11 @@ if (!i18n.isInitialized) {
         et: { translation: et },
       },
       lng: initialLang,
-      fallbackLng: "en",
+      fallbackLng: "et",
       supportedLngs: ["en", "et"],
       interpolation: { escapeValue: false },
       detection: {
-        order: ["localStorage", "navigator"],
+        order: ["localStorage"],
         lookupLocalStorage: "dp_lang",
         caches: ["localStorage"],
       },
