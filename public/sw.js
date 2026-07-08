@@ -1,5 +1,5 @@
 // DropPocket service worker (minimal, network-first for navigations).
-const CACHE = "dp-v1";
+const CACHE = "dp-v2-mydroppocket";
 const CORE = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
