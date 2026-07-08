@@ -1,0 +1,2 @@
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS type text NOT NULL DEFAULT 'expense' CHECK (type IN ('expense','income'));
+CREATE INDEX IF NOT EXISTS expenses_user_type_date_idx ON public.expenses(user_id, type, expense_date DESC);

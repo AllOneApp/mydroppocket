@@ -92,6 +92,7 @@ export type Database = {
           notes: string | null
           ocr_raw: Json | null
           store: string | null
+          type: string
           updated_at: string
           user_id: string
         }
@@ -109,6 +110,7 @@ export type Database = {
           notes?: string | null
           ocr_raw?: Json | null
           store?: string | null
+          type?: string
           updated_at?: string
           user_id: string
         }
@@ -126,6 +128,7 @@ export type Database = {
           notes?: string | null
           ocr_raw?: Json | null
           store?: string | null
+          type?: string
           updated_at?: string
           user_id?: string
         }
