@@ -32,7 +32,10 @@ function Landing() {
           <h1 className="mx-auto max-w-3xl text-5xl font-bold tracking-tight sm:text-6xl">
             {t("landing.titleA")}<span className="bg-gradient-to-br from-primary to-blue-800 bg-clip-text text-transparent">{t("landing.titleB")}</span>.
           </h1>
-          <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">{t("landing.subtitle")}</p>
+          <p className="mx-auto mt-6 max-w-2xl text-lg text-foreground">
+            Garantiitšekid ei pea enam seisma sahtlis ega pleekima aja jooksul. MyDropPocket aitab sul kõik ostutšekid, garantiid ja järelmaksulepingud turvaliselt ühte kohta salvestada. Leia vajalik dokument sekunditega otsingu või häälkäskluse abil ning prindi või saada see e-postiga edasi alati siis, kui seda vajad. Nii on sinu olulised ostudokumendid alati alles ja käepärast.
+          </p>
+          <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">{t("landing.subtitle")}</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link to="/auth">
               <Button size="lg" className="brand-gradient-bg text-primary-foreground shadow-lg">
