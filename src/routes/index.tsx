@@ -12,11 +12,13 @@ function Landing() {
   const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-background">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-        <Logo className="h-10" />
-        <div className="flex items-center gap-2">
-          <Link to="/auth"><Button variant="ghost">{t("common.signIn")}</Button></Link>
-          <Link to="/auth"><Button className="brand-gradient-bg text-primary-foreground">{t("common.getStarted")}</Button></Link>
+      <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4 sm:py-5">
+        <Link to="/" className="flex shrink-0 items-center" aria-label="DropPocket">
+          <Logo />
+        </Link>
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <Link to="/auth"><Button variant="ghost" size="sm" className="px-2 sm:px-3">{t("common.signIn")}</Button></Link>
+          <Link to="/auth"><Button size="sm" className="brand-gradient-bg px-3 text-primary-foreground sm:px-4">{t("common.getStarted")}</Button></Link>
         </div>
       </header>
 
