@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldCheck, Wallet, FileText, ArrowRight, Bell } from "lucide-react";
+import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,10 +26,20 @@ function Dashboard() {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const weekStart = new Date(now);
       weekStart.setDate(now.getDate() - now.getDay());
-      const allExp = await supabase.from("expenses").select("amount, expense_date").gte("expense_date", monthStart.toISOString().slice(0, 10));
-      const rows = allExp.data ?? [];
-      const monthTotal = rows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
-      const weekTotal = rows.filter((r) => new Date(r.expense_date) >= weekStart).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      const allExp = await supabase.from("expenses").select("amount, expense_date, type").gte("expense_date", yearStart.toISOString().slice(0, 10));
+      const rows = (allExp.data ?? []) as { amount: number; expense_date: string; type: "expense" | "income" }[];
+      const sum = (list: typeof rows, type: "expense" | "income") => list.filter((r) => r.type === type).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+      const todayStr = now.toISOString().slice(0, 10);
+      const dayRows = rows.filter((r) => r.expense_date === todayStr);
+      const weekRows = rows.filter((r) => new Date(r.expense_date) >= weekStart);
+      const monthRows = rows.filter((r) => new Date(r.expense_date) >= monthStart);
+      const totals = {
+        today: { income: sum(dayRows, "income"), expense: sum(dayRows, "expense") },
+        week: { income: sum(weekRows, "income"), expense: sum(weekRows, "expense") },
+        month: { income: sum(monthRows, "income"), expense: sum(monthRows, "expense") },
+        year: { income: sum(rows, "income"), expense: sum(rows, "expense") },
+      };
       const expiring = (w.data ?? []).filter((r) => {
         const s = warrantyStatus(r.warranty_expiry).tone;
         return s === "orange";
@@ -38,7 +48,7 @@ function Dashboard() {
         warranties: w.data ?? [],
         expenses: e.data ?? [],
         agreements: a.data ?? [],
-        monthTotal, weekTotal, expiring,
+        totals, expiring,
       };
     },
   });
@@ -62,9 +72,29 @@ function Dashboard() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <ModuleCard to="/warranties" icon={ShieldCheck} title={t("nav.warranties")} value={t("dashboard.warrantiesTracked", { count: data?.warranties.length ?? 0 })} sub={t("dashboard.expiringSoon", { count: data?.expiring.length ?? 0 })} />
-        <ModuleCard to="/expenses" icon={Wallet} title={t("nav.expenses")} value={formatCurrency(data?.monthTotal ?? 0)} sub={t("dashboard.thisWeek", { amount: formatCurrency(data?.weekTotal ?? 0) })} />
+        <ModuleCard to="/expenses" icon={Wallet} title={t("nav.expenses")} value={formatCurrency((data?.totals.month.income ?? 0) - (data?.totals.month.expense ?? 0))} sub={t("expenses.balance") + " · " + t("expenses.thisMonth")} />
         <ModuleCard to="/agreements" icon={FileText} title={t("nav.agreements")} value={t("dashboard.onFile", { count: data?.agreements.length ?? 0 })} sub={t("dashboard.contractsInstallments")} />
       </div>
+
+      {data && (
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {(["today", "week", "month", "year"] as const).map((k) => {
+            const p = data.totals[k];
+            const bal = p.income - p.expense;
+            const label = k === "today" ? t("expenses.today") : k === "week" ? t("expenses.thisWeek") : k === "month" ? t("expenses.thisMonth") : t("expenses.thisYear");
+            return (
+              <div key={k} className="card-soft p-5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+                <div className="mt-3 space-y-1.5 text-sm">
+                  <div className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><TrendingUp className="h-3.5 w-3.5 text-green-600" />{t("expenses.income")}</span><span className="font-medium text-green-600">{formatCurrency(p.income)}</span></div>
+                  <div className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><TrendingDown className="h-3.5 w-3.5 text-red-600" />{t("expenses.expense")}</span><span className="font-medium text-red-600">{formatCurrency(p.expense)}</span></div>
+                  <div className="flex items-center justify-between border-t border-border pt-1.5"><span className="font-semibold">{t("expenses.balance")}</span><span className={`font-bold ${bal >= 0 ? "text-green-600" : "text-red-600"}`}>{formatCurrency(bal)}</span></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="card-soft p-6">
