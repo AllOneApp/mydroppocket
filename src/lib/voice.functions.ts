@@ -109,6 +109,8 @@ const RecurringSchema = z.object({
   frequency: z.enum(["monthly", "bimonthly", "quarterly", "semiannual", "annual"]).nullable(),
   due_day: z.number().nullable().describe("Day of month the payment is due, 1-31"),
   start_date: z.string().nullable().describe("YYYY-MM-DD"),
+  end_date: z.string().nullable().describe("YYYY-MM-DD, when the recurring payment ends"),
+  next_due_date: z.string().nullable().describe("YYYY-MM-DD, first / next due date if the user gave a full date"),
   notes: z.string().nullable(),
 });
 
@@ -138,9 +140,9 @@ function promptFor(kind: (typeof Kinds)[number], lang: string) {
     case "document":
       return `The user is attaching a document and describing what it belongs to. Detect which module (warranties/expenses/agreements) and the key search keyword (product name, company, or store). ${langNote}`;
     case "recurring_payment":
-      return `Extract a recurring payment (subscription, utility, installment, streaming, insurance, etc.) from a spoken note. Detect service_name, provider, category, amount, currency, frequency (monthly/bimonthly/quarterly/semiannual/annual — default monthly), and due_day (day of month). Currency defaults to EUR. ${langNote}`;
+      return `Extract a recurring payment (subscription, utility, installment, streaming, insurance, etc.) from a spoken note. Detect service_name, provider, category, amount, currency, frequency (monthly/bimonthly/quarterly/semiannual/annual), due_day (day of month), start_date, end_date and next_due_date. Map Estonian frequency words: "iga kuu"→monthly, "kord aastas"/"aastane"→annual, "kord kvartalis"→quarterly, "iga 2 kuu tagant"→bimonthly, "kord poolaastas"→semiannual. Map Estonian category words to English: telefon→Phone, internet→Internet, elekter→Electricity, vesi→Water, prügi→Waste, kindlustus→Insurance, voogedastus/striiming→Streaming, tarkvara→Software, liising→Leasing, järelmaks→Installment, kodulaen→Mortgage, tellimus→Subscription, kommunaal→Utilities, TV/kaabel→TV, pilv→CloudStorage. Full dates like "15. august 2026" become YYYY-MM-DD (2026-08-15). Currency defaults to EUR. ${langNote}`;
     default:
-      return `Extract a financial record from a spoken note. Decide type=expense (spending) or income (received). Pick a category from: expense=${ExpenseCategories.join(", ")}; income=${IncomeCategories.join(", ")}. Currency defaults to EUR. If no date is given use today (${t}). ${langNote}`;
+      return `Extract a financial record from a spoken note. Decide type=expense (spending) or income (received). Pick a category from: expense=${ExpenseCategories.join(", ")}; income=${IncomeCategories.join(", ")}. Map Estonian words to these categories: toit/toidukaubad→Groceries, kütus/bensiin→Fuel, restoran/söök väljas→Restaurant, kohv→Coffee, juuksur→Hairdresser, küüned→Nails, ost/pood/riided→Shopping, arst/apteek/tervis→Healthcare, reis/reisimine→Travel, lemmikloom→Pets; palk→Salary, müük→Sale, kingitus→Gift, investeering/dividend→Investment, tagastus→Refund. "Prisma/Rimi/Selver/Maxima/Coop" are grocery stores → store field, category=Groceries. Currency defaults to EUR. If no date is given use today (${t}). ${langNote}`;
   }
 }
 

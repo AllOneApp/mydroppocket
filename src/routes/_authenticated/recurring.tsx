@@ -421,7 +421,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
                 amount: d.amount != null ? String(d.amount) : f.amount,
                 currency: (d.currency as string) || f.currency,
                 frequency: (d.frequency as Frequency) || f.frequency,
-                next_due_date: dueDayToDate(d.due_day as number | null) || f.next_due_date,
+                start_date: (d.start_date as string) || f.start_date,
+                end_date: (d.end_date as string) || f.end_date,
+                next_due_date: (d.next_due_date as string) || dueDayToDate(d.due_day as number | null) || (d.start_date as string) || f.next_due_date,
                 notes: (d.notes as string) || f.notes,
               }))}
             />
