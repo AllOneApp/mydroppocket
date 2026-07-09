@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown } from "lucide-react";
+import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown, Repeat } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
@@ -44,11 +44,31 @@ function Dashboard() {
         const s = warrantyStatus(r.warranty_expiry).tone;
         return s === "orange";
       });
+
+      // Recurring payments summary
+      const now2 = new Date();
+      const mStart = new Date(now2.getFullYear(), now2.getMonth(), 1).toISOString().slice(0, 10);
+      const mEnd = new Date(now2.getFullYear(), now2.getMonth() + 1, 0).toISOString().slice(0, 10);
+      const todayStr2 = now2.toISOString().slice(0, 10);
+      const [rp, rpi] = await Promise.all([
+        supabase.from("recurring_payments").select("id, service_name, next_due_date, amount, currency"),
+        supabase.from("recurring_payment_instances").select("id, due_date, amount, status, recurring_payment_id"),
+      ]);
+      const insts = (rpi.data ?? []) as { id: string; due_date: string; amount: number; status: "pending" | "paid"; recurring_payment_id: string }[];
+      const rps = (rp.data ?? []) as { id: string; service_name: string; next_due_date: string; amount: number; currency: string | null }[];
+      const monthInsts = insts.filter((i) => i.due_date >= mStart && i.due_date <= mEnd);
+      const rpPaid = monthInsts.filter((i) => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
+      const rpUnpaid = monthInsts.filter((i) => i.status === "pending" && i.due_date >= todayStr2).reduce((s, i) => s + Number(i.amount), 0);
+      const rpOverdue = insts.filter((i) => i.status === "pending" && i.due_date < todayStr2).reduce((s, i) => s + Number(i.amount), 0);
+      const nextPending = insts.filter((i) => i.status === "pending").sort((a, b) => a.due_date.localeCompare(b.due_date))[0] ?? null;
+      const nextRec = nextPending ? rps.find((r) => r.id === nextPending.recurring_payment_id) ?? null : null;
+
       return {
         warranties: w.data ?? [],
         expenses: e.data ?? [],
         agreements: a.data ?? [],
         totals, expiring,
+        recurring: { paid: rpPaid, unpaid: rpUnpaid, overdue: rpOverdue, next: nextPending, nextRec },
       };
     },
   });
@@ -75,6 +95,40 @@ function Dashboard() {
         <ModuleCard to="/expenses" icon={Wallet} title={t("nav.expenses")} value={formatCurrency((data?.totals.month.income ?? 0) - (data?.totals.month.expense ?? 0))} sub={t("expenses.balance") + " · " + t("expenses.thisMonth")} />
         <ModuleCard to="/agreements" icon={FileText} title={t("nav.agreements")} value={t("dashboard.onFile", { count: data?.agreements.length ?? 0 })} sub={t("dashboard.contractsInstallments")} />
       </div>
+
+      {/* Recurring payments card */}
+      <div className="mt-6">
+        <Link to="/recurring" className="card-soft group block p-6 transition hover:-translate-y-0.5 hover:shadow-lg">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-xl brand-gradient-bg text-primary-foreground">
+                <Repeat className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t("nav.recurring")}</p>
+                <p className="text-lg font-semibold">{t("recurring.monthSummary")}</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <MiniStat label={"💚 " + t("recurring.paid")} value={formatCurrency(data?.recurring.paid ?? 0)} tone="green" />
+            <MiniStat label={"🟠 " + t("recurring.unpaid")} value={formatCurrency(data?.recurring.unpaid ?? 0)} tone="orange" />
+            <MiniStat label={"🔴 " + t("recurring.overdue")} value={formatCurrency(data?.recurring.overdue ?? 0)} tone="red" />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">📅 {t("recurring.nextDue")}</p>
+              {data?.recurring.next && data.recurring.nextRec ? (
+                <>
+                  <p className="mt-1 text-base font-bold">{data.recurring.next.due_date.slice(5).replace("-", ".")}</p>
+                  <p className="truncate text-xs text-muted-foreground">{data.recurring.nextRec.service_name}</p>
+                  <p className="text-sm font-semibold">{formatCurrency(Number(data.recurring.next.amount), data.recurring.nextRec.currency ?? "EUR")}</p>
+                </>
+              ) : <p className="mt-1 text-sm text-muted-foreground">{t("recurring.nothingDue")}</p>}
+            </div>
+          </div>
+        </Link>
+      </div>
+
 
       {data && (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
