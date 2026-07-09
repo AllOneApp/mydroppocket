@@ -27,7 +27,8 @@
     "deleted": "Deleted",
     "failed": "Failed",
     "scanFailed": "Scan failed",
-    "autoFilled": "Fields auto-filled"
+    "autoFilled": "Fields auto-filled",
+    "back": "Back"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -110,12 +111,16 @@
   },
   "expenses": {
     "title": "Income & expenses",
-    "desc": "Log income and spending with or without a receipt. Speak to add income or expenses.",
+    "desc": "Log income and expenses with or without a receipt. Speak or upload a receipt and AI fills the fields for you.",
     "add": "Add entry",
     "addExpense": "Add expense",
     "addIncome": "Add income",
     "editTitle": "Edit entry",
     "addTitle": "Add entry",
+    "uploadReceipt": "Upload receipt",
+    "fillManually": "Fill manually",
+    "orFill": "or fill the fields below manually",
+    "chooseMethod": "Choose how to add the entry",
     "type": "Type",
     "typeExpense": "Expense",
     "typeIncome": "Income",
