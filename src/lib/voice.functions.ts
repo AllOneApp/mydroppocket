@@ -296,7 +296,7 @@ export const parseVoiceCommand = createServerFn({ method: "POST" })
       return { ok: true as const, data: normalized as Record<string, string | number | null> };
     } catch (err) {
       if (NoObjectGeneratedError.isInstance(err)) {
-        console.error("[VoiceInput] server:parse:no-object", err.text);
+        console.error("[VoiceInput] server:parse:no-object", { textLength: err.text?.length ?? 0 });
         const fallback = parseJsonObject(err.text ?? "");
         if (fallback) {
           const normalized = normalizeVoiceOutput(data.context, fallback);
