@@ -27,7 +27,8 @@
     "deleted": "Kustutatud",
     "failed": "Ebaõnnestus",
     "scanFailed": "Skaneerimine ebaõnnestus",
-    "autoFilled": "Väljad täidetud automaatselt"
+    "autoFilled": "Väljad täidetud automaatselt",
+    "back": "Tagasi"
   },
   "nav": {
     "dashboard": "Töölaud",
@@ -110,12 +111,16 @@
   },
   "expenses": {
     "title": "Tulud ja kulud",
-    "desc": "Salvesta oma tulud ja kulud koos või ilma tšekita. Räägi ja lisa tulu või kulu.",
+    "desc": "Salvesta oma tulud ja kulud koos või ilma tšekita. Räägi või laadi tšekk ning AI täidab vajalikud väljad automaatselt.",
     "add": "Lisa kirje",
     "addExpense": "Lisa kulu",
     "addIncome": "Lisa tulu",
     "editTitle": "Muuda kirjet",
     "addTitle": "Lisa kirje",
+    "uploadReceipt": "Laadi tšekk üles",
+    "fillManually": "Täida käsitsi",
+    "orFill": "või täida väljad allpool käsitsi",
+    "chooseMethod": "Vali kuidas soovid andmed lisada",
     "type": "Tüüp",
     "typeExpense": "Kulu",
     "typeIncome": "Tulu",
@@ -255,10 +260,6 @@
     "tooShort": "Salvestus liiga lühike, proovi uuesti.",
     "micDenied": "Mikrofoni ligipääs puudub."
   },
-  "common.back": "Tagasi",
-  "expenses.uploadReceipt": "Laadi tšekk üles",
-  "expenses.fillManually": "Täida käsitsi",
-  "expenses.orFill": "või täida väljad käsitsi",
   "dateRange": {
     "period": "Periood",
     "from": "Alates",
