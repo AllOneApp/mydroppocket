@@ -34,6 +34,7 @@
     "dashboard": "Dashboard",
     "warranties": "Warranties",
     "expenses": "Income & expenses",
+    "recurring": "Recurring payments",
     "agreements": "Agreements",
     "search": "Search",
     "settings": "Settings"
@@ -275,6 +276,80 @@
       "lastYear": "Last year",
       "all": "All time",
       "custom": "Custom"
+    }
+  },
+  "recurring": {
+    "title": "Recurring payments",
+    "desc": "Manage every recurring payment — utilities, subscriptions, installments and contracts.",
+    "add": "Add recurring payment",
+    "addTitle": "Add recurring payment",
+    "editTitle": "Edit recurring payment",
+    "empty.title": "No recurring payments yet",
+    "empty.desc": "Add your first recurring payment to keep every subscription in one place.",
+    "serviceName": "Service name",
+    "provider": "Provider",
+    "category": "Category",
+    "amount": "Amount",
+    "currency": "Currency",
+    "frequency": "Frequency",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "dueDate": "Due date",
+    "nextDue": "Next payment",
+    "reminder": "Reminder",
+    "notes": "Notes",
+    "contractFile": "Contract",
+    "receiptFile": "Receipt",
+    "invoiceFile": "Invoice",
+    "markPaid": "Mark as paid",
+    "paid": "Paid",
+    "unpaid": "To pay",
+    "overdue": "Overdue",
+    "monthSummary": "This month",
+    "confirmDelete": "Delete this recurring payment and all its instances?",
+    "added": "Recurring payment added",
+    "paidMarked": "Marked as paid",
+    "attachReceipt": "Attach a receipt or invoice?",
+    "photo": "Photo",
+    "uploadPdf": "Upload PDF",
+    "skip": "Skip",
+    "nothingDue": "Nothing due",
+    "frequencies": {
+      "monthly": "Every month",
+      "bimonthly": "Every 2 months",
+      "quarterly": "Every quarter",
+      "semiannual": "Every 6 months",
+      "annual": "Every year"
+    },
+    "reminders": {
+      "7": "7 days before",
+      "3": "3 days before",
+      "1": "1 day before",
+      "0": "On the due date"
+    },
+    "status": {
+      "paid": "Paid",
+      "dueIn": "Due in {{days}}d",
+      "overdue": "Overdue {{days}}d"
+    },
+    "categories": {
+      "Utilities": "Utilities",
+      "Electricity": "Electricity",
+      "Water": "Water",
+      "Waste": "Waste",
+      "Phone": "Phone",
+      "Internet": "Internet",
+      "TV": "TV",
+      "Leasing": "Leasing",
+      "Installment": "Installment",
+      "Mortgage": "Mortgage",
+      "Streaming": "Streaming",
+      "CloudStorage": "Cloud storage",
+      "AI": "AI service",
+      "Software": "Software",
+      "Insurance": "Insurance",
+      "Subscription": "Subscription",
+      "Other": "Other"
     }
   }
 }
