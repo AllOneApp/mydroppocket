@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Repeat, Trash2, CheckCircle2, Upload, Camera, X as XIcon } from "lucide-react";
+import { Plus, Repeat, Trash2, CheckCircle2, Upload, Camera, X as XIcon, Calendar, History, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileDrop } from "@/components/FileDrop";
 import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
-import { deleteFile, formatCurrency, uploadFile } from "@/lib/records";
+import { deleteFile, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
 import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_authenticated/recurring")({
@@ -47,6 +47,7 @@ function RecurringPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Recurring | null>(null);
   const [payAsk, setPayAsk] = useState<{ instance: Instance; recurring: Recurring } | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const { data: recurring } = useQuery({
     queryKey: ["recurring_payments"],
@@ -102,7 +103,17 @@ function RecurringPage() {
     const overdue = list.filter((i) => i.status === "pending" && i.due_date < today).reduce((s, i) => s + Number(i.amount), 0);
     const upcoming = list.filter((i) => i.status === "pending").sort((a, b) => a.due_date.localeCompare(b.due_date))[0] ?? null;
     const upcomingRec = upcoming ? (recurring ?? []).find((r) => r.id === upcoming.recurring_payment_id) : null;
-    return { paid, toPay, overdue, upcoming, upcomingRec };
+    const paidCount = inMonth.filter((i) => i.status === "paid").length;
+    const totalCount = inMonth.length;
+    const percent = totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0;
+    const upcomingList = list
+      .filter((i) => i.status === "pending")
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+      .slice(0, 8);
+    const history = list
+      .filter((i) => i.status === "paid")
+      .sort((a, b) => (b.paid_at ?? b.due_date).localeCompare(a.paid_at ?? a.due_date));
+    return { paid, toPay, overdue, upcoming, upcomingRec, paidCount, totalCount, percent, upcomingList, history };
   }, [instances, recurring, monthStart, monthEnd, today]);
 
   async function markPaid(inst: Instance, rec: Recurring) {
@@ -180,6 +191,54 @@ function RecurringPage() {
         </div>
       </div>
 
+      {/* Month progress */}
+      {summary.totalCount > 0 && (
+        <div className="card-soft mb-6 p-5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold">{t("recurring.monthProgress")}</p>
+            <p className="text-sm font-bold">{summary.percent}%</p>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full brand-gradient-bg transition-all"
+              style={{ width: `${summary.percent}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t("recurring.paymentsPaid", { paid: summary.paidCount, total: summary.totalCount })}
+          </p>
+        </div>
+      )}
+
+      {/* Upcoming payments */}
+      <div className="card-soft mb-6 p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">{t("recurring.upcomingTitle")}</h3>
+        </div>
+        {summary.upcomingList.length === 0 ? (
+          <p className="py-3 text-center text-sm text-muted-foreground">{t("recurring.upcomingEmpty")}</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {summary.upcomingList.map((i) => {
+              const rec = (recurring ?? []).find((r) => r.id === i.recurring_payment_id);
+              const overdueRow = i.due_date < today;
+              return (
+                <li key={i.id} className="flex items-center gap-3 py-2.5">
+                  <div className={`w-14 shrink-0 text-center text-xs font-semibold ${overdueRow ? "text-red-600" : "text-muted-foreground"}`}>
+                    {i.due_date.slice(5).replace("-", ".")}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{rec?.service_name ?? "—"}</p>
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold">{formatCurrency(Number(i.amount), i.currency ?? "EUR")}</p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
       {/* List */}
       {(recurring ?? []).length === 0 ? (
         <div className="card-soft flex flex-col items-center p-12 text-center">
@@ -230,6 +289,58 @@ function RecurringPage() {
           })}
         </div>
       )}
+
+      {/* Payment history */}
+      <div className="mt-6">
+        <button
+          onClick={() => setShowHistory((v) => !v)}
+          className="card-soft flex w-full items-center justify-between p-4 text-left transition hover:shadow-md"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            <History className="h-4 w-4 text-primary" />
+            {t("recurring.historyTitle")}
+            <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{summary.history.length}</span>
+          </span>
+          {showHistory ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+        {showHistory && (
+          <div className="card-soft mt-2 p-5">
+            {summary.history.length === 0 ? (
+              <p className="py-3 text-center text-sm text-muted-foreground">{t("recurring.historyEmpty")}</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {summary.history.map((i) => {
+                  const rec = (recurring ?? []).find((r) => r.id === i.recurring_payment_id);
+                  return (
+                    <li key={i.id} className="flex items-center gap-3 py-3">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{rec?.service_name ?? "—"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {t("recurring.paidOn")}: {(i.paid_at ?? i.due_date).slice(0, 10)}
+                        </p>
+                      </div>
+                      {i.receipt_file_path && (
+                        <button
+                          onClick={async () => {
+                            try { const url = await signedUrl(i.receipt_file_path!); window.open(url, "_blank"); }
+                            catch (e) { toast.error(e instanceof Error ? e.message : t("common.failed")); }
+                          }}
+                          className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          title={t("recurring.viewReceipt")}
+                        >
+                          <FileText className="h-4 w-4" />
+                        </button>
+                      )}
+                      <p className="shrink-0 text-sm font-semibold">{formatCurrency(Number(i.amount), i.currency ?? "EUR")}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
 
       <RecurringDialog open={open} onOpenChange={setOpen} row={editing} />
       <AttachReceiptDialog data={payAsk} onClose={() => setPayAsk(null)} />
