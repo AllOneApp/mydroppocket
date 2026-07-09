@@ -85,11 +85,11 @@ export function VoiceInput({ context, onResult, size = "sm", variant = "outline"
       console.info("[VoiceInput] client:transcribe-result", { context, ok: stt.ok, textLength: stt.ok ? stt.text.length : 0 });
       if (!stt.ok) { toast.error(stt.error); setState("idle"); return; }
       if (!stt.text.trim()) { toast.error(t("voice.tooShort")); setState("idle"); return; }
-      console.info("[VoiceInput] client:send-parse", { context, text: stt.text });
+      console.info("[VoiceInput] client:send-parse", { context, textLength: stt.text.length });
       const parsed = await parse({ data: { text: stt.text, context, lang: i18n.language || "et" } });
-      console.info("[VoiceInput] client:parse-result", { context, ok: parsed.ok, data: parsed.ok ? parsed.data : undefined, error: parsed.ok ? undefined : parsed.error });
+      console.info("[VoiceInput] client:parse-result", { context, ok: parsed.ok, keys: parsed.ok ? Object.keys(parsed.data) : [], error: parsed.ok ? undefined : parsed.error });
       if (!parsed.ok) { toast.error(parsed.error); setState("idle"); return; }
-      console.info("[VoiceInput] client:onResult", { context, data: parsed.data });
+      console.info("[VoiceInput] client:onResult", { context, keys: Object.keys(parsed.data) });
       onResult(parsed.data, stt.text);
       console.info("[VoiceInput] client:onResult-done", { context });
       toast.success(t("voice.filled"));
