@@ -82,21 +82,23 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <Menu style={{ width: 28, height: 28 }} />
           </Button>
-          {showBack && (
-            <Button
-              variant="ghost"
-              onClick={() => window.history.back()}
-              aria-label="Back"
-              className="h-11 w-11 shrink-0 p-0"
-            >
-              <ArrowLeft style={{ width: 26, height: 26 }} />
-            </Button>
-          )}
           <Logo className="h-10" />
           <div className="ml-auto"><LanguageSwitcher /></div>
         </header>
         <main className="min-w-0 flex-1 p-6 md:p-10">
-          <div className="mx-auto max-w-6xl">{children}</div>
+          <div className="mx-auto max-w-6xl">
+            {showBack && (
+              <button
+                type="button"
+                onClick={() => window.history.back()}
+                className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                aria-label={t("common.back")}
+              >
+                <ArrowLeft className="h-4 w-4" /> {t("common.back")}
+              </button>
+            )}
+            {children}
+          </div>
         </main>
       </div>
     </div>
