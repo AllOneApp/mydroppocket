@@ -34,6 +34,7 @@
     "dashboard": "Töölaud",
     "warranties": "Garantiid",
     "expenses": "Tulud ja kulud",
+    "recurring": "Püsimaksed",
     "agreements": "Lepingud",
     "search": "Otsing",
     "settings": "Seaded"
@@ -275,6 +276,80 @@
       "lastYear": "Eelmine aasta",
       "all": "Kõik",
       "custom": "Kohandatud"
+    }
+  },
+  "recurring": {
+    "title": "Püsimaksed",
+    "desc": "Halda kõiki korduvaid makseid — kommunaalid, tellimused, järelmaksud ja lepingud.",
+    "add": "Lisa püsimakse",
+    "addTitle": "Lisa püsimakse",
+    "editTitle": "Muuda püsimakset",
+    "empty.title": "Püsimakseid pole veel",
+    "empty.desc": "Lisa oma esimene püsimakse, et hoida kõik korduvad kulud ühes kohas.",
+    "serviceName": "Teenuse nimi",
+    "provider": "Teenusepakkuja",
+    "category": "Kategooria",
+    "amount": "Summa",
+    "currency": "Valuuta",
+    "frequency": "Korduvus",
+    "startDate": "Alguskuupäev",
+    "endDate": "Lõppkuupäev",
+    "dueDate": "Maksetähtaeg",
+    "nextDue": "Järgmine makse",
+    "reminder": "Meeldetuletus",
+    "notes": "Märkused",
+    "contractFile": "Leping",
+    "receiptFile": "Maksekinnitus",
+    "invoiceFile": "Arve",
+    "markPaid": "Märgista makstuks",
+    "paid": "Makstud",
+    "unpaid": "Veel maksta",
+    "overdue": "Hilinenud",
+    "monthSummary": "Kuu kokkuvõte",
+    "confirmDelete": "Kustutada see püsimakse ja kõik selle maksed?",
+    "added": "Püsimakse lisatud",
+    "paidMarked": "Makse märgitud makstuks",
+    "attachReceipt": "Soovid lisada maksekinnituse või arve?",
+    "photo": "Pildista",
+    "uploadPdf": "Laadi PDF",
+    "skip": "Jäta vahele",
+    "nothingDue": "Ei ole tähtaegu",
+    "frequencies": {
+      "monthly": "Iga kuu",
+      "bimonthly": "Iga 2 kuu tagant",
+      "quarterly": "Kord kvartalis",
+      "semiannual": "Kord poolaastas",
+      "annual": "Kord aastas"
+    },
+    "reminders": {
+      "7": "7 päeva enne",
+      "3": "3 päeva enne",
+      "1": "1 päev enne",
+      "0": "Maksetähtaja päeval"
+    },
+    "status": {
+      "paid": "Makstud",
+      "dueIn": "Tulemas {{days}} p",
+      "overdue": "Hilinenud {{days}} p"
+    },
+    "categories": {
+      "Utilities": "Kommunaalid",
+      "Electricity": "Elekter",
+      "Water": "Vesi",
+      "Waste": "Prügi",
+      "Phone": "Telefon",
+      "Internet": "Internet",
+      "TV": "TV",
+      "Leasing": "Liising",
+      "Installment": "Järelmaks",
+      "Mortgage": "Kodulaen",
+      "Streaming": "Voogedastus",
+      "CloudStorage": "Pilvesalvestus",
+      "AI": "AI teenus",
+      "Software": "Tarkvara",
+      "Insurance": "Kindlustus",
+      "Subscription": "Tellimus",
+      "Other": "Muu"
     }
   }
 }
