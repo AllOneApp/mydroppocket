@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, ShieldCheck, Wallet, FileText, Search, Settings, LogOut, Menu, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Wallet, FileText, Search, Settings, LogOut, Menu, ArrowLeft, Repeat } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "./Logo";
@@ -12,6 +12,7 @@ const nav = [
   { to: "/dashboard", icon: LayoutDashboard, key: "dashboard" },
   { to: "/warranties", icon: ShieldCheck, key: "warranties" },
   { to: "/expenses", icon: Wallet, key: "expenses" },
+  { to: "/recurring", icon: Repeat, key: "recurring" },
   { to: "/agreements", icon: FileText, key: "agreements" },
   { to: "/search", icon: Search, key: "search" },
   { to: "/settings", icon: Settings, key: "settings" },
