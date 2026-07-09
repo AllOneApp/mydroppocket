@@ -367,7 +367,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 
   useEffect(() => { if (open) { setForm(makeForm(row)); setFile(null); } }, [open, row]);
   useEffect(() => {
-    if (open) console.info("[VoiceInput] recurring:form-state", form);
+    if (open) console.info("[VoiceInput] recurring:form-state", { filledFields: Object.values(form).filter(Boolean).length });
   }, [open, form]);
 
   async function save(e: React.FormEvent) {
@@ -417,7 +417,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             <VoiceInput
               context="recurring_payment"
               onResult={(d) => {
-                console.info("[VoiceInput] recurring:onResult", d);
+                console.info("[VoiceInput] recurring:onResult", { keys: Object.keys(d) });
                 setForm((f) => {
                   const next = {
                     ...f,
@@ -432,7 +432,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
                     next_due_date: (d.next_due_date as string) || dueDayToDate(d.due_day as number | null) || (d.start_date as string) || f.next_due_date,
                     notes: (d.notes as string) || f.notes,
                   };
-                  console.info("[VoiceInput] recurring:setForm", next);
+                  console.info("[VoiceInput] recurring:setForm", { filledFields: Object.values(next).filter(Boolean).length });
                   return next;
                 });
               }}
