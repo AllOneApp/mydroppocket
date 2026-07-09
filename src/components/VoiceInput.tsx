@@ -38,17 +38,25 @@ export function VoiceInput({ context, onResult, size = "sm", variant = "outline"
 
   async function start() {
     try {
+      console.info("[VoiceInput] client:start", { context });
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
       streamRef.current = stream;
       const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
       const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
       chunksRef.current = [];
-      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      rec.onstop = () => finish(rec.mimeType || "audio/webm");
+      rec.ondataavailable = (e) => {
+        console.info("[VoiceInput] client:data", { context, size: e.data.size, type: e.data.type });
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      rec.onstop = () => {
+        console.info("[VoiceInput] client:stop-event", { context, chunks: chunksRef.current.length, mime: rec.mimeType });
+        finish(rec.mimeType || "audio/webm");
+      };
       rec.start();
       recorderRef.current = rec;
       setState("recording");
+      console.info("[VoiceInput] client:recording", { context, mime: rec.mimeType });
     } catch (e) {
       toast.error(t("voice.micDenied"));
       console.error(e);
@@ -56,6 +64,7 @@ export function VoiceInput({ context, onResult, size = "sm", variant = "outline"
   }
 
   function stop() {
+    console.info("[VoiceInput] client:stop-click", { context, state: recorderRef.current?.state });
     recorderRef.current?.stop();
     streamRef.current?.getTracks().forEach((tr) => tr.stop());
   }
@@ -64,20 +73,28 @@ export function VoiceInput({ context, onResult, size = "sm", variant = "outline"
     setState("processing");
     try {
       const blob = new Blob(chunksRef.current, { type: mimeType });
+      console.info("[VoiceInput] client:finish", { context, mimeType, blobSize: blob.size, chunks: chunksRef.current.length });
       if (blob.size < 1024) {
         toast.error(t("voice.tooShort"));
         setState("idle");
         return;
       }
       const base64 = await blobToBase64(blob);
+      console.info("[VoiceInput] client:send-transcribe", { context, mimeType, base64Length: base64.length });
       const stt = await transcribe({ data: { mime: mimeType, base64 } });
+      console.info("[VoiceInput] client:transcribe-result", { context, ok: stt.ok, textLength: stt.ok ? stt.text.length : 0 });
       if (!stt.ok) { toast.error(stt.error); setState("idle"); return; }
       if (!stt.text.trim()) { toast.error(t("voice.tooShort")); setState("idle"); return; }
+      console.info("[VoiceInput] client:send-parse", { context, text: stt.text });
       const parsed = await parse({ data: { text: stt.text, context, lang: i18n.language || "et" } });
+      console.info("[VoiceInput] client:parse-result", { context, ok: parsed.ok, data: parsed.ok ? parsed.data : undefined, error: parsed.ok ? undefined : parsed.error });
       if (!parsed.ok) { toast.error(parsed.error); setState("idle"); return; }
+      console.info("[VoiceInput] client:onResult", { context, data: parsed.data });
       onResult(parsed.data, stt.text);
+      console.info("[VoiceInput] client:onResult-done", { context });
       toast.success(t("voice.filled"));
     } catch (e) {
+      console.error("[VoiceInput] client:error", e);
       toast.error(e instanceof Error ? e.message : t("common.failed"));
     } finally {
       setState("idle");
