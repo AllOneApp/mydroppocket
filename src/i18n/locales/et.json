@@ -45,7 +45,7 @@
     "warranties.title": "Garantiid",
     "warranties.desc": "Jälgi kehtivaid garantiisid ja saa teade enne aegumist.",
     "expenses.title": "Kulud",
-    "expenses.desc": "Salvesta igapäevased kulud koos või ilma tšekita.",
+    "expenses.desc": "Salvesta oma tulud ja kulud koos või ilma tšekita. Räägi või laadi tšekk ning AI täidab vajalikud väljad automaatselt.",
     "agreements.title": "Lepingud",
     "agreements.desc": "Hoia lepingud ja järelmaksud turvaliselt.",
     "originals.title": "Originaalfailid puutumata",
@@ -255,6 +255,10 @@
     "tooShort": "Salvestus liiga lühike, proovi uuesti.",
     "micDenied": "Mikrofoni ligipääs puudub."
   },
+  "common.back": "Tagasi",
+  "expenses.uploadReceipt": "Laadi tšekk üles",
+  "expenses.fillManually": "Täida käsitsi",
+  "expenses.orFill": "või täida väljad käsitsi",
   "dateRange": {
     "period": "Periood",
     "from": "Alates",
