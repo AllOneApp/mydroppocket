@@ -220,3 +220,13 @@ function ModuleCard({ to, icon: Icon, title, value, sub }: { to: "/warranties" |
 function EmptyState({ msg }: { msg: string }) {
   return <p className="py-6 text-center text-sm text-muted-foreground">{msg}</p>;
 }
+
+function MiniStat({ label, value, tone }: { label: string; value: string; tone: "green" | "orange" | "red" }) {
+  const color = tone === "green" ? "text-green-600" : tone === "orange" ? "text-orange-600" : "text-red-600";
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-base font-bold ${color}`}>{value}</p>
+    </div>
+  );
+}
