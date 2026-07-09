@@ -366,6 +366,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
   const [form, setForm] = useState(() => makeForm(row));
 
   useEffect(() => { if (open) { setForm(makeForm(row)); setFile(null); } }, [open, row]);
+  useEffect(() => {
+    if (open) console.info("[VoiceInput] recurring:form-state", { filledFields: Object.values(form).filter(Boolean).length });
+  }, [open, form]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -413,19 +416,26 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           <div className="flex justify-end">
             <VoiceInput
               context="recurring_payment"
-              onResult={(d) => setForm((f) => ({
-                ...f,
-                service_name: (d.service_name as string) || f.service_name,
-                provider: (d.provider as string) || f.provider,
-                category: (d.category as string) && (CATEGORIES as readonly string[]).includes(d.category as string) ? (d.category as string) : f.category,
-                amount: d.amount != null ? String(d.amount) : f.amount,
-                currency: (d.currency as string) || f.currency,
-                frequency: (d.frequency as Frequency) || f.frequency,
-                start_date: (d.start_date as string) || f.start_date,
-                end_date: (d.end_date as string) || f.end_date,
-                next_due_date: (d.next_due_date as string) || dueDayToDate(d.due_day as number | null) || (d.start_date as string) || f.next_due_date,
-                notes: (d.notes as string) || f.notes,
-              }))}
+              onResult={(d) => {
+                console.info("[VoiceInput] recurring:onResult", { keys: Object.keys(d) });
+                setForm((f) => {
+                  const next = {
+                    ...f,
+                    service_name: (d.service_name as string) || f.service_name,
+                    provider: (d.provider as string) || f.provider,
+                    category: (d.category as string) && (CATEGORIES as readonly string[]).includes(d.category as string) ? (d.category as string) : f.category,
+                    amount: d.amount != null ? String(d.amount) : f.amount,
+                    currency: (d.currency as string) || f.currency,
+                    frequency: (d.frequency as Frequency) || f.frequency,
+                    start_date: (d.start_date as string) || f.start_date,
+                    end_date: (d.end_date as string) || f.end_date,
+                    next_due_date: (d.next_due_date as string) || dueDayToDate(d.due_day as number | null) || (d.start_date as string) || f.next_due_date,
+                    notes: (d.notes as string) || f.notes,
+                  };
+                  console.info("[VoiceInput] recurring:setForm", { filledFields: Object.values(next).filter(Boolean).length });
+                  return next;
+                });
+              }}
             />
           </div>
           <div><Label>{t("recurring.serviceName")} *</Label><Input required value={form.service_name} onChange={(e) => setForm({ ...form, service_name: e.target.value })} /></div>
