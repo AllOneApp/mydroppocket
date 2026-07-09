@@ -16,7 +16,7 @@ import { FileDrop } from "@/components/FileDrop";
 import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, formatCurrency, uploadFile } from "@/lib/records";
-import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Category, type Frequency } from "@/lib/recurring";
+import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_authenticated/recurring")({
   head: () => ({ meta: [{ title: "Püsimaksed — MyDropPocket" }] }),
