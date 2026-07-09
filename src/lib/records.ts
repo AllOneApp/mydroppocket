@@ -1,11 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import i18n from "@/i18n";
 
-export type RecordKind = "warranty" | "expense" | "agreement";
-export const tableFor: Record<RecordKind, "warranties" | "expenses" | "agreements"> = {
+export type RecordKind = "warranty" | "expense" | "agreement" | "recurring";
+export const tableFor: Record<RecordKind, "warranties" | "expenses" | "agreements" | "recurring_payments"> = {
   warranty: "warranties",
   expense: "expenses",
   agreement: "agreements",
+  recurring: "recurring_payments",
 };
 
 export async function uploadFile(userId: string, kind: RecordKind, file: File) {

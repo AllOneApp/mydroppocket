@@ -38,7 +38,7 @@ export const transcribeAudio = createServerFn({ method: "POST" })
     return { ok: true as const, text: json.text ?? "" };
   });
 
-const Kinds = ["expense", "income", "expense_or_income", "warranty", "agreement", "search", "document"] as const;
+const Kinds = ["expense", "income", "expense_or_income", "warranty", "agreement", "search", "document", "recurring_payment"] as const;
 
 const ParseInput = z.object({
   text: z.string(),
@@ -100,6 +100,18 @@ const DocumentLinkSchema = z.object({
   description: z.string().nullable(),
 });
 
+const RecurringSchema = z.object({
+  service_name: z.string().nullable(),
+  provider: z.string().nullable(),
+  category: z.string().nullable().describe("e.g. Utilities, Electricity, Water, Phone, Internet, TV, Streaming, Software, Insurance, Leasing, Installment, Mortgage, Subscription, Other"),
+  amount: z.number().nullable(),
+  currency: z.string().nullable(),
+  frequency: z.enum(["monthly", "bimonthly", "quarterly", "semiannual", "annual"]).nullable(),
+  due_day: z.number().nullable().describe("Day of month the payment is due, 1-31"),
+  start_date: z.string().nullable().describe("YYYY-MM-DD"),
+  notes: z.string().nullable(),
+});
+
 function today() { return new Date().toISOString().slice(0, 10); }
 
 function schemaFor(kind: (typeof Kinds)[number]) {
@@ -108,6 +120,7 @@ function schemaFor(kind: (typeof Kinds)[number]) {
     case "agreement": return AgreementSchema;
     case "search": return SearchSchema;
     case "document": return DocumentLinkSchema;
+    case "recurring_payment": return RecurringSchema;
     default: return RecordSchema;
   }
 }
@@ -124,6 +137,8 @@ function promptFor(kind: (typeof Kinds)[number], lang: string) {
       return `Turn the spoken query into search filters across warranties/expenses/agreements. Detect module, type (income/expense), store, category, keyword and date range (support "today", "yesterday", "this week/month/year", "last week/month/year"). ${langNote}`;
     case "document":
       return `The user is attaching a document and describing what it belongs to. Detect which module (warranties/expenses/agreements) and the key search keyword (product name, company, or store). ${langNote}`;
+    case "recurring_payment":
+      return `Extract a recurring payment (subscription, utility, installment, streaming, insurance, etc.) from a spoken note. Detect service_name, provider, category, amount, currency, frequency (monthly/bimonthly/quarterly/semiannual/annual — default monthly), and due_day (day of month). Currency defaults to EUR. ${langNote}`;
     default:
       return `Extract a financial record from a spoken note. Decide type=expense (spending) or income (received). Pick a category from: expense=${ExpenseCategories.join(", ")}; income=${IncomeCategories.join(", ")}. Currency defaults to EUR. If no date is given use today (${t}). ${langNote}`;
   }
