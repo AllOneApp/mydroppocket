@@ -164,6 +164,140 @@ export type Database = {
         }
         Relationships: []
       }
+      recurring_payment_instances: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string | null
+          due_date: string
+          id: string
+          invoice_file_mime: string | null
+          invoice_file_name: string | null
+          invoice_file_path: string | null
+          notes: string | null
+          paid_at: string | null
+          receipt_file_mime: string | null
+          receipt_file_name: string | null
+          receipt_file_path: string | null
+          recurring_payment_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string | null
+          due_date: string
+          id?: string
+          invoice_file_mime?: string | null
+          invoice_file_name?: string | null
+          invoice_file_path?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          receipt_file_mime?: string | null
+          receipt_file_name?: string | null
+          receipt_file_path?: string | null
+          recurring_payment_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string | null
+          due_date?: string
+          id?: string
+          invoice_file_mime?: string | null
+          invoice_file_name?: string | null
+          invoice_file_path?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          receipt_file_mime?: string | null
+          receipt_file_name?: string | null
+          receipt_file_path?: string | null
+          recurring_payment_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_payment_instances_recurring_payment_id_fkey"
+            columns: ["recurring_payment_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recurring_payments: {
+        Row: {
+          amount: number
+          category: string | null
+          contract_file_mime: string | null
+          contract_file_name: string | null
+          contract_file_path: string | null
+          created_at: string
+          currency: string | null
+          end_date: string | null
+          frequency: string
+          id: string
+          linked_purchase_id: string | null
+          next_due_date: string
+          notes: string | null
+          provider: string | null
+          reminder_days_before: number
+          service_name: string
+          start_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          contract_file_mime?: string | null
+          contract_file_name?: string | null
+          contract_file_path?: string | null
+          created_at?: string
+          currency?: string | null
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          linked_purchase_id?: string | null
+          next_due_date?: string
+          notes?: string | null
+          provider?: string | null
+          reminder_days_before?: number
+          service_name: string
+          start_date?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          contract_file_mime?: string | null
+          contract_file_name?: string | null
+          contract_file_path?: string | null
+          created_at?: string
+          currency?: string | null
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          linked_purchase_id?: string | null
+          next_due_date?: string
+          notes?: string | null
+          provider?: string | null
+          reminder_days_before?: number
+          service_name?: string
+          start_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       warranties: {
         Row: {
           amount: number | null
