@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { transcribeAudio, parseVoiceCommand } from "@/lib/voice.functions";
 
-type Context = "expense" | "income" | "expense_or_income" | "warranty" | "agreement" | "search" | "document";
+type Context = "expense" | "income" | "expense_or_income" | "warranty" | "agreement" | "search" | "document" | "recurring_payment";
 
 type Props = {
   context: Context;
