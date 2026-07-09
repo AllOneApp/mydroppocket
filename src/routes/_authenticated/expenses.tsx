@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Wallet, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, Wallet, TrendingUp, TrendingDown, Mic, Upload, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 
@@ -84,24 +84,6 @@ function ExpensesPage() {
           <p className="mt-1 text-sm text-muted-foreground sm:text-base">{t("expenses.desc")}</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-          <VoiceInput
-            context="expense_or_income"
-            variant="destructive"
-            className="h-11 w-full justify-center sm:w-auto"
-            onResult={(d) => {
-              setEditing(null);
-              setPrefill({
-                type: (d.type as EntryType) || "expense",
-                amount: d.amount != null ? Number(d.amount) : undefined as unknown as number,
-                currency: (d.currency as string) || "EUR",
-                store: (d.store as string) || null,
-                category: (d.category as string) || "Other",
-                expense_date: (d.expense_date as string) || new Date().toISOString().slice(0, 10),
-                description: (d.description as string) || null,
-              });
-              setOpen(true);
-            }}
-          />
           <Button
             onClick={() => openAdd("income")}
             className="h-11 w-full justify-center bg-sky-500 text-white hover:bg-sky-500/90 sm:w-auto"
@@ -167,8 +149,16 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => makeForm(row, prefill));
+  const [mode, setMode] = useState<"choose" | "voice" | "upload" | "manual">("choose");
 
-  useEffect(() => { if (open) setForm(makeForm(row, prefill)); }, [open, row, prefill]);
+  useEffect(() => {
+    if (open) {
+      setForm(makeForm(row, prefill));
+      setFile(null);
+      // If editing an existing row, skip method chooser
+      setMode(row ? "manual" : "choose");
+    }
+  }, [open, row, prefill]);
 
   const isIncome = form.type === "income";
   const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
@@ -230,13 +220,52 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("expenses.editTitle") : t("expenses.addTitle")}</DialogTitle></DialogHeader>
+        {mode === "choose" ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{t("expenses.chooseMethod")}</p>
+            <VoiceInput
+              context={isIncome ? "income" : "expense"}
+              variant="destructive"
+              className="h-14 w-full justify-center text-base"
+              onResult={(d) => {
+                setForm((f) => ({
+                  ...f,
+                  type: (d.type as EntryType) || f.type,
+                  amount: d.amount != null ? String(d.amount) : f.amount,
+                  currency: (d.currency as string) || f.currency,
+                  store: (d.store as string) || f.store,
+                  expense_date: (d.expense_date as string) || f.expense_date,
+                  category: (d.category as string) || f.category,
+                  description: (d.description as string) || f.description,
+                }));
+                setMode("manual");
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setMode("upload")}
+              className="h-14 w-full justify-center text-base"
+            >
+              <Upload className="mr-2 h-5 w-5" /> {t("expenses.uploadReceipt")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setMode("manual")}
+              className="h-14 w-full justify-center text-base"
+            >
+              <Pencil className="mr-2 h-5 w-5" /> {t("expenses.fillManually")}
+            </Button>
+          </div>
+        ) : (
         <form onSubmit={save} className="space-y-4">
           <div className="flex items-center justify-between gap-2">
             <div className="inline-flex rounded-lg border border-border p-0.5">
               <button type="button" onClick={() => setForm({ ...form, type: "expense", category: EXPENSE_CATEGORIES.includes(form.category) ? form.category : "Other" })} className={`rounded-md px-3 py-1.5 text-sm ${!isIncome ? "bg-red-500 text-white" : "text-muted-foreground"}`}>{t("expenses.typeExpense")}</button>
               <button type="button" onClick={() => setForm({ ...form, type: "income", category: INCOME_CATEGORIES.includes(form.category) ? form.category : "Salary" })} className={`rounded-md px-3 py-1.5 text-sm ${isIncome ? "bg-green-500 text-white" : "text-muted-foreground"}`}>{t("expenses.typeIncome")}</button>
             </div>
-            <VoiceInput
+            {mode !== "manual" || !row ? <VoiceInput
               context={isIncome ? "income" : "expense"}
               onResult={(d) => setForm((f) => ({
                 ...f,
@@ -248,9 +277,11 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
                 category: (d.category as string) || f.category,
                 description: (d.description as string) || f.description,
               }))}
-            />
+            /> : null}
           </div>
-          <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
+          {(mode === "upload" || file) && (
+            <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div><Label>{t("expenses.amount")} *</Label><Input type="number" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
             <div><Label>{t("expenses.date")} *</Label><Input type="date" required value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} /></div>
@@ -266,6 +297,7 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
           <div><Label>{t("expenses.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );
