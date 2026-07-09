@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Wallet, TrendingUp, TrendingDown, Mic, Upload, Pencil } from "lucide-react";
+import { Plus, Wallet, TrendingUp, TrendingDown, Upload, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 
