@@ -428,7 +428,7 @@ function makeForm(row: Recurring | null) {
   return {
     service_name: row?.service_name ?? "",
     provider: row?.provider ?? "",
-    category: (row?.category ?? "Subscription") as Category,
+    category: (row?.category ?? "Subscription") as string,
     amount: row?.amount?.toString() ?? "",
     currency: row?.currency ?? "EUR",
     frequency: (row?.frequency ?? "monthly") as Frequency,
