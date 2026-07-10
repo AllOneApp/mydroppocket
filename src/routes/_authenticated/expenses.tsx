@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileDrop } from "@/components/FileDrop";
 import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
-import { DateRangeFilter, computeRange, type DateRange } from "@/components/DateRangeFilter";
+import { DateRangeFilter, computeRange, localDateString, type DateRange } from "@/components/DateRangeFilter";
 import { supabase } from "@/integrations/supabase/client";
 import { expensesQueryKey, expensesQueryOptions, type ExpenseEntryType, type ExpenseRow } from "@/lib/expenses";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
@@ -328,7 +328,7 @@ function makeForm(row: Row | null, prefill: Partial<Row> | null) {
     amount: row?.amount?.toString() ?? (prefill?.amount != null ? String(prefill.amount) : ""),
     currency: row?.currency ?? prefill?.currency ?? "EUR",
     category: row?.category ?? prefill?.category ?? (type === "income" ? "Salary" : "Other"),
-    expense_date: row?.expense_date ?? prefill?.expense_date ?? new Date().toISOString().slice(0, 10),
+    expense_date: row?.expense_date ?? prefill?.expense_date ?? localDateString(),
     description: row?.description ?? prefill?.description ?? "",
     store: row?.store ?? prefill?.store ?? "",
     notes: row?.notes ?? "",

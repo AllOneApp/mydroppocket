@@ -6,7 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 export type DateRange = { from: string; to: string; preset: PresetKey };
 export type PresetKey = "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth" | "thisYear" | "lastYear" | "all" | "custom";
 
-function iso(d: Date) { return d.toISOString().slice(0, 10); }
+export function localDateString(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 export function computeRange(preset: PresetKey, from?: string, to?: string): { from: string; to: string } {
   const now = new Date();
@@ -14,20 +19,20 @@ export function computeRange(preset: PresetKey, from?: string, to?: string): { f
   const dow = now.getDay(); // 0=Sun
   const monStart = new Date(y, m, d - ((dow + 6) % 7));
   switch (preset) {
-    case "today": return { from: iso(new Date(y, m, d)), to: iso(new Date(y, m, d)) };
-    case "yesterday": return { from: iso(new Date(y, m, d - 1)), to: iso(new Date(y, m, d - 1)) };
-    case "thisWeek": return { from: iso(monStart), to: iso(new Date(y, m, d)) };
+    case "today": return { from: localDateString(new Date(y, m, d)), to: localDateString(new Date(y, m, d)) };
+    case "yesterday": return { from: localDateString(new Date(y, m, d - 1)), to: localDateString(new Date(y, m, d - 1)) };
+    case "thisWeek": return { from: localDateString(monStart), to: localDateString(new Date(y, m, d)) };
     case "lastWeek": {
       const lastEnd = new Date(monStart); lastEnd.setDate(lastEnd.getDate() - 1);
       const lastStart = new Date(lastEnd); lastStart.setDate(lastStart.getDate() - 6);
-      return { from: iso(lastStart), to: iso(lastEnd) };
+      return { from: localDateString(lastStart), to: localDateString(lastEnd) };
     }
-    case "thisMonth": return { from: iso(new Date(y, m, 1)), to: iso(new Date(y, m, d)) };
-    case "lastMonth": return { from: iso(new Date(y, m - 1, 1)), to: iso(new Date(y, m, 0)) };
-    case "thisYear": return { from: iso(new Date(y, 0, 1)), to: iso(new Date(y, m, d)) };
-    case "lastYear": return { from: iso(new Date(y - 1, 0, 1)), to: iso(new Date(y - 1, 11, 31)) };
-    case "all": return { from: "1900-01-01", to: iso(new Date(y, m, d)) };
-    case "custom": return { from: from ?? iso(new Date(y, m, 1)), to: to ?? iso(new Date(y, m, d)) };
+    case "thisMonth": return { from: localDateString(new Date(y, m, 1)), to: localDateString(new Date(y, m, d)) };
+    case "lastMonth": return { from: localDateString(new Date(y, m - 1, 1)), to: localDateString(new Date(y, m, 0)) };
+    case "thisYear": return { from: localDateString(new Date(y, 0, 1)), to: localDateString(new Date(y, m, d)) };
+    case "lastYear": return { from: localDateString(new Date(y - 1, 0, 1)), to: localDateString(new Date(y - 1, 11, 31)) };
+    case "all": return { from: "1900-01-01", to: localDateString(new Date(y, m, d)) };
+    case "custom": return { from: from ?? localDateString(new Date(y, m, 1)), to: to ?? localDateString(new Date(y, m, d)) };
   }
 }
 
