@@ -34,7 +34,7 @@ export function Header({ variant, onMenu }: HeaderProps) {
             type="button"
             onClick={onMenu}
             aria-label="Menu"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-accent"
+            className="mt-6 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-accent"
           >
             <Menu style={{ width: 28, height: 28 }} />
           </button>
@@ -43,7 +43,7 @@ export function Header({ variant, onMenu }: HeaderProps) {
           <Logo />
         </Link>
         <div className="flex items-center justify-end">
-          <LanguageSwitcher />
+          <LanguageSwitcher className="mt-6" />
         </div>
       </header>
     );
