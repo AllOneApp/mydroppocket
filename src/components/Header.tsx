@@ -51,15 +51,25 @@ export function Header({ variant, onMenu }: HeaderProps) {
 
   if (variant === "auth") {
     return (
-      <header className={`${rowBase} mx-auto max-w-6xl px-4 sm:px-6`}>
-        <div className="flex items-center justify-start">
-          <LanguageSwitcher />
-        </div>
-        <Link to="/" aria-label="DropPocket" className="flex items-center justify-center">
-          <Logo />
-        </Link>
-        <div className="flex items-center justify-end" />
-      </header>
+      <>
+        {/* Mobile: only language switcher + logo, same baseline */}
+        <header className="mx-auto flex h-[84px] w-full max-w-6xl items-center justify-between px-4 sm:hidden">
+          <LanguageSwitcher className="mt-2" />
+          <Link to="/" aria-label="DropPocket">
+            <Logo />
+          </Link>
+        </header>
+        {/* Desktop: keep three-column grid */}
+        <header className={`${rowBase} mx-auto hidden max-w-6xl px-4 sm:grid sm:px-6`}>
+          <div className="flex items-center justify-start">
+            <LanguageSwitcher />
+          </div>
+          <Link to="/" aria-label="DropPocket" className="flex items-center justify-center">
+            <Logo />
+          </Link>
+          <div className="flex items-center justify-end" />
+        </header>
+      </>
     );
   }
 
