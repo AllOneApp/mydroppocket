@@ -59,15 +59,12 @@ export function Header({ variant, onMenu }: HeaderProps) {
             <Logo />
           </Link>
         </header>
-        {/* Desktop: keep three-column grid */}
-        <header className={`${rowBase} mx-auto hidden max-w-6xl px-4 sm:grid sm:px-6`}>
-          <div className="flex items-center justify-start">
-            <LanguageSwitcher />
-          </div>
+        {/* Desktop: logo centered, language switcher below */}
+        <header className="mx-auto hidden w-full max-w-6xl flex-col items-center px-4 pb-4 pt-5 sm:flex sm:px-6">
           <Link to="/" aria-label="DropPocket" className="flex items-center justify-center">
             <Logo />
           </Link>
-          <div className="flex items-center justify-end" />
+          <LanguageSwitcher className="mt-2" />
         </header>
       </>
     );
