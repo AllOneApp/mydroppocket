@@ -54,7 +54,7 @@ export function Header({ variant, onMenu }: HeaderProps) {
       <>
         {/* Mobile: only language switcher + logo, same baseline */}
         <header className="mx-auto flex h-[84px] w-full max-w-6xl items-center justify-between px-4 sm:hidden">
-          <LanguageSwitcher className="mt-2" />
+          <LanguageSwitcher className="mt-[18px]" />
           <Link to="/" aria-label="DropPocket">
             <Logo />
           </Link>
