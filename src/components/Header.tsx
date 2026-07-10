@@ -82,8 +82,8 @@ export function Header({ variant, onMenu }: HeaderProps) {
           <Logo className="h-[78px]" />
         </Link>
         <div className="flex w-full items-center justify-between">
-          <LanguageSwitcher />
-          <div className="mr-6 flex items-center gap-2">
+          <LanguageSwitcher className="ml-5" />
+          <div className="mr-3.5 flex items-center gap-2">
             <Link to="/auth">
               <Button variant="ghost" size="sm" className="px-2 text-xs">
                 {t("common.signIn")}
