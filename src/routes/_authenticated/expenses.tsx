@@ -149,14 +149,13 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => makeForm(row, prefill));
-  const [mode, setMode] = useState<"choose" | "voice" | "upload" | "manual">("choose");
+  const [showUpload, setShowUpload] = useState(false);
 
   useEffect(() => {
     if (open) {
       setForm(makeForm(row, prefill));
       setFile(null);
-      // If editing an existing row, skip method chooser
-      setMode(row ? "manual" : "choose");
+      setShowUpload(false);
     }
   }, [open, row, prefill]);
 
@@ -227,53 +226,18 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("expenses.editTitle") : t("expenses.addTitle")}</DialogTitle></DialogHeader>
-        {mode === "choose" ? (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">{t("expenses.chooseMethod")}</p>
-            <VoiceInput
-              context={isIncome ? "income" : "expense"}
-              variant="destructive"
-              className="h-14 w-full justify-center text-base"
-              onResult={(d) => {
-                setForm((f) => ({
-                  ...f,
-                  type: (d.type as EntryType) || f.type,
-                  amount: d.amount != null ? String(d.amount) : f.amount,
-                  currency: (d.currency as string) || f.currency,
-                  store: (d.store as string) || f.store,
-                  expense_date: (d.expense_date as string) || f.expense_date,
-                  category: (d.category as string) || f.category,
-                  description: (d.description as string) || f.description,
-                }));
-                setMode("manual");
-              }}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setMode("upload")}
-              className="h-14 w-full justify-center text-base"
-            >
-              <Upload className="mr-2 h-5 w-5" /> {t("expenses.uploadReceipt")}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setMode("manual")}
-              className="h-14 w-full justify-center text-base"
-            >
-              <Pencil className="mr-2 h-5 w-5" /> {t("expenses.fillManually")}
-            </Button>
-          </div>
-        ) : (
         <form onSubmit={save} className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <div className="inline-flex rounded-lg border border-border p-0.5">
               <button type="button" onClick={() => setForm({ ...form, type: "expense", category: EXPENSE_CATEGORIES.includes(form.category) ? form.category : "Other" })} className={`rounded-md px-3 py-1.5 text-sm ${!isIncome ? "bg-red-500 text-white" : "text-muted-foreground"}`}>{t("expenses.typeExpense")}</button>
               <button type="button" onClick={() => setForm({ ...form, type: "income", category: INCOME_CATEGORIES.includes(form.category) ? form.category : "Salary" })} className={`rounded-md px-3 py-1.5 text-sm ${isIncome ? "bg-green-500 text-white" : "text-muted-foreground"}`}>{t("expenses.typeIncome")}</button>
             </div>
-            {mode !== "manual" || !row ? <VoiceInput
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <VoiceInput
               context={isIncome ? "income" : "expense"}
+              variant="outline"
+              className="h-11 w-full justify-center"
               onResult={(d) => setForm((f) => ({
                 ...f,
                 type: (d.type as EntryType) || f.type,
@@ -284,9 +248,15 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
                 category: (d.category as string) || f.category,
                 description: (d.description as string) || f.description,
               }))}
-            /> : null}
+            />
+            <Button type="button" variant={showUpload ? "secondary" : "outline"} onClick={() => setShowUpload((v) => !v)} className="h-11 w-full justify-center">
+              <Upload className="mr-1.5 h-4 w-4" />{t("expenses.uploadReceipt")}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setShowUpload(false)} className="h-11 w-full justify-center">
+              <Pencil className="mr-1.5 h-4 w-4" />{t("expenses.fillManually")}
+            </Button>
           </div>
-          {(mode === "upload" || file) && (
+          {(showUpload || file) && (
             <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -304,7 +274,6 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
           <div><Label>{t("expenses.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
-        )}
       </DialogContent>
     </Dialog>
   );
