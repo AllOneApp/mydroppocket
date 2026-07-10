@@ -64,7 +64,7 @@ export function Header({ variant, onMenu }: HeaderProps) {
           <Link to="/" aria-label="DropPocket" className="flex items-center justify-center">
             <Logo />
           </Link>
-          <LanguageSwitcher className="mt-2" />
+          <LanguageSwitcher className="mt-[18px]" />
         </header>
       </>
     );
