@@ -21,9 +21,14 @@ export type ExpenseRow = {
 export const expensesQueryKey = ["expenses"] as const;
 
 export async function fetchExpenses(): Promise<ExpenseRow[]> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error("Kasutaja sessiooni ei leitud.");
+
   const { data, error } = await supabase
     .from("expenses")
     .select("*")
+    .eq("user_id", userData.user.id)
     .order("expense_date", { ascending: false })
     .order("created_at", { ascending: false });
 
