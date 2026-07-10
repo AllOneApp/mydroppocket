@@ -271,12 +271,17 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
               className="h-11 w-full justify-center"
               onResult={(d) => setForm((f) => ({
                 ...f,
-                type: (d.type as EntryType) || f.type,
+                // Never let the AI override the user-selected entry type.
                 amount: d.amount != null ? String(d.amount) : f.amount,
                 currency: (d.currency as string) || f.currency,
                 store: (d.store as string) || f.store,
                 expense_date: (d.expense_date as string) || f.expense_date,
-                category: (d.category as string) || f.category,
+                category: (() => {
+                  const c = d.category as string | undefined;
+                  if (!c) return f.category;
+                  const allowed = f.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+                  return allowed.includes(c) ? c : f.category;
+                })(),
                 description: (d.description as string) || f.description,
               }))}
             />
