@@ -43,7 +43,7 @@ export function Header({ variant, onMenu }: HeaderProps) {
           <Logo />
         </Link>
         <div className="flex items-center justify-end">
-          <LanguageSwitcher className="mt-6" />
+          <LanguageSwitcher className="mt-8" />
         </div>
       </header>
     );
