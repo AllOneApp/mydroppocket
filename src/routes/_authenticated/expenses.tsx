@@ -206,10 +206,17 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
         notes: form.notes || null,
         ...(fileInfo ? { file_path: fileInfo.path, file_name: fileInfo.name, file_mime: fileInfo.mime } : {}),
       };
-      if (row) await supabase.from("expenses").update(payload).eq("id", row.id);
-      else await supabase.from("expenses").insert(payload);
-      qc.invalidateQueries({ queryKey: ["expenses"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      if (row) {
+        const { error } = await supabase.from("expenses").update(payload).eq("id", row.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("expenses").insert(payload);
+        if (error) throw error;
+      }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["expenses"], refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
+      ]);
       toast.success(row ? t("common.updated") : t("expenses.added"));
       onOpenChange(false);
     } catch (e) { toast.error(e instanceof Error ? e.message : t("common.failed")); }
