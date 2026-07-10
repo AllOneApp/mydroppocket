@@ -73,30 +73,57 @@ export function Header({ variant, onMenu }: HeaderProps) {
     );
   }
 
-  // public (landing): [ET/EN] [LOGO] [Sign in | Get started]
+  // public (landing): mobile = 2-row, desktop = 3-col grid
   return (
-    <header className={`${rowBase} mx-auto max-w-6xl px-4 sm:px-6`}>
-      <div className="flex items-center justify-start">
-        <LanguageSwitcher />
-      </div>
-      <Link to="/" aria-label="DropPocket" className="flex items-center justify-center">
-        <Logo />
-      </Link>
-      <div className="flex items-center justify-end gap-2 sm:gap-3">
-        <Link to="/auth">
-          <Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm">
-            {t("common.signIn")}
-          </Button>
+    <>
+      {/* Mobile: centered logo + action buttons row */}
+      <header className="flex flex-col items-center gap-4 pb-6 pt-4 sm:hidden">
+        <Link to="/" aria-label="DropPocket">
+          <Logo className="h-[78px]" />
         </Link>
-        <Link to="/auth">
-          <Button
-            size="sm"
-            className="brand-gradient-bg px-2.5 text-xs text-primary-foreground sm:px-4 sm:text-sm"
-          >
-            {t("common.getStarted")}
-          </Button>
+        <div className="flex w-full items-center justify-between">
+          <LanguageSwitcher />
+          <div className="flex items-center gap-2">
+            <Link to="/auth">
+              <Button variant="ghost" size="sm" className="px-2 text-xs">
+                {t("common.signIn")}
+              </Button>
+            </Link>
+            <Link to="/auth">
+              <Button
+                size="sm"
+                className="brand-gradient-bg px-2.5 text-xs text-primary-foreground"
+              >
+                {t("common.getStarted")}
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </header>
+      {/* Desktop: keep three-column grid */}
+      <header className={`${rowBase} mx-auto hidden max-w-6xl px-4 sm:grid sm:px-6`}>
+        <div className="flex items-center justify-start">
+          <LanguageSwitcher />
+        </div>
+        <Link to="/" aria-label="DropPocket" className="flex items-center justify-center">
+          <Logo />
         </Link>
-      </div>
-    </header>
+        <div className="flex items-center justify-end gap-2 sm:gap-3">
+          <Link to="/auth">
+            <Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm">
+              {t("common.signIn")}
+            </Button>
+          </Link>
+          <Link to="/auth">
+            <Button
+              size="sm"
+              className="brand-gradient-bg px-2.5 text-xs text-primary-foreground sm:px-4 sm:text-sm"
+            >
+              {t("common.getStarted")}
+            </Button>
+          </Link>
+        </div>
+      </header>
+    </>
   );
 }
