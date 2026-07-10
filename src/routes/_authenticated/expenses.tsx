@@ -187,8 +187,10 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
     e.preventDefault();
     setSaving(true);
     try {
-      const { data: userRes } = await supabase.auth.getUser();
-      const uid = userRes.user!.id;
+      const { data: userRes, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!userRes.user) throw new Error("Kasutaja sessiooni ei leitud.");
+      const uid = userRes.user.id;
       let fileInfo: { path: string; name: string; mime: string } | null = null;
       if (file) fileInfo = await uploadFile(uid, "expense", file);
       const payload = {
@@ -205,13 +207,35 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
       };
       let savedRow: Row;
       if (row) {
-        const { data, error } = await supabase.from("expenses").update(payload).eq("id", row.id).select("*").single();
+        const { error } = await supabase.from("expenses").update(payload).eq("id", row.id).eq("user_id", uid);
         if (error) throw error;
-        savedRow = data as Row;
+        const { data: verifiedRow, error: verifyError } = await supabase
+          .from("expenses")
+          .select("*")
+          .eq("id", row.id)
+          .eq("user_id", uid)
+          .maybeSingle();
+        if (verifyError) throw verifyError;
+        if (!verifiedRow) throw new Error("Kirje muutmist ei saanud andmebaasis kinnitada.");
+        savedRow = verifiedRow as Row;
       } else {
-        const { data, error } = await supabase.from("expenses").insert(payload).select("*").single();
-        if (error) throw error;
-        savedRow = data as Row;
+        const { data: insertedRow, error: insertError } = await supabase
+          .from("expenses")
+          .insert(payload)
+          .select("id")
+          .single();
+        if (insertError) throw insertError;
+        if (!insertedRow?.id) throw new Error("Andmebaas ei tagastanud salvestatud kirje ID-d.");
+
+        const { data: verifiedRow, error: verifyError } = await supabase
+          .from("expenses")
+          .select("*")
+          .eq("id", insertedRow.id)
+          .eq("user_id", uid)
+          .maybeSingle();
+        if (verifyError) throw verifyError;
+        if (!verifiedRow) throw new Error("Kirjet ei leitud pärast salvestamist andmebaasist.");
+        savedRow = verifiedRow as Row;
       }
       qc.setQueryData<Row[]>(expensesQueryKey, (current = []) => {
         const withoutSaved = current.filter((entry) => entry.id !== savedRow.id);
@@ -225,7 +249,7 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
       ]);
       toast.success(row ? t("common.updated") : t("expenses.added"));
       onOpenChange(false);
-    } catch (e) { toast.error(e instanceof Error ? e.message : t("common.failed")); }
+    } catch (e) { toast.error(getErrorMessage(e, t("common.failed"))); }
     finally { setSaving(false); }
   }
 
@@ -284,6 +308,17 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
       </DialogContent>
     </Dialog>
   );
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object") {
+    const value = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const parts = [value.message, value.details, value.hint, value.code ? `(${String(value.code)})` : null]
+      .filter((part): part is string => typeof part === "string" && part.length > 0);
+    if (parts.length > 0) return parts.join(" · ");
+  }
+  return fallback;
 }
 
 function makeForm(row: Row | null, prefill: Partial<Row> | null) {
