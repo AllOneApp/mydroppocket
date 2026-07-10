@@ -1,9 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShieldCheck, Wallet, FileText, ArrowRight, Sparkles, Lock, Search } from "lucide-react";
-import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { Header } from "@/components/Header";
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -13,16 +12,7 @@ function Landing() {
   const { t } = useTranslation();
   return (
     <div className="min-h-screen overflow-x-clip bg-background">
-      <header className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5">
-        <Link to="/" className="flex min-w-0 shrink items-center" aria-label="DropPocket">
-          <Logo className="h-9 sm:h-14 md:h-16" />
-        </Link>
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <LanguageSwitcher />
-          <Link to="/auth"><Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm">{t("common.signIn")}</Button></Link>
-          <Link to="/auth"><Button size="sm" className="brand-gradient-bg px-2.5 text-xs text-primary-foreground sm:px-4 sm:text-sm">{t("common.getStarted")}</Button></Link>
-        </div>
-      </header>
+      <Header variant="public" />
 
       <main className="mx-auto max-w-6xl px-4 sm:px-6">
         <section className="pt-10 pb-20 text-center sm:pt-20 sm:pb-24">
