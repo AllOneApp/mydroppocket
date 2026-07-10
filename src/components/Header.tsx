@@ -102,7 +102,7 @@ export function Header({ variant, onMenu }: HeaderProps) {
       </header>
       {/* Desktop: keep three-column grid */}
       <header className={`${rowBase} mx-auto hidden max-w-6xl px-4 sm:grid sm:px-6`}>
-        <div className="flex items-center justify-start">
+      <div className="flex translate-y-[35px] items-center justify-start">
           <LanguageSwitcher />
         </div>
         <Link to="/" aria-label="DropPocket" className="flex items-center justify-center">
