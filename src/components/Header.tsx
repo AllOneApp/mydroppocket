@@ -13,29 +13,36 @@ interface HeaderProps {
 }
 
 /**
- * Single unified header used across every page.
- * - Fixed height ~72px
- * - Identical Logo size (h-12) everywhere
- * - One flex row, items-center, justify-between
+ * Unified header across every page.
+ * Layout: three-column grid so the logo is always visually centered
+ * and left/right clusters align on the same horizontal baseline.
+ * Logo size (h-[60px]) is identical on every variant.
  */
 export function Header({ variant, onMenu }: HeaderProps) {
   const { t } = useTranslation();
 
+  const rowBase =
+    "grid h-[84px] w-full grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-4";
+
   if (variant === "app-mobile") {
     return (
-      <header className="flex h-[72px] items-center justify-between border-b border-border bg-card/50 px-4 backdrop-blur md:hidden">
-        <button
-          type="button"
-          onClick={onMenu}
-          aria-label="Menu"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-accent"
-        >
-          <Menu style={{ width: 28, height: 28 }} />
-        </button>
-        <Link to="/dashboard" aria-label="DropPocket" className="flex items-center">
-          <Logo className="h-12" />
+      <header
+        className={`${rowBase} border-b border-border bg-card/50 px-4 backdrop-blur md:hidden`}
+      >
+        <div className="flex items-center justify-start">
+          <button
+            type="button"
+            onClick={onMenu}
+            aria-label="Menu"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-accent"
+          >
+            <Menu style={{ width: 28, height: 28 }} />
+          </button>
+        </div>
+        <Link to="/dashboard" aria-label="DropPocket" className="flex items-center justify-center">
+          <Logo />
         </Link>
-        <div className="flex h-11 shrink-0 items-center">
+        <div className="flex items-center justify-end">
           <LanguageSwitcher />
         </div>
       </header>
@@ -44,25 +51,28 @@ export function Header({ variant, onMenu }: HeaderProps) {
 
   if (variant === "auth") {
     return (
-      <header className="mx-auto flex h-[72px] w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link to="/" aria-label="DropPocket" className="flex items-center">
-          <Logo className="h-12" />
-        </Link>
-        <div className="flex items-center">
+      <header className={`${rowBase} mx-auto max-w-6xl px-4 sm:px-6`}>
+        <div className="flex items-center justify-start">
           <LanguageSwitcher />
         </div>
+        <Link to="/" aria-label="DropPocket" className="flex items-center justify-center">
+          <Logo />
+        </Link>
+        <div className="flex items-center justify-end" />
       </header>
     );
   }
 
-  // public (landing)
+  // public (landing): [ET/EN] [LOGO] [Sign in | Get started]
   return (
-    <header className="mx-auto flex h-[72px] w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-      <Link to="/" aria-label="DropPocket" className="flex items-center">
-        <Logo className="h-12" />
-      </Link>
-      <div className="flex items-center gap-2 sm:gap-4">
+    <header className={`${rowBase} mx-auto max-w-6xl px-4 sm:px-6`}>
+      <div className="flex items-center justify-start">
         <LanguageSwitcher />
+      </div>
+      <Link to="/" aria-label="DropPocket" className="flex items-center justify-center">
+        <Logo />
+      </Link>
+      <div className="flex items-center justify-end gap-2 sm:gap-3">
         <Link to="/auth">
           <Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm">
             {t("common.signIn")}

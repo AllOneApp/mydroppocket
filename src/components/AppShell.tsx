@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const Sidebar = (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-4">
-      <div className="mb-8 px-2 pt-2"><Logo className="h-12" /></div>
+      <div className="mb-8 px-2 pt-2"><Logo /></div>
       <nav className="flex-1 space-y-1">
         {nav.map(({ to, icon: Icon, key }) => {
           const active = location.pathname === to;
