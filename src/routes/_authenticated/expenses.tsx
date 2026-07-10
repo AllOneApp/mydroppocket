@@ -17,6 +17,7 @@ import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
 import { DateRangeFilter, computeRange, type DateRange } from "@/components/DateRangeFilter";
 import { supabase } from "@/integrations/supabase/client";
+import { expensesQueryKey, expensesQueryOptions, type ExpenseEntryType, type ExpenseRow } from "@/lib/expenses";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
@@ -29,12 +30,8 @@ export const Route = createFileRoute("/_authenticated/expenses")({
 const EXPENSE_CATEGORIES = ["Groceries", "Fuel", "Restaurant", "Coffee", "Hairdresser", "Nails", "Shopping", "Healthcare", "Travel", "Pets", "Other"];
 const INCOME_CATEGORIES = ["Salary", "Sale", "Gift", "Investment", "Refund", "OtherIncome"];
 
-type EntryType = "expense" | "income";
-type Row = {
-  id: string; type: EntryType; amount: number; currency: string | null; category: string; expense_date: string;
-  description: string | null; notes: string | null; store: string | null;
-  file_path: string | null; file_name: string | null;
-};
+type EntryType = ExpenseEntryType;
+type Row = ExpenseRow;
 
 function ExpensesPage() {
   const qc = useQueryClient();
@@ -47,14 +44,7 @@ function ExpensesPage() {
     return { preset: "thisMonth", from: r.from, to: r.to };
   });
 
-  const { data } = useQuery({
-    queryKey: ["expenses"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("expenses").select("*").order("expense_date", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as Row[];
-    },
-  });
+  const { data } = useQuery(expensesQueryOptions());
 
   const filtered = useMemo(() => (data ?? []).filter((r) => r.expense_date >= range.from && r.expense_date <= range.to), [data, range]);
   const income = filtered.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
@@ -63,11 +53,19 @@ function ExpensesPage() {
 
   async function del(r: Row) {
     if (!confirm(t("expenses.confirmDelete"))) return;
-    if (r.file_path) await deleteFile(r.file_path);
-    await supabase.from("expenses").delete().eq("id", r.id);
-    qc.invalidateQueries({ queryKey: ["expenses"] });
-    qc.invalidateQueries({ queryKey: ["dashboard"] });
-    toast.success(t("common.deleted"));
+    try {
+      const { error } = await supabase.from("expenses").delete().eq("id", r.id);
+      if (error) throw error;
+      if (r.file_path) await deleteFile(r.file_path);
+      qc.setQueryData<Row[]>(expensesQueryKey, (current = []) => current.filter((entry) => entry.id !== r.id));
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
+      ]);
+      toast.success(t("common.deleted"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("common.failed"));
+    }
   }
 
   function openAdd(type: EntryType) {
@@ -205,15 +203,24 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
         notes: form.notes || null,
         ...(fileInfo ? { file_path: fileInfo.path, file_name: fileInfo.name, file_mime: fileInfo.mime } : {}),
       };
+      let savedRow: Row;
       if (row) {
-        const { error } = await supabase.from("expenses").update(payload).eq("id", row.id);
+        const { data, error } = await supabase.from("expenses").update(payload).eq("id", row.id).select("*").single();
         if (error) throw error;
+        savedRow = data as Row;
       } else {
-        const { error } = await supabase.from("expenses").insert(payload);
+        const { data, error } = await supabase.from("expenses").insert(payload).select("*").single();
         if (error) throw error;
+        savedRow = data as Row;
       }
+      qc.setQueryData<Row[]>(expensesQueryKey, (current = []) => {
+        const withoutSaved = current.filter((entry) => entry.id !== savedRow.id);
+        return [savedRow, ...withoutSaved].sort((a, b) =>
+          b.expense_date.localeCompare(a.expense_date),
+        );
+      });
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ["expenses"], refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
       ]);
       toast.success(row ? t("common.updated") : t("expenses.added"));

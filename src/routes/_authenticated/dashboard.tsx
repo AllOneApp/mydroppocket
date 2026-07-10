@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown, Repeat } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
+import { computeRange } from "@/components/DateRangeFilter";
 import { supabase } from "@/integrations/supabase/client";
+import { expenseTotals, expensesQueryOptions } from "@/lib/expenses";
 import { formatCurrency, warrantyStatus } from "@/lib/records";
 import { useTranslation } from "react-i18next";
 
@@ -14,32 +16,14 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function Dashboard() {
   const { t } = useTranslation();
+  const { data: expenseRows = [] } = useQuery(expensesQueryOptions());
   const { data } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
-      const [w, e, a] = await Promise.all([
+      const [w, a] = await Promise.all([
         supabase.from("warranties").select("*").order("warranty_expiry", { ascending: true }).limit(5),
-        supabase.from("expenses").select("*").order("expense_date", { ascending: false }).limit(5),
         supabase.from("agreements").select("*").order("created_at", { ascending: false }).limit(5),
       ]);
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - now.getDay());
-      const yearStart = new Date(now.getFullYear(), 0, 1);
-      const allExp = await supabase.from("expenses").select("amount, expense_date, type").gte("expense_date", yearStart.toISOString().slice(0, 10));
-      const rows = (allExp.data ?? []) as { amount: number; expense_date: string; type: "expense" | "income" }[];
-      const sum = (list: typeof rows, type: "expense" | "income") => list.filter((r) => r.type === type).reduce((s, r) => s + Number(r.amount ?? 0), 0);
-      const todayStr = now.toISOString().slice(0, 10);
-      const dayRows = rows.filter((r) => r.expense_date === todayStr);
-      const weekRows = rows.filter((r) => new Date(r.expense_date) >= weekStart);
-      const monthRows = rows.filter((r) => new Date(r.expense_date) >= monthStart);
-      const totals = {
-        today: { income: sum(dayRows, "income"), expense: sum(dayRows, "expense") },
-        week: { income: sum(weekRows, "income"), expense: sum(weekRows, "expense") },
-        month: { income: sum(monthRows, "income"), expense: sum(monthRows, "expense") },
-        year: { income: sum(rows, "income"), expense: sum(rows, "expense") },
-      };
       const expiring = (w.data ?? []).filter((r) => {
         const s = warrantyStatus(r.warranty_expiry).tone;
         return s === "orange";
@@ -65,13 +49,20 @@ function Dashboard() {
 
       return {
         warranties: w.data ?? [],
-        expenses: e.data ?? [],
         agreements: a.data ?? [],
-        totals, expiring,
+        expiring,
         recurring: { paid: rpPaid, unpaid: rpUnpaid, overdue: rpOverdue, next: nextPending, nextRec },
       };
     },
   });
+
+  const totals = {
+    today: expenseTotals(expenseRows, computeRange("today").from, computeRange("today").to),
+    week: expenseTotals(expenseRows, computeRange("thisWeek").from, computeRange("thisWeek").to),
+    month: expenseTotals(expenseRows, computeRange("thisMonth").from, computeRange("thisMonth").to),
+    year: expenseTotals(expenseRows, computeRange("thisYear").from, computeRange("thisYear").to),
+  };
+  const recentExpenses = expenseRows.slice(0, 5);
 
   return (
     <AppShell>
@@ -92,7 +83,7 @@ function Dashboard() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <ModuleCard to="/warranties" icon={ShieldCheck} title={t("nav.warranties")} value={t("dashboard.warrantiesTracked", { count: data?.warranties.length ?? 0 })} sub={t("dashboard.expiringSoon", { count: data?.expiring.length ?? 0 })} />
-        <ModuleCard to="/expenses" icon={Wallet} title={t("nav.expenses")} value={formatCurrency((data?.totals.month.income ?? 0) - (data?.totals.month.expense ?? 0))} sub={t("expenses.balance") + " · " + t("expenses.thisMonth")} />
+        <ModuleCard to="/expenses" icon={Wallet} title={t("nav.expenses")} value={formatCurrency(totals.month.balance)} sub={t("expenses.balance") + " · " + t("expenses.thisMonth")} />
         <ModuleCard to="/agreements" icon={FileText} title={t("nav.agreements")} value={t("dashboard.onFile", { count: data?.agreements.length ?? 0 })} sub={t("dashboard.contractsInstallments")} />
       </div>
 
@@ -133,8 +124,8 @@ function Dashboard() {
       {data && (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {(["today", "week", "month", "year"] as const).map((k) => {
-            const p = data.totals[k];
-            const bal = p.income - p.expense;
+            const p = totals[k];
+            const bal = p.balance;
             const label = k === "today" ? t("expenses.today") : k === "week" ? t("expenses.thisWeek") : k === "month" ? t("expenses.thisMonth") : t("expenses.thisYear");
             return (
               <div key={k} className="card-soft p-5">
@@ -156,9 +147,9 @@ function Dashboard() {
             <h3 className="text-lg font-semibold">{t("dashboard.recentExpenses")}</h3>
             <Link to="/expenses" className="text-sm text-primary hover:underline">{t("dashboard.viewAll")}</Link>
           </div>
-          {data?.expenses.length ? (
+          {recentExpenses.length ? (
             <ul className="divide-y divide-border">
-              {data.expenses.map((r) => (
+              {recentExpenses.map((r) => (
                 <li key={r.id} className="flex items-center justify-between py-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{r.description || r.category}</p>
