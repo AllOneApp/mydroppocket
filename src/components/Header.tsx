@@ -102,15 +102,15 @@ export function Header({ variant, onMenu }: HeaderProps) {
       </header>
       {/* Desktop: keep three-column grid */}
       <header className={`${rowBase} mx-auto hidden max-w-6xl px-4 sm:grid sm:px-6`}>
-        <div className="flex items-center justify-start">
+      <div className="flex translate-y-[35px] items-center justify-start">
           <LanguageSwitcher />
         </div>
         <Link to="/" aria-label="DropPocket" className="flex items-center justify-center">
           <Logo />
         </Link>
-        <div className="flex items-center justify-end gap-2 sm:gap-3">
+        <div className="flex translate-y-[35px] items-center justify-end gap-2 sm:gap-3">
           <Link to="/auth">
-            <Button variant="ghost" size="sm" className="px-2 text-xs sm:px-3 sm:text-sm">
+            <Button variant="ghost" size="sm" className="border border-sky-300 px-2 text-xs sm:px-3 sm:text-sm">
               {t("common.signIn")}
             </Button>
           </Link>
