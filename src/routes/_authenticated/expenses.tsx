@@ -139,7 +139,7 @@ function ExpensesPage() {
   );
 }
 
-function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null; prefill: Partial<Row> | null }) {
+export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null; prefill: Partial<Row> | null; initialMode?: "voice" | "upload" | "manual" }) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const extract = useServerFn(extractDocument);
@@ -148,14 +148,16 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => makeForm(row, prefill));
   const [showUpload, setShowUpload] = useState(false);
+  const [autoVoice, setAutoVoice] = useState(false);
 
   useEffect(() => {
     if (open) {
       setForm(makeForm(row, prefill));
       setFile(null);
-      setShowUpload(false);
+      setShowUpload(initialMode === "upload");
+      setAutoVoice(initialMode === "voice");
     }
-  }, [open, row, prefill]);
+  }, [open, row, prefill, initialMode]);
 
   const isIncome = form.type === "income";
   const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
@@ -269,6 +271,7 @@ function ExpenseDialog({ open, onOpenChange, row, prefill }: { open: boolean; on
               context={isIncome ? "income" : "expense"}
               variant="outline"
               className="h-11 w-full justify-center"
+              autoStart={autoVoice}
               onResult={(d) => setForm((f) => ({
                 ...f,
                 // Never let the AI override the user-selected entry type.

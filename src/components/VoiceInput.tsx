@@ -1,5 +1,5 @@
 import { Mic, Square, Loader2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
@@ -16,6 +16,7 @@ type Props = {
   variant?: "default" | "outline" | "ghost" | "secondary" | "destructive";
   className?: string;
   label?: string;
+  autoStart?: boolean;
 };
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -27,7 +28,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export function VoiceInput({ context, onResult, size = "sm", variant = "outline", className, label }: Props) {
+export function VoiceInput({ context, onResult, size = "sm", variant = "outline", className, label, autoStart = false }: Props) {
   const { t, i18n } = useTranslation();
   const transcribe = useServerFn(transcribeAudio);
   const parse = useServerFn(parseVoiceCommand);
@@ -35,6 +36,7 @@ export function VoiceInput({ context, onResult, size = "sm", variant = "outline"
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const autoStartedRef = useRef(false);
 
   async function start() {
     try {
@@ -62,6 +64,14 @@ export function VoiceInput({ context, onResult, size = "sm", variant = "outline"
       console.error(e);
     }
   }
+
+  useEffect(() => {
+    if (autoStart && !autoStartedRef.current && state === "idle") {
+      autoStartedRef.current = true;
+      void start();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   function stop() {
     console.info("[VoiceInput] client:stop-click", { context, state: recorderRef.current?.state });
