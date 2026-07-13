@@ -366,3 +366,29 @@ function makeForm(row: Row | null, prefill: Partial<Row> | null) {
     notes: row?.notes ?? "",
   };
 }
+
+// Normalize any date-ish string coming from OCR/AI to YYYY-MM-DD (local).
+// Supports: "YYYY-MM-DD", "DD.MM.YYYY", "DD/MM/YYYY", "DD-MM-YYYY", ISO timestamps.
+// Returns null when input cannot be parsed.
+function normalizeDateString(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const s = String(input).trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
+  if (m) {
+    const d = m[1].padStart(2, "0");
+    const mo = m[2].padStart(2, "0");
+    let y = m[3];
+    if (y.length === 2) y = (Number(y) > 70 ? "19" : "20") + y;
+    return `${y}-${mo}-${d}`;
+  }
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const mo = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${d}`;
+  }
+  return null;
+}
