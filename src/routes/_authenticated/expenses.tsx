@@ -337,10 +337,10 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
                 });
               }}
             />
-            <Button type="button" variant={showUpload ? "secondary" : "outline"} onClick={() => setShowUpload((v) => !v)} className="h-11 w-full justify-center whitespace-nowrap">
+            <Button type="button" variant={inputMode === "upload" ? "secondary" : "outline"} onClick={() => setInputMode("upload")} className="h-11 w-full justify-center whitespace-nowrap">
               <Upload className="mr-1.5 h-4 w-4" />{t("expenses.uploadReceipt")}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setShowUpload(false)} className="h-11 w-full justify-center whitespace-nowrap">
+            <Button type="button" variant={inputMode === "manual" ? "secondary" : "outline"} onClick={() => setInputMode("manual")} className="h-11 w-full justify-center whitespace-nowrap">
               <Pencil className="mr-1.5 h-4 w-4" />{t("expenses.fillManually")}
             </Button>
           </div>
