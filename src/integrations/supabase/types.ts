@@ -25,6 +25,7 @@ export type Database = {
           file_mime: string | null
           file_name: string | null
           file_path: string | null
+          gdrive_file_id: string | null
           id: string
           monthly_payment: number | null
           notes: string | null
@@ -45,6 +46,7 @@ export type Database = {
           file_mime?: string | null
           file_name?: string | null
           file_path?: string | null
+          gdrive_file_id?: string | null
           id?: string
           monthly_payment?: number | null
           notes?: string | null
@@ -65,6 +67,7 @@ export type Database = {
           file_mime?: string | null
           file_name?: string | null
           file_path?: string | null
+          gdrive_file_id?: string | null
           id?: string
           monthly_payment?: number | null
           notes?: string | null
@@ -88,6 +91,7 @@ export type Database = {
           file_mime: string | null
           file_name: string | null
           file_path: string | null
+          gdrive_file_id: string | null
           id: string
           notes: string | null
           ocr_raw: Json | null
@@ -106,6 +110,7 @@ export type Database = {
           file_mime?: string | null
           file_name?: string | null
           file_path?: string | null
+          gdrive_file_id?: string | null
           id?: string
           notes?: string | null
           ocr_raw?: Json | null
@@ -124,6 +129,7 @@ export type Database = {
           file_mime?: string | null
           file_name?: string | null
           file_path?: string | null
+          gdrive_file_id?: string | null
           id?: string
           notes?: string | null
           ocr_raw?: Json | null
@@ -146,6 +152,7 @@ export type Database = {
           root_folder_id: string | null
           root_folder_name: string
           scope: string
+          subfolders_json: Json | null
           updated_at: string
           user_id: string
         }
@@ -160,6 +167,7 @@ export type Database = {
           root_folder_id?: string | null
           root_folder_name?: string
           scope: string
+          subfolders_json?: Json | null
           updated_at?: string
           user_id: string
         }
@@ -174,6 +182,7 @@ export type Database = {
           root_folder_id?: string | null
           root_folder_name?: string
           scope?: string
+          subfolders_json?: Json | null
           updated_at?: string
           user_id?: string
         }
@@ -219,11 +228,13 @@ export type Database = {
           invoice_file_mime: string | null
           invoice_file_name: string | null
           invoice_file_path: string | null
+          invoice_gdrive_file_id: string | null
           notes: string | null
           paid_at: string | null
           receipt_file_mime: string | null
           receipt_file_name: string | null
           receipt_file_path: string | null
+          receipt_gdrive_file_id: string | null
           recurring_payment_id: string
           status: string
           updated_at: string
@@ -238,11 +249,13 @@ export type Database = {
           invoice_file_mime?: string | null
           invoice_file_name?: string | null
           invoice_file_path?: string | null
+          invoice_gdrive_file_id?: string | null
           notes?: string | null
           paid_at?: string | null
           receipt_file_mime?: string | null
           receipt_file_name?: string | null
           receipt_file_path?: string | null
+          receipt_gdrive_file_id?: string | null
           recurring_payment_id: string
           status?: string
           updated_at?: string
@@ -257,11 +270,13 @@ export type Database = {
           invoice_file_mime?: string | null
           invoice_file_name?: string | null
           invoice_file_path?: string | null
+          invoice_gdrive_file_id?: string | null
           notes?: string | null
           paid_at?: string | null
           receipt_file_mime?: string | null
           receipt_file_name?: string | null
           receipt_file_path?: string | null
+          receipt_gdrive_file_id?: string | null
           recurring_payment_id?: string
           status?: string
           updated_at?: string
@@ -284,6 +299,7 @@ export type Database = {
           contract_file_mime: string | null
           contract_file_name: string | null
           contract_file_path: string | null
+          contract_gdrive_file_id: string | null
           created_at: string
           currency: string | null
           end_date: string | null
@@ -305,6 +321,7 @@ export type Database = {
           contract_file_mime?: string | null
           contract_file_name?: string | null
           contract_file_path?: string | null
+          contract_gdrive_file_id?: string | null
           created_at?: string
           currency?: string | null
           end_date?: string | null
@@ -326,6 +343,7 @@ export type Database = {
           contract_file_mime?: string | null
           contract_file_name?: string | null
           contract_file_path?: string | null
+          contract_gdrive_file_id?: string | null
           created_at?: string
           currency?: string | null
           end_date?: string | null
@@ -351,6 +369,7 @@ export type Database = {
           file_mime: string | null
           file_name: string | null
           file_path: string | null
+          gdrive_file_id: string | null
           id: string
           notes: string | null
           ocr_raw: Json | null
@@ -368,6 +387,7 @@ export type Database = {
           file_mime?: string | null
           file_name?: string | null
           file_path?: string | null
+          gdrive_file_id?: string | null
           id?: string
           notes?: string | null
           ocr_raw?: Json | null
@@ -385,6 +405,7 @@ export type Database = {
           file_mime?: string | null
           file_name?: string | null
           file_path?: string | null
+          gdrive_file_id?: string | null
           id?: string
           notes?: string | null
           ocr_raw?: Json | null

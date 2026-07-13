@@ -16,6 +16,7 @@ import { FileDrop } from "@/components/FileDrop";
 import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
+import { syncFileToGoogleDrive } from "@/lib/google-drive.functions";
 import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_authenticated/recurring")({
@@ -393,10 +394,32 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         notes: form.notes || null,
         ...(fileInfo ? { contract_file_path: fileInfo.path, contract_file_name: fileInfo.name, contract_file_mime: fileInfo.mime } : {}),
       };
+      let recordId: string | null = null;
       if (row) {
-        await supabase.from("recurring_payments").update(payload).eq("id", row.id);
+        const { error } = await supabase.from("recurring_payments").update(payload).eq("id", row.id);
+        if (error) throw error;
+        recordId = row.id;
       } else {
-        await supabase.from("recurring_payments").insert(payload);
+        const { data: inserted, error } = await supabase.from("recurring_payments").insert(payload).select("id").single();
+        if (error) throw error;
+        recordId = inserted?.id ?? null;
+      }
+      if (fileInfo && recordId) {
+        try {
+          await syncFileToGoogleDrive({
+            data: {
+              table: "recurring_payments",
+              recordId,
+              gdriveColumn: "contract_gdrive_file_id",
+              folderKey: "recurring",
+              filePath: fileInfo.path,
+              fileName: fileInfo.name,
+              mime: fileInfo.mime,
+            },
+          });
+        } catch (err) {
+          console.warn("[gdrive] recurring sync failed", err);
+        }
       }
       qc.invalidateQueries({ queryKey: ["recurring_payments"] });
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
@@ -505,6 +528,21 @@ function AttachReceiptDialog({ data, onClose }: { data: { instance: Instance; re
         ? { receipt_file_path: info.path, receipt_file_name: info.name, receipt_file_mime: info.mime }
         : { invoice_file_path: info.path, invoice_file_name: info.name, invoice_file_mime: info.mime };
       await supabase.from("recurring_payment_instances").update(patch).eq("id", data.instance.id);
+      try {
+        await syncFileToGoogleDrive({
+          data: {
+            table: "recurring_payment_instances",
+            recordId: data.instance.id,
+            gdriveColumn: kind === "receipt" ? "receipt_gdrive_file_id" : "invoice_gdrive_file_id",
+            folderKey: kind,
+            filePath: info.path,
+            fileName: info.name,
+            mime: info.mime,
+          },
+        });
+      } catch (err) {
+        console.warn("[gdrive] instance sync failed", err);
+      }
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
       toast.success(t("common.saved"));
       onClose();

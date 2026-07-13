@@ -224,3 +224,117 @@ export async function ensureMyDropPocketStructure(accessToken: string): Promise<
   }
   return { rootId: root.id, rootName: root.name, subfolders };
 }
+
+// ---------- Token lifecycle + upload ----------
+
+export type FolderKey = "warranty" | "expense" | "agreement" | "recurring" | "receipt" | "invoice";
+
+export const FOLDER_KEY_TO_NAME: Record<FolderKey, string> = {
+  warranty: "Garantiid",
+  expense: "Tšekid",
+  agreement: "Lepingud",
+  recurring: "Järelmaksulepingud",
+  receipt: "Tšekid",
+  invoice: "Järelmaksulepingud",
+};
+
+/**
+ * Get a valid access token for a user, refreshing (and persisting) it if the
+ * stored one is expired or about to expire. Also returns the cached subfolder
+ * map, rebuilding it if missing.
+ */
+export async function getValidAccessTokenForUser(userId: string): Promise<{
+  accessToken: string;
+  rootId: string;
+  subfolders: Record<string, string>;
+} | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("google_drive_connections")
+    .select("access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, root_folder_id, subfolders_json")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  let accessToken = decryptToken(data.access_token_ciphertext);
+  const expiresAt = new Date(data.access_token_expires_at).getTime();
+  const now = Date.now();
+  if (expiresAt - now < 60_000) {
+    const refreshToken = decryptToken(data.refresh_token_ciphertext);
+    const refreshed = await refreshAccessToken(refreshToken);
+    accessToken = refreshed.access_token;
+    const newExpiresAt = new Date(now + refreshed.expires_in * 1000).toISOString();
+    await supabaseAdmin
+      .from("google_drive_connections")
+      .update({
+        access_token_ciphertext: encryptToken(accessToken),
+        access_token_expires_at: newExpiresAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
+  }
+
+  let subfolders = (data.subfolders_json as Record<string, string> | null) ?? null;
+  let rootId = data.root_folder_id as string | null;
+  if (!subfolders || !rootId) {
+    const built = await ensureMyDropPocketStructure(accessToken);
+    subfolders = Object.fromEntries(built.subfolders.map((s) => [s.name, s.id]));
+    rootId = built.rootId;
+    await supabaseAdmin
+      .from("google_drive_connections")
+      .update({
+        root_folder_id: rootId,
+        subfolders_json: subfolders,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
+  }
+
+  return { accessToken, rootId: rootId!, subfolders };
+}
+
+/**
+ * Multipart upload of a file's bytes to a specific folder in the user's Drive.
+ * Uses only the drive.file scope: MyDropPocket can access only files it created.
+ */
+export async function uploadBytesToDriveFolder(opts: {
+  accessToken: string;
+  parentId: string;
+  name: string;
+  mime: string;
+  bytes: Uint8Array;
+}): Promise<{ id: string; name: string }> {
+  const boundary = "mdp_" + Math.random().toString(16).slice(2);
+  const metadata = {
+    name: opts.name,
+    parents: [opts.parentId],
+    mimeType: opts.mime || "application/octet-stream",
+  };
+  const enc = new TextEncoder();
+  const preamble = enc.encode(
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+      JSON.stringify(metadata) +
+      `\r\n--${boundary}\r\nContent-Type: ${metadata.mimeType}\r\n\r\n`,
+  );
+  const closing = enc.encode(`\r\n--${boundary}--`);
+  const body = new Uint8Array(preamble.length + opts.bytes.length + closing.length);
+  body.set(preamble, 0);
+  body.set(opts.bytes, preamble.length);
+  body.set(closing, preamble.length + opts.bytes.length);
+
+  const res = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${opts.accessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    },
+  );
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Drive upload failed (${res.status}): ${text}`);
+  return JSON.parse(text);
+}
