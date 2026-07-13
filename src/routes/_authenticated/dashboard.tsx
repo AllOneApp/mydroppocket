@@ -1,15 +1,30 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown, Repeat, Plus, Mic, Upload, Pencil } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { computeRange } from "@/components/DateRangeFilter";
 import { supabase } from "@/integrations/supabase/client";
-import { expenseTotals, expensesQueryOptions } from "@/lib/expenses";
+import { expenseTotals, expensesQueryOptions, expensesQueryKey, type ExpenseRow } from "@/lib/expenses";
 import { formatCurrency, warrantyStatus } from "@/lib/records";
+import { deleteFile } from "@/lib/records";
 import { useTranslation } from "react-i18next";
 import { ExpenseDialog } from "./expenses";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — DropPocket" }] }),
