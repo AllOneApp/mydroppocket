@@ -137,7 +137,10 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
   }));
 
   async function scan() {
-    if (!file) return;
+    if (!file) {
+      toast.error(t("file.pickFirst", { defaultValue: "Please add a file first" }));
+      return;
+    }
     setScanning(true);
     try {
       const base64 = await fileToBase64(file);
@@ -154,9 +157,11 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
         }));
         toast.success(t("common.autoFilled"));
       } else {
+        console.error("[scan] extract returned error", res.error);
         toast.error(res.error);
       }
     } catch (e) {
+      console.error("[scan] failed", e);
       toast.error(e instanceof Error ? e.message : t("common.scanFailed"));
     } finally { setScanning(false); }
   }
