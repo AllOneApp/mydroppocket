@@ -213,7 +213,16 @@ function Dashboard() {
             const label = k === "today" ? t("expenses.today") : k === "week" ? t("expenses.thisWeek") : k === "month" ? t("expenses.thisMonth") : t("expenses.thisYear");
             return (
               <div key={k} className="card-soft p-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+                  <button
+                    type="button"
+                    onClick={() => setPeriodKey(k)}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    {t("dashboard.viewMore")}
+                  </button>
+                </div>
                 <div className="mt-3 space-y-1.5 text-sm">
                   <div className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><TrendingUp className="h-3.5 w-3.5 text-green-600" />{t("expenses.income")}</span><span className="font-medium text-green-600">{formatCurrency(p.income)}</span></div>
                   <div className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><TrendingDown className="h-3.5 w-3.5 text-red-600" />{t("expenses.expense")}</span><span className="font-medium text-red-600">{formatCurrency(p.expense)}</span></div>
