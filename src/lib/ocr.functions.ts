@@ -75,13 +75,6 @@ Return null for an unknown scalar field and never invent a value.
     const locale = data.locale ?? "en";
     const languageName = locale === "et" ? "Estonian (eesti keel)" : "English";
     const languageDirective = `\n\nIMPORTANT LANGUAGE RULE: Return every free-text field (title, notes, description, category, purchased_items, and any other human-readable text) in ${languageName}. Translate values into ${languageName} when the source document is written in another language. Keep proper nouns (company names, store names, brand names), agreement numbers, ISO dates (YYYY-MM-DD), numeric amounts, and ISO currency codes unchanged.`;
-    if (locale === "et") {
-      // Estonian expense category names, so the UI displays them in Estonian.
-      extractionPrompts.expense = extractionPrompts.expense.replace(
-        "one of Groceries, Fuel, Restaurant, Coffee, Shopping, Healthcare, Travel, Other",
-        "one of Toidukaubad, Kütus, Restoran, Kohv, Ostlemine, Tervishoid, Reisimine, Muu",
-      ).replace('exactly "[store] ost"', 'exactly "[store] ost"');
-    }
     extractionPrompts.warranty += languageDirective;
     extractionPrompts.expense += languageDirective;
     extractionPrompts.agreement += languageDirective;
