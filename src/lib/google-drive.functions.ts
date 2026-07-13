@@ -147,3 +147,193 @@ export const syncFileToGoogleDrive = createServerFn({ method: "POST" })
 
     return { ok: true as const, fileId: uploaded.id };
   });
+
+// =========================================================
+// ETAPP 3 — Full MyDropPocket backup to user's Google Drive.
+// Per-category entries.json + root backup-info.json.
+// =========================================================
+
+export type BackupCategory =
+  | "warranties"
+  | "expenses"
+  | "agreements"
+  | "recurring_payments"
+  | "recurring_payment_instances";
+
+const CATEGORY_TO_FOLDER: Record<BackupCategory, string> = {
+  warranties: "Garantiid",
+  expenses: "Tulud ja kulud",
+  agreements: "Lepingud",
+  recurring_payments: "Püsimaksed",
+  recurring_payment_instances: "Järelmaksulepingud",
+};
+
+const ALL_CATEGORIES: BackupCategory[] = [
+  "warranties",
+  "expenses",
+  "agreements",
+  "recurring_payments",
+  "recurring_payment_instances",
+];
+
+async function writeCategoryJson(params: {
+  userId: string;
+  supabase: import("@supabase/supabase-js").SupabaseClient;
+  accessToken: string;
+  rootId: string;
+  subfolders: Record<string, string>;
+  category: BackupCategory;
+}): Promise<{ count: number }> {
+  const { ensureSubfolderId, upsertJsonInFolder } = await import("./google-drive.server");
+  const { data, error } = await params.supabase
+    .from(params.category)
+    .select("*")
+    .eq("user_id", params.userId);
+  if (error) throw error;
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  const folderName = CATEGORY_TO_FOLDER[params.category];
+  const parentId = await ensureSubfolderId({
+    userId: params.userId,
+    accessToken: params.accessToken,
+    rootId: params.rootId,
+    subfolders: params.subfolders,
+    name: folderName,
+  });
+  const payload = {
+    backupVersion: 1,
+    category: params.category,
+    exportedAt: new Date().toISOString(),
+    count: rows.length,
+    entries: rows,
+  };
+  await upsertJsonInFolder({
+    accessToken: params.accessToken,
+    parentId,
+    name: "entries.json",
+    json: payload,
+  });
+  return { count: rows.length };
+}
+
+async function writeBackupInfo(params: {
+  accessToken: string;
+  rootId: string;
+  totals: { entries: number; files: number };
+}) {
+  const { upsertJsonInFolder } = await import("./google-drive.server");
+  await upsertJsonInFolder({
+    accessToken: params.accessToken,
+    parentId: params.rootId,
+    name: "backup-info.json",
+    json: {
+      backupVersion: 1,
+      lastBackup: new Date().toISOString(),
+      entries: params.totals.entries,
+      files: params.totals.files,
+      appVersion: "1.0.0",
+    },
+  });
+}
+
+async function countFilesForUser(
+  supabase: import("@supabase/supabase-js").SupabaseClient,
+  userId: string,
+): Promise<number> {
+  let total = 0;
+  const tables: Array<{ table: BackupCategory; cols: string[] }> = [
+    { table: "warranties", cols: ["file_path"] },
+    { table: "expenses", cols: ["file_path"] },
+    { table: "agreements", cols: ["file_path"] },
+    { table: "recurring_payment_instances", cols: ["receipt_file_path", "invoice_file_path"] },
+  ];
+  for (const t of tables) {
+    const { data, error } = await supabase.from(t.table).select(t.cols.join(",")).eq("user_id", userId);
+    if (error) throw error;
+    for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+      for (const c of t.cols) if (row[c]) total++;
+    }
+  }
+  return total;
+}
+
+async function totalEntriesForUser(
+  supabase: import("@supabase/supabase-js").SupabaseClient,
+  userId: string,
+): Promise<number> {
+  let total = 0;
+  for (const c of ALL_CATEGORIES) {
+    const { count, error } = await supabase
+      .from(c)
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId);
+    if (error) throw error;
+    total += count ?? 0;
+  }
+  return total;
+}
+
+/**
+ * Sync one category's entries.json to Google Drive, then refresh backup-info.json.
+ * Best-effort: silently skips when the user has no Drive connection.
+ */
+export const syncBackupCategory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { category: BackupCategory }) => input)
+  .handler(async ({ data, context }) => {
+    const { getValidAccessTokenForUser } = await import("./google-drive.server");
+    const conn = await getValidAccessTokenForUser(context.userId);
+    if (!conn) return { skipped: true as const, reason: "not_connected" };
+    await writeCategoryJson({
+      userId: context.userId,
+      supabase: context.supabase,
+      accessToken: conn.accessToken,
+      rootId: conn.rootId,
+      subfolders: conn.subfolders,
+      category: data.category,
+    });
+    const entries = await totalEntriesForUser(context.supabase, context.userId);
+    const files = await countFilesForUser(context.supabase, context.userId);
+    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files } });
+    return { ok: true as const };
+  });
+
+/**
+ * Full backup — writes every category's entries.json plus backup-info.json.
+ */
+export const syncBackupAll = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { getValidAccessTokenForUser } = await import("./google-drive.server");
+    const conn = await getValidAccessTokenForUser(context.userId);
+    if (!conn) return { skipped: true as const, reason: "not_connected" };
+    let entries = 0;
+    for (const c of ALL_CATEGORIES) {
+      const r = await writeCategoryJson({
+        userId: context.userId,
+        supabase: context.supabase,
+        accessToken: conn.accessToken,
+        rootId: conn.rootId,
+        subfolders: conn.subfolders,
+        category: c,
+      });
+      entries += r.count;
+    }
+    const files = await countFilesForUser(context.supabase, context.userId);
+    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files } });
+    return { ok: true as const, entries, files };
+  });
+
+/**
+ * Delete a previously uploaded original file from the user's Drive.
+ * Best-effort; used when a record with a synced file is removed.
+ */
+export const deleteGoogleDriveFile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { fileId: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { getValidAccessTokenForUser, deleteDriveFile } = await import("./google-drive.server");
+    const conn = await getValidAccessTokenForUser(context.userId);
+    if (!conn) return { skipped: true as const };
+    await deleteDriveFile({ accessToken: conn.accessToken, fileId: data.fileId });
+    return { ok: true as const };
+  });
