@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 import { pickLang, setLang, type Lang } from "@/i18n";
+import { Cloud, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — DropPocket" }] }),
@@ -107,6 +108,22 @@ function SettingsPage() {
             <Switch checked={profile.notifications_enabled} onCheckedChange={(v) => setProfile({ ...profile, notifications_enabled: v })} />
           </div>
         </section>
+
+        <Link
+          to="/settings/cloud-backup"
+          className="card-soft flex items-center justify-between gap-4 p-6 transition-colors hover:bg-accent/40"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+              <Cloud className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold">Pilve varundus</p>
+              <p className="text-sm text-muted-foreground">Halda pilveteenuseid ja varukoopiaid</p>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </Link>
 
         <Button onClick={save} disabled={saving} className="w-full brand-gradient-bg text-primary-foreground sm:w-auto">{saving ? t("common.saving") : t("common.saveChanges")}</Button>
       </div>
