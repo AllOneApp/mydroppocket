@@ -83,6 +83,8 @@
     "recentExpenses": "Recent expenses",
     "upcomingWarranties": "Upcoming warranties",
     "viewAll": "View all",
+    "viewMore": "View details",
+    "noEntries": "No entries for this period",
     "noExpenses": "No expenses yet",
     "noWarranties": "No warranties yet"
   },
