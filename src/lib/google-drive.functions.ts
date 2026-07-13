@@ -185,10 +185,11 @@ const ALL_CATEGORIES: BackupCategory[] = [
   "recurring_payment_instances",
 ];
 
-function rowsToXlsxBytes(rows: Array<Record<string, unknown>>, sheetName: string): Uint8Array {
-  // Lazy require so xlsx is only pulled in on the server.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const XLSX = require("xlsx") as typeof import("xlsx");
+async function rowsToXlsxBytes(
+  rows: Array<Record<string, unknown>>,
+  sheetName: string,
+): Promise<Uint8Array> {
+  const XLSX = await import("xlsx");
   // Flatten unknown values so cells stay readable.
   const flat = rows.map((r) => {
     const out: Record<string, unknown> = {};
@@ -230,7 +231,7 @@ async function writeCategoryXlsx(params: {
     subfolders: params.subfolders,
     name: folderName,
   });
-  const bytes = rowsToXlsxBytes(rows, folderName);
+  const bytes = await rowsToXlsxBytes(rows, folderName);
   await upsertBytesInFolder({
     accessToken: params.accessToken,
     parentId,
@@ -260,7 +261,7 @@ async function writeBackupInfo(params: {
     { Väli: "Varunduse versioon", Väärtus: 1 },
     { Väli: "Rakenduse versioon", Väärtus: "1.0.0" },
   ];
-  const bytes = rowsToXlsxBytes(info, "Varunduse info");
+  const bytes = await rowsToXlsxBytes(info, "Varunduse info");
   await upsertBytesInFolder({
     accessToken: params.accessToken,
     parentId: params.rootId,
