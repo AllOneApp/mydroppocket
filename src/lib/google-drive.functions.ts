@@ -324,7 +324,7 @@ export const syncBackupCategory = createServerFn({ method: "POST" })
     const { getValidAccessTokenForUser } = await import("./google-drive.server");
     const conn = await getValidAccessTokenForUser(context.userId);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
-    await writeCategoryJson({
+    await writeCategoryXlsx({
       userId: context.userId,
       supabase: context.supabase,
       accessToken: conn.accessToken,
@@ -349,7 +349,7 @@ export const syncBackupAll = createServerFn({ method: "POST" })
     if (!conn) return { skipped: true as const, reason: "not_connected" };
     let entries = 0;
     for (const c of ALL_CATEGORIES) {
-      const r = await writeCategoryJson({
+      const r = await writeCategoryXlsx({
         userId: context.userId,
         supabase: context.supabase,
         accessToken: conn.accessToken,
