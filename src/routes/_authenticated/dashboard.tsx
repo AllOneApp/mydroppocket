@@ -33,12 +33,36 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function Dashboard() {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickMode, setQuickMode] = useState<"voice" | "upload" | "manual">("manual");
   function openQuick(mode: "voice" | "upload" | "manual") {
     setQuickMode(mode);
     setQuickOpen(true);
   }
+  const [periodKey, setPeriodKey] = useState<null | "today" | "week" | "month" | "year">(null);
+  const [editRow, setEditRow] = useState<ExpenseRow | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteRow, setDeleteRow] = useState<ExpenseRow | null>(null);
+
+  async function performDelete(r: ExpenseRow) {
+    try {
+      const { error } = await supabase.from("expenses").delete().eq("id", r.id);
+      if (error) throw error;
+      if (r.file_path) await deleteFile(r.file_path);
+      qc.setQueryData<ExpenseRow[]>(expensesQueryKey, (current = []) => current.filter((e) => e.id !== r.id));
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
+      ]);
+      toast.success(t("common.deleted"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("common.failed"));
+    } finally {
+      setDeleteRow(null);
+    }
+  }
+
   const { data: expenseRows = [] } = useQuery(expensesQueryOptions());
   const { data } = useQuery({
     queryKey: ["dashboard"],
