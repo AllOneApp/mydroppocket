@@ -170,16 +170,22 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
       const res = await extract({ data: { kind: "expense", mime: file.type || "application/octet-stream", base64 } });
       if (res.ok) {
         const d = res.data;
-        setForm((f) => ({
-          ...f,
-          amount: d.amount != null ? String(d.amount) : f.amount,
-          currency: (d.currency as string) || f.currency,
-          store: (d.store as string) || f.store,
-          expense_date: (d.expense_date as string) || f.expense_date,
-          category: (d.category as string) && EXPENSE_CATEGORIES.includes(d.category as string) ? (d.category as string) : f.category,
-          description: (d.description as string) || f.description,
-        }));
-        toast.success(t("common.autoFilled"));
+        const filled = [d.amount, d.currency, d.store, d.expense_date, d.category, d.description]
+          .some((v) => v !== null && v !== undefined && v !== "");
+        if (!filled) {
+          toast.error(t("common.noDataFound", { defaultValue: "Dokumendist ei õnnestunud vajalikke andmeid leida." }));
+        } else {
+          setForm((f) => ({
+            ...f,
+            amount: d.amount != null ? String(d.amount) : f.amount,
+            currency: (d.currency as string) || f.currency,
+            store: (d.store as string) || f.store,
+            expense_date: (d.expense_date as string) || f.expense_date,
+            category: (d.category as string) && EXPENSE_CATEGORIES.includes(d.category as string) ? (d.category as string) : f.category,
+            description: (d.description as string) || f.description,
+          }));
+          toast.success(t("common.autoFilled"));
+        }
       } else toast.error(res.error);
     } catch (e) { toast.error(e instanceof Error ? e.message : t("common.scanFailed")); }
     finally { setScanning(false); }
@@ -266,11 +272,11 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
               <button type="button" onClick={() => setForm({ ...form, type: "income", category: INCOME_CATEGORIES.includes(form.category) ? form.category : "Salary" })} className={`rounded-md px-3 py-1.5 text-sm ${isIncome ? "bg-green-500 text-white" : "text-muted-foreground"}`}>{t("expenses.typeIncome")}</button>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <VoiceInput
               context="expense_or_income"
               variant="outline"
-              className="h-11 w-full justify-center"
+              className="h-11 w-full justify-center whitespace-nowrap"
               autoStart={autoVoice}
               onResult={(d) => {
                 const aiType = d.type === "income" || d.type === "expense" ? d.type : null;
@@ -299,10 +305,10 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
                 });
               }}
             />
-            <Button type="button" variant={showUpload ? "secondary" : "outline"} onClick={() => setShowUpload((v) => !v)} className="h-11 w-full justify-center">
+            <Button type="button" variant={showUpload ? "secondary" : "outline"} onClick={() => setShowUpload((v) => !v)} className="h-11 w-full justify-center whitespace-nowrap">
               <Upload className="mr-1.5 h-4 w-4" />{t("expenses.uploadReceipt")}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setShowUpload(false)} className="h-11 w-full justify-center">
+            <Button type="button" variant="outline" onClick={() => setShowUpload(false)} className="h-11 w-full justify-center whitespace-nowrap">
               <Pencil className="mr-1.5 h-4 w-4" />{t("expenses.fillManually")}
             </Button>
           </div>

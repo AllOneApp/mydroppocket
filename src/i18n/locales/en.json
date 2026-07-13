@@ -28,6 +28,7 @@
     "failed": "Failed",
     "scanFailed": "Scan failed",
     "autoFilled": "Fields auto-filled",
+    "noDataFound": "Could not extract data from the document.",
     "back": "Back"
   },
   "nav": {
