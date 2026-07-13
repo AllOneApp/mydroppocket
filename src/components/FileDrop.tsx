@@ -57,7 +57,7 @@ export function FileDrop({
         />
       </div>
       {file && onScan && (
-        <Button type="button" variant="outline" size="sm" onClick={onScan} disabled={scanning} className="mt-2 w-full">
+        <Button type="button" variant="secondary" onClick={() => onScan?.()} disabled={scanning} className="mt-2 w-full">
           {scanning ? t("file.scanning") : t("file.autoFill")}
         </Button>
       )}
