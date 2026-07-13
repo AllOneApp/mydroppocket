@@ -21,6 +21,7 @@ import { Route as AuthenticatedExpensesRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAgreementsRouteImport } from './routes/_authenticated/agreements'
 import { Route as AuthenticatedSettingsCloudBackupRouteImport } from './routes/_authenticated/settings.cloud-backup'
+import { Route as ApiPublicGoogleDriveCallbackRouteImport } from './routes/api/public/google-drive/callback'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -82,6 +83,12 @@ const AuthenticatedSettingsCloudBackupRoute =
     path: '/cloud-backup',
     getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
+const ApiPublicGoogleDriveCallbackRoute =
+  ApiPublicGoogleDriveCallbackRouteImport.update({
+    id: '/api/public/google-drive/callback',
+    path: '/api/public/google-drive/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -95,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/warranties': typeof AuthenticatedWarrantiesRoute
   '/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
+  '/api/public/google-drive/callback': typeof ApiPublicGoogleDriveCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -108,6 +116,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/warranties': typeof AuthenticatedWarrantiesRoute
   '/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
+  '/api/public/google-drive/callback': typeof ApiPublicGoogleDriveCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -123,6 +132,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/_authenticated/warranties': typeof AuthenticatedWarrantiesRoute
   '/_authenticated/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
+  '/api/public/google-drive/callback': typeof ApiPublicGoogleDriveCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -138,6 +148,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/warranties'
     | '/settings/cloud-backup'
+    | '/api/public/google-drive/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -151,6 +162,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/warranties'
     | '/settings/cloud-backup'
+    | '/api/public/google-drive/callback'
   id:
     | '__root__'
     | '/'
@@ -165,6 +177,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/warranties'
     | '/_authenticated/settings/cloud-backup'
+    | '/api/public/google-drive/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -172,6 +185,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  ApiPublicGoogleDriveCallbackRoute: typeof ApiPublicGoogleDriveCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -260,6 +274,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsCloudBackupRouteImport
       parentRoute: typeof AuthenticatedSettingsRoute
     }
+    '/api/public/google-drive/callback': {
+      id: '/api/public/google-drive/callback'
+      path: '/api/public/google-drive/callback'
+      fullPath: '/api/public/google-drive/callback'
+      preLoaderRoute: typeof ApiPublicGoogleDriveCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -304,6 +325,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  ApiPublicGoogleDriveCallbackRoute: ApiPublicGoogleDriveCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
