@@ -40,6 +40,10 @@ export function expensesQueryOptions() {
   return queryOptions({
     queryKey: expensesQueryKey,
     queryFn: fetchExpenses,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

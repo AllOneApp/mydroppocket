@@ -160,6 +160,13 @@ function RootComponent() {
       router.invalidate();
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
       if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        void subscribeExpenses();
+      }
+      if (event === "SIGNED_OUT" && expensesChannel) {
+        void supabase.removeChannel(expensesChannel);
+        expensesChannel = null;
+      }
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         void (async () => {
           const { data: u } = await supabase.auth.getUser();
           if (!u.user) return;
@@ -172,19 +179,30 @@ function RootComponent() {
         })();
       }
     });
-    const expensesChannel = supabase
-      .channel("expenses-dashboard-sync")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "expenses" },
-        () => {
-          void Promise.all([
-            queryClient.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
-            queryClient.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
-          ]);
-        },
-      )
-      .subscribe();
+    let expensesChannel: ReturnType<typeof supabase.channel> | null = null;
+    const invalidateExpenses = () => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: expensesQueryKey }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+    };
+    const subscribeExpenses = async () => {
+      if (expensesChannel) {
+        await supabase.removeChannel(expensesChannel);
+        expensesChannel = null;
+      }
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+      expensesChannel = supabase
+        .channel(`expenses-sync-${u.user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "expenses" },
+          () => invalidateExpenses(),
+        )
+        .subscribe();
+    };
+    void subscribeExpenses();
     // On first mount, if a session exists, hydrate language from profile.
     void (async () => {
       const { data: u } = await supabase.auth.getUser();
@@ -198,7 +216,7 @@ function RootComponent() {
     })();
     return () => {
       data.subscription.unsubscribe();
-      void supabase.removeChannel(expensesChannel);
+      if (expensesChannel) void supabase.removeChannel(expensesChannel);
     };
   }, [router, queryClient]);
 
