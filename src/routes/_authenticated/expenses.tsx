@@ -305,9 +305,10 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
             </div>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <span onClickCapture={() => setInputMode("voice")} className="contents">
             <VoiceInput
               context="expense_or_income"
-              variant="outline"
+              variant={inputMode === "voice" ? "secondary" : "outline"}
               className="h-11 w-full justify-center whitespace-nowrap"
               autoStart={autoVoice}
               onResult={(d) => {
@@ -337,6 +338,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
                 });
               }}
             />
+            </span>
             <Button type="button" variant={inputMode === "upload" ? "secondary" : "outline"} onClick={() => setInputMode("upload")} className="h-11 w-full justify-center whitespace-nowrap">
               <Upload className="mr-1.5 h-4 w-4" />{t("expenses.uploadReceipt")}
             </Button>
