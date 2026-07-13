@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown, Repeat } from "lucide-react";
+import { useState } from "react";
+import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown, Repeat, Plus, Mic, Upload, Pencil } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { computeRange } from "@/components/DateRangeFilter";
@@ -8,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { expenseTotals, expensesQueryOptions } from "@/lib/expenses";
 import { formatCurrency, warrantyStatus } from "@/lib/records";
 import { useTranslation } from "react-i18next";
+import { ExpenseDialog } from "./expenses";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — DropPocket" }] }),
@@ -16,6 +18,12 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function Dashboard() {
   const { t } = useTranslation();
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickMode, setQuickMode] = useState<"voice" | "upload" | "manual">("manual");
+  function openQuick(mode: "voice" | "upload" | "manual") {
+    setQuickMode(mode);
+    setQuickOpen(true);
+  }
   const { data: expenseRows = [] } = useQuery(expensesQueryOptions());
   const { data } = useQuery({
     queryKey: ["dashboard"],
@@ -70,6 +78,43 @@ function Dashboard() {
         <h1 className="text-3xl font-bold">{t("dashboard.welcome")}</h1>
         <p className="mt-1 text-muted-foreground">{t("dashboard.subtitle")}</p>
       </div>
+
+      <div className="card-soft mb-6 p-6">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-xl brand-gradient-bg text-primary-foreground">
+            <Plus className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">{t("expenses.title")}</p>
+            <p className="text-lg font-semibold">{t("expenses.addTitle")}</p>
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => openQuick("voice")}
+            className="flex h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background text-sm font-medium transition hover:bg-accent"
+          >
+            <Mic className="h-4 w-4" />{t("voice.speak")}
+          </button>
+          <button
+            type="button"
+            onClick={() => openQuick("upload")}
+            className="flex h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background text-sm font-medium transition hover:bg-accent"
+          >
+            <Upload className="h-4 w-4" />{t("expenses.uploadReceipt")}
+          </button>
+          <button
+            type="button"
+            onClick={() => openQuick("manual")}
+            className="flex h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background text-sm font-medium transition hover:bg-accent"
+          >
+            <Pencil className="h-4 w-4" />{t("expenses.fillManually")}
+          </button>
+        </div>
+      </div>
+
+      <ExpenseDialog open={quickOpen} onOpenChange={setQuickOpen} row={null} prefill={null} initialMode={quickMode} />
 
       {data?.expiring && data.expiring.length > 0 && (
         <div className="card-soft mb-6 flex items-start gap-3 border-orange-200 bg-orange-50 p-4 dark:border-orange-900/40 dark:bg-orange-950/30">
