@@ -190,7 +190,7 @@ function RecurringPage() {
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">📅 {t("recurring.nextDue")}</p>
           {summary.upcoming && summary.upcomingRec ? (
             <>
-              <p className="mt-2 text-lg font-bold">{summary.upcoming.due_date.slice(5).replace("-", ".")}</p>
+              <p className="mt-2 text-lg font-bold">{formatDateShort(summary.upcoming.due_date)}</p>
               <p className="truncate text-sm text-muted-foreground">{summary.upcomingRec.service_name}</p>
               <p className="text-sm font-semibold">{formatCurrency(Number(summary.upcoming.amount), summary.upcoming.currency ?? "EUR")}</p>
             </>
@@ -234,8 +234,8 @@ function RecurringPage() {
               const overdueRow = i.due_date < today;
               return (
                 <li key={i.id} className="flex items-center gap-3 py-2.5">
-                  <div className={`w-14 shrink-0 text-center text-xs font-semibold ${overdueRow ? "text-red-600" : "text-muted-foreground"}`}>
-                    {i.due_date.slice(5).replace("-", ".")}
+                  <div className={`w-16 shrink-0 text-center text-xs font-semibold ${overdueRow ? "text-red-600" : "text-muted-foreground"}`}>
+                    {formatDateShort(i.due_date)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{rec?.service_name ?? "—"}</p>
@@ -275,7 +275,7 @@ function RecurringPage() {
                       {r.provider ?? "—"}{catLabel ? ` · ${catLabel}` : ""} · {t(`recurring.frequencies.${r.frequency}` as const)}
                     </p>
                     <p className="mt-1 text-sm">
-                      {t("recurring.nextDue")}: <span className="font-medium">{next ? next.due_date : r.next_due_date}</span>
+                      {t("recurring.nextDue")}: <span className="font-medium">{formatDate(next ? next.due_date : r.next_due_date)}</span>
                     </p>
                   </button>
                   <div className="flex flex-col items-end gap-2">
@@ -326,7 +326,7 @@ function RecurringPage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{rec?.service_name ?? "—"}</p>
                         <p className="text-xs text-muted-foreground">
-                          {t("recurring.paidOn")}: {(i.paid_at ?? i.due_date).slice(0, 10)}
+                          {t("recurring.paidOn")}: {formatDate(i.paid_at ?? i.due_date)}
                         </p>
                       </div>
                       {i.receipt_file_path && (

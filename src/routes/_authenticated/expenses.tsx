@@ -127,7 +127,7 @@ function ExpensesPage() {
                       {isIncome ? <TrendingUp className="h-3.5 w-3.5 text-green-600" /> : <TrendingDown className="h-3.5 w-3.5 text-red-600" />}
                       {r.description || t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}
                     </p>
-                    <p className="mt-1 text-sm text-muted-foreground">{r.expense_date} · {t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}{r.store ? ` · ${r.store}` : ""}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{formatDate(r.expense_date)} · {t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}{r.store ? ` · ${r.store}` : ""}</p>
                   </button>
                   <p className={`shrink-0 text-lg font-semibold ${isIncome ? "text-green-600" : ""}`}>{isIncome ? "+" : "−"}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
                 </div>

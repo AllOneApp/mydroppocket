@@ -103,7 +103,7 @@ function Section({ title, count, tone, items, onEdit, onDelete }: {
                     <h3 className="truncate text-base font-semibold hover:text-primary">{r.product_name}</h3>
                   </button>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {r.store ?? "—"} · {t("warranties.bought")} {r.purchase_date ?? "—"} · {formatCurrency(r.amount ? Number(r.amount) : null, r.currency ?? "EUR")}
+                    {r.store ?? "—"} · {t("warranties.bought")} {formatDate(r.purchase_date)} · {formatCurrency(r.amount ? Number(r.amount) : null, r.currency ?? "EUR")}
                   </p>
                   {r.notes && <p className="mt-2 text-sm text-muted-foreground">{r.notes}</p>}
                 </div>

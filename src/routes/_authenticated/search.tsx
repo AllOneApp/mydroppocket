@@ -95,12 +95,12 @@ function SearchPage() {
         <div className="mt-8 grid gap-6">
           <Group icon={ShieldCheck} title={t("search.warrantiesN", { count: data.warranties.length })} to="/warranties">
             {data.warranties.map((r) => (
-              <Row key={r.id} title={r.product_name} sub={`${r.store ?? "—"} · ${r.purchase_date ?? ""}`} right={formatCurrency(r.amount ? Number(r.amount) : null, r.currency ?? "EUR")} />
+              <Row key={r.id} title={r.product_name} sub={`${r.store ?? "—"} · ${formatDate(r.purchase_date)}`} right={formatCurrency(r.amount ? Number(r.amount) : null, r.currency ?? "EUR")} />
             ))}
           </Group>
           <Group icon={Wallet} title={t("search.expensesN", { count: data.expenses.length })} to="/expenses">
             {data.expenses.map((r) => (
-              <Row key={r.id} title={r.description || r.category} sub={`${r.expense_date} · ${r.category}`} right={formatCurrency(Number(r.amount), r.currency ?? "EUR")} />
+              <Row key={r.id} title={r.description || formatCategory("expenses", r.category)} sub={`${formatDate(r.expense_date)} · ${formatCategory("expenses", r.category)}`} right={formatCurrency(Number(r.amount), r.currency ?? "EUR")} />
             ))}
           </Group>
           <Group icon={FileText} title={t("search.agreementsN", { count: data.agreements.length })} to="/agreements">

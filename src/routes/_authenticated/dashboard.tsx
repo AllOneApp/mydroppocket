@@ -10,6 +10,7 @@ import { computeRange } from "@/components/DateRangeFilter";
 import { supabase } from "@/integrations/supabase/client";
 import { expenseTotals, expensesQueryKey, expensesQueryOptions, type ExpenseRow } from "@/lib/expenses";
 import { formatCurrency, warrantyStatus } from "@/lib/records";
+import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
 import { deleteFile } from "@/lib/records";
 import { useTranslation } from "react-i18next";
 import { ExpenseDialog } from "./expenses";
@@ -202,7 +203,7 @@ function Dashboard() {
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">📅 {t("recurring.nextDue")}</p>
               {data?.recurring.next && data.recurring.nextRec ? (
                 <>
-                  <p className="mt-1 text-base font-bold">{data.recurring.next.due_date.slice(5).replace("-", ".")}</p>
+                  <p className="mt-1 text-base font-bold">{formatDateShort(data.recurring.next.due_date)}</p>
                   <p className="truncate text-xs text-muted-foreground">{data.recurring.nextRec.service_name}</p>
                   <p className="text-sm font-semibold">{formatCurrency(Number(data.recurring.next.amount), data.recurring.nextRec.currency ?? "EUR")}</p>
                 </>
@@ -253,8 +254,8 @@ function Dashboard() {
               {recentExpenses.map((r) => (
                 <li key={r.id} className="flex items-center justify-between py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{r.description || r.category}</p>
-                    <p className="text-xs text-muted-foreground">{r.expense_date} · {r.category}</p>
+                    <p className="truncate text-sm font-medium">{r.description || formatCategory("expenses", r.category)}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(r.expense_date)} · {formatCategory("expenses", r.category)}</p>
                   </div>
                   <p className="text-sm font-semibold">{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
                 </li>
@@ -322,7 +323,7 @@ function Dashboard() {
                               {isIncome ? <TrendingUp className="h-3.5 w-3.5 shrink-0 text-green-600" /> : <TrendingDown className="h-3.5 w-3.5 shrink-0 text-red-600" />}
                               <span className="truncate">{r.description || catLabel}</span>
                             </p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">{r.expense_date} · {catLabel}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(r.expense_date)} · {catLabel}</p>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             <p className={`text-sm font-semibold ${isIncome ? "text-green-600" : "text-red-600"}`}>
