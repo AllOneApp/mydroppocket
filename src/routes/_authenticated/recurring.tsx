@@ -137,6 +137,10 @@ function RecurringPage() {
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success(t("recurring.paidMarked"));
       setPayAsk({ instance: { ...inst, status: "paid" }, recurring: rec });
+      try {
+        await syncBackupCategory({ data: { category: "recurring_payment_instances" } });
+        await syncBackupCategory({ data: { category: "recurring_payments" } });
+      } catch (e) { console.warn("[gdrive] backup sync failed", e); }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("common.failed"));
     }
@@ -152,6 +156,10 @@ function RecurringPage() {
       if (i.invoice_file_path) await deleteFile(i.invoice_file_path);
     }
     await supabase.from("recurring_payments").delete().eq("id", r.id);
+    try {
+      await syncBackupCategory({ data: { category: "recurring_payments" } });
+      await syncBackupCategory({ data: { category: "recurring_payment_instances" } });
+    } catch (e) { console.warn("[gdrive] backup sync failed", e); }
     qc.invalidateQueries({ queryKey: ["recurring_payments"] });
     qc.invalidateQueries({ queryKey: ["recurring_instances"] });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
