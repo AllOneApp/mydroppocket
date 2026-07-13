@@ -531,3 +531,108 @@ export const deleteGoogleDriveFile = createServerFn({ method: "POST" })
     await deleteDriveFile({ accessToken: conn.accessToken, fileId: data.fileId });
     return { ok: true as const };
   });
+
+// -----------------------------------------------------------------------------
+// Multi-attachment sync: mirror all attachments of one agreement to a
+// per-agreement subfolder under "Lepingud". Uploads only attachments that
+// don't yet have a gdrive_file_id and persists the id back on each row.
+// Files are stored in original quality / original format — never merged.
+// -----------------------------------------------------------------------------
+
+function sanitizeFolderName(s: string): string {
+  const cleaned = (s || "").replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned.slice(0, 80) || "Leping";
+}
+
+export const syncAgreementAttachments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { agreementId: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { getValidAccessTokenForUser, findOrCreateFolder, uploadBytesToDriveFolder } =
+      await import("./google-drive.server");
+
+    // Load agreement (RLS-scoped).
+    const { data: agreement, error: agErr } = await context.supabase
+      .from("agreements")
+      .select("id, title, user_id")
+      .eq("id", data.agreementId)
+      .maybeSingle();
+    if (agErr) throw agErr;
+    if (!agreement || (agreement as { user_id: string }).user_id !== context.userId) {
+      throw new Error("Agreement not found");
+    }
+    // Read cached folder id via admin (bypasses type gaps for new column).
+    const { data: extra } = await supabaseAdmin
+      .from("agreements")
+      .select("gdrive_folder_id, title")
+      .eq("id", data.agreementId)
+      .maybeSingle();
+    const cachedFolderId = (extra as { gdrive_folder_id?: string | null } | null)?.gdrive_folder_id ?? null;
+
+    const conn = await getValidAccessTokenForUser(context.userId);
+    if (!conn) return { skipped: true as const, reason: "not_connected" };
+    const lepingudId = conn.subfolders["Lepingud"];
+    if (!lepingudId) throw new Error("Missing Drive subfolder: Lepingud");
+
+    // Ensure per-agreement subfolder.
+    let folderId = cachedFolderId;
+    if (!folderId) {
+      const name = sanitizeFolderName((agreement as { title: string }).title || "Leping");
+      const f = await findOrCreateFolder({ accessToken: conn.accessToken, name, parentId: lepingudId });
+      folderId = f.id;
+      await supabaseAdmin.from("agreements").update({ gdrive_folder_id: folderId }).eq("id", data.agreementId);
+    }
+
+    // Fetch attachments needing sync.
+    const { data: attRaw, error: attErr } = await context.supabase
+      .from("agreement_attachments")
+      .select("id, file_path, file_name, file_mime, gdrive_file_id")
+      .eq("agreement_id", data.agreementId);
+    if (attErr) throw attErr;
+    const attachments = (attRaw ?? []) as Array<{
+      id: string;
+      file_path: string;
+      file_name: string;
+      file_mime: string | null;
+      gdrive_file_id: string | null;
+    }>;
+
+    let uploaded = 0;
+    for (const a of attachments) {
+      if (a.gdrive_file_id) continue;
+      if (!a.file_path.startsWith(`${context.userId}/`)) continue;
+      const dl = await supabaseAdmin.storage.from("documents").download(a.file_path);
+      if (dl.error || !dl.data) continue;
+      const bytes = new Uint8Array(await dl.data.arrayBuffer());
+      const up = await uploadBytesToDriveFolder({
+        accessToken: conn.accessToken,
+        parentId: folderId,
+        name: a.file_name,
+        mime: a.file_mime ?? "application/octet-stream",
+        bytes,
+      });
+      await supabaseAdmin
+        .from("agreement_attachments")
+        .update({ gdrive_file_id: up.id })
+        .eq("id", a.id);
+      uploaded++;
+    }
+
+    return { ok: true as const, uploaded, folderId };
+  });
+
+/**
+ * Delete the per-agreement Drive folder (and everything under it).
+ * Best-effort — used when an agreement is deleted from the app.
+ */
+export const deleteAgreementDriveFolder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { folderId: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { getValidAccessTokenForUser, deleteDriveFile } = await import("./google-drive.server");
+    const conn = await getValidAccessTokenForUser(context.userId);
+    if (!conn) return { skipped: true as const };
+    await deleteDriveFile({ accessToken: conn.accessToken, fileId: data.folderId });
+    return { ok: true as const };
+  });

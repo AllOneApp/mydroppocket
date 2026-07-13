@@ -191,7 +191,13 @@
       "purchase_contract": "Purchase contract",
       "service": "Service agreement",
       "contract": "Other contract"
-    }
+    },
+    "attachments": "Attachments",
+    "attachmentsAdd": "Add files",
+    "attachmentsCount": "{{count}} / {{max}} files added",
+    "attachmentsMaxReached": "Maximum number of files is {{max}}.",
+    "attachmentsEmpty": "No attachments added yet.",
+    "attachmentsHint": "Images and PDFs — up to {{max}} files per agreement."
   },
   "search": {
     "title": "Search",

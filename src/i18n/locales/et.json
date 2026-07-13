@@ -191,7 +191,13 @@
       "purchase_contract": "Ostuleping",
       "service": "Teenusleping",
       "contract": "Muu leping"
-    }
+    },
+    "attachments": "Manused",
+    "attachmentsAdd": "Lisa failid",
+    "attachmentsCount": "{{count}} / {{max}} faili lisatud",
+    "attachmentsMaxReached": "Maksimaalne failide arv on {{max}}.",
+    "attachmentsEmpty": "Manuseid pole veel lisatud.",
+    "attachmentsHint": "Pildid ja PDF-id — kuni {{max}} faili ühe lepingu kohta."
   },
   "search": {
     "title": "Otsing",
