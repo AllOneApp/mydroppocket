@@ -11,6 +11,11 @@ const InputSchema = z.object({
   base64: z.string(),
 });
 
+const SUPPORTED_IMAGE_MIMES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif"];
+const SUPPORTED_DOC_MIMES = ["application/pdf"];
+// Approx byte size from base64 length. Gemini limit ~20MB inline.
+const MAX_INLINE_BYTES = 20 * 1024 * 1024;
+
 export const extractDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => InputSchema.parse(data))
@@ -73,6 +78,32 @@ Return null for an unknown scalar field and never invent a value.
     const dataUrl = `data:${data.mime};base64,${data.base64}`;
     const isImage = data.mime.startsWith("image/");
 
+    // ── Input validation ────────────────────────────────────────────────
+    if (!data.base64 || data.base64.length < 32) {
+      console.error("[ocr] empty or too small base64", { kind: data.kind, mime: data.mime, len: data.base64.length });
+      return { ok: false as const, error: "File is empty or unreadable." };
+    }
+    const approxBytes = Math.floor((data.base64.length * 3) / 4);
+    if (approxBytes > MAX_INLINE_BYTES) {
+      console.error("[ocr] file too large", { kind: data.kind, mime: data.mime, approxBytes });
+      return {
+        ok: false as const,
+        error: `File is too large (${(approxBytes / 1024 / 1024).toFixed(1)} MB). Max 20 MB.`,
+      };
+    }
+    const mimeOk = isImage
+      ? SUPPORTED_IMAGE_MIMES.includes(data.mime.toLowerCase())
+      : SUPPORTED_DOC_MIMES.includes(data.mime.toLowerCase());
+    if (!mimeOk) {
+      console.error("[ocr] unsupported mime", { kind: data.kind, mime: data.mime });
+      return {
+        ok: false as const,
+        error: `Unsupported file format: ${data.mime || "unknown"}. Supported: JPG, PNG, WEBP, HEIC, PDF.`,
+      };
+    }
+
+    console.info("[ocr] extracting", { kind: data.kind, mime: data.mime, approxBytes });
+
     try {
       const { output } = await generateText({
         model,
@@ -93,12 +124,51 @@ Return null for an unknown scalar field and never invent a value.
           },
         ],
       });
-      return { ok: true as const, data: output as Record<string, string | number | null> };
-    } catch (err) {
-      if (NoObjectGeneratedError.isInstance(err)) {
-        return { ok: false as const, error: "Could not read document" };
+      const result = output as Record<string, string | number | null | string[]>;
+      // Detect "AI returned an object, but every field is null/empty" — this is
+      // effectively "no readable data on the document".
+      const hasAny = Object.values(result).some((v) => {
+        if (v === null || v === undefined) return false;
+        if (typeof v === "string") return v.trim().length > 0;
+        if (Array.isArray(v)) return v.length > 0;
+        return true;
+      });
+      if (!hasAny) {
+        console.warn("[ocr] AI returned all-null object", { kind: data.kind, result });
+        return { ok: false as const, error: "No readable text found on the document." };
       }
-      console.error("OCR error", err);
-      return { ok: false as const, error: err instanceof Error ? err.message : "OCR failed" };
+      console.info("[ocr] success", { kind: data.kind, keys: Object.keys(result).filter((k) => result[k] != null) });
+      return { ok: true as const, data: result as Record<string, string | number | null> };
+    } catch (err) {
+      // Extract as much detail as possible for logs + user message.
+      const anyErr = err as { message?: string; statusCode?: number; status?: number; cause?: unknown; responseBody?: string };
+      const status = anyErr?.statusCode ?? anyErr?.status;
+      console.error("[ocr] extract failed", {
+        kind: data.kind,
+        mime: data.mime,
+        status,
+        message: anyErr?.message,
+        responseBody: anyErr?.responseBody,
+        cause: anyErr?.cause,
+      });
+      if (NoObjectGeneratedError.isInstance(err)) {
+        return { ok: false as const, error: "AI could not analyse the document (no structured output)." };
+      }
+      if (status === 429) {
+        return { ok: false as const, error: "AI rate limit reached. Please try again in a moment." };
+      }
+      if (status === 402) {
+        return { ok: false as const, error: "AI credits exhausted for this workspace." };
+      }
+      if (status === 413) {
+        return { ok: false as const, error: "File is too large for the AI service." };
+      }
+      if (anyErr?.message?.toLowerCase().includes("timeout")) {
+        return { ok: false as const, error: "AI request timed out. Please try again." };
+      }
+      return {
+        ok: false as const,
+        error: err instanceof Error ? `AI service error: ${err.message}` : "AI service error.",
+      };
     }
   });
