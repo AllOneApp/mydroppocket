@@ -118,8 +118,8 @@ function SettingsPage() {
               <Cloud className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="font-semibold">Pilve varundus</p>
-              <p className="text-sm text-muted-foreground">Halda pilveteenuseid ja varukoopiaid</p>
+              <p className="font-semibold">{t("settings.cloudBackup")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.cloudBackupDesc")}</p>
             </div>
           </div>
           <ChevronRight className="h-5 w-5 text-muted-foreground" />
