@@ -121,7 +121,7 @@ function Section({ title, count, tone, items, onEdit, onDelete }: {
 
 function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null }) {
   const qc = useQueryClient();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const extract = useServerFn(extractDocument);
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -155,7 +155,8 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
         toast.error("Could not read file contents.");
         return;
       }
-      const res = await extract({ data: { kind: "warranty", mime: file.type || "application/octet-stream", base64 } });
+      const locale = (i18n.language?.toLowerCase().startsWith("et") ? "et" : "en") as "et" | "en";
+      const res = await extract({ data: { kind: "warranty", mime: file.type || "application/octet-stream", base64, locale } });
       console.info("[scan] warranty response", res);
       if (res.ok) {
         const d = res.data;

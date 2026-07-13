@@ -143,7 +143,7 @@ function AgreementsPage() {
 
 function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null }) {
   const qc = useQueryClient();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const extract = useServerFn(extractDocument);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [existing, setExisting] = useState<ExistingAttachment[]>([]);
@@ -212,7 +212,8 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         if (!base64) throw new Error(t("file.readFailedAt", { defaultValue: "Could not read file {{index}}.", index: index + 1 }));
         return { name: file.name, mime: file.type || "application/octet-stream", base64 };
       }));
-      const res = await extract({ data: { kind: "agreement", files } });
+      const locale = (i18n.language?.toLowerCase().startsWith("et") ? "et" : "en") as "et" | "en";
+      const res = await extract({ data: { kind: "agreement", files, locale } });
       console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
