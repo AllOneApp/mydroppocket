@@ -249,7 +249,7 @@ async function countFilesForUser(
   for (const t of tables) {
     const { data, error } = await supabase.from(t.table).select(t.cols.join(",")).eq("user_id", userId);
     if (error) throw error;
-    for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+    for (const row of ((data ?? []) as unknown) as Array<Record<string, unknown>>) {
       for (const c of t.cols) if (row[c]) total++;
     }
   }
