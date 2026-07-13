@@ -197,7 +197,9 @@
     "attachmentsCount": "{{count}} / {{max}} faili lisatud",
     "attachmentsMaxReached": "Maksimaalne failide arv on {{max}}.",
     "attachmentsEmpty": "Manuseid pole veel lisatud.",
-    "attachmentsHint": "Pildid ja PDF-id — kuni {{max}} faili ühe lepingu kohta."
+    "attachmentsHint": "Pildid ja PDF-id — kuni {{max}} faili ühe lepingu kohta.",
+    "analysisNoData": "Üles laaditud lehtedelt ei leitud lepingu andmeid.",
+    "analysisFailed": "Lepingu analüüs ebaõnnestus. Tehniline põhjus salvestati logidesse."
   },
   "search": {
     "title": "Otsing",
@@ -277,7 +279,10 @@
     "drop": "Lohista fail või klõpsa üleslaadimiseks",
     "types": "Foto, pilt või PDF",
     "scanning": "Skaneerin AI-ga…",
-    "autoFill": "✨ Täida dokumendist automaatselt"
+    "autoFill": "✨ Täida dokumendist automaatselt",
+    "pickFirst": "Lisa esmalt vähemalt üks fail.",
+    "empty": "Valitud fail on tühi.",
+    "readFailedAt": "Faili {{index}} sisu ei õnnestunud lugeda."
   },
   "notFound": {
     "title": "Lehte ei leitud",

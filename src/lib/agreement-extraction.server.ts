@@ -90,6 +90,26 @@ function parseLooseLines(text: string) {
   return result;
 }
 
+function addPlainTextMatches(source: Record<string, unknown>, text: string) {
+  const patterns: Array<[string, RegExp]> = [
+    ["title", /(?:document title|agreement title|title|pealkiri)\s+(?:is|on)\s+([^.;\n]+)/i],
+    ["company", /(?:company|provider|creditor|seller|ettevõte|ettevote|teenusepakkuja|krediidiandja)\s+(?:is|on)\s+([^.;\n]+)/i],
+    ["agreement_number", /(?:agreement|contract|credit|lepingu|krediidi)\s*(?:number|nr|no|number on|nr on)?\s*[#:]?\s*([A-Z0-9][A-Z0-9./_-]{2,})/i],
+    ["start_date", /(?:start date|effective date|agreement date|alguskuupäev|alguskuupaev|lepingu kuupäev|lepingu kuupaev)\s+(?:is|on)?\s*([^.;\n]+)/i],
+    ["end_date", /(?:end date|termination date|maturity date|lõppkuupäev|loppkuupaev)\s+(?:is|on)?\s*([^.;\n]+)/i],
+    ["monthly_payment", /(?:monthly payment|monthly instalment|monthly installment|monthly fee|kuumakse)\s+(?:is|on)?\s*([^.;\n]+)/i],
+    ["total_amount", /(?:total amount|total payable|contract total|credit amount|kogusumma|kokku tasuda)\s+(?:is|on)?\s*([^.;\n]+)/i],
+    ["currency", /(?:currency|valuuta)\s+(?:is|on)?\s*([A-Z]{3})\b/i],
+    ["notes", /(?:notes|remarks|märkmed|markmed)\s+(?:are|is|on)?\s*([^\n]+)/i],
+  ];
+  for (const [field, pattern] of patterns) {
+    if (source[field] != null) continue;
+    const match = text.match(pattern);
+    if (match?.[1]) source[field] = match[1].trim();
+  }
+  return source;
+}
+
 function valueFor(source: Record<string, unknown>, aliases: string[]) {
   const entries = Object.entries(source);
   for (const alias of aliases) {
@@ -152,9 +172,9 @@ export function parseAgreementResponse(rawResponse: string) {
     parsed = parseJsonCandidate(candidate, parserErrors);
     if (parsed) break;
   }
-  const source = parsed
+  const source = addPlainTextMatches(parsed
     ? ((parsed.agreement && typeof parsed.agreement === "object" ? parsed.agreement : parsed) as Record<string, unknown>)
-    : parseLooseLines(rawResponse);
+    : parseLooseLines(rawResponse), rawResponse);
   const ocrText = asText(valueFor(source, ["ocr_text", "source_text", "extracted_text", "document_text"])) ?? rawResponse;
   const data: AgreementExtraction = {
     title: asText(valueFor(source, ["title", "pealkiri", "document_title", "agreement_title"])),

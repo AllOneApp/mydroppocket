@@ -152,7 +152,7 @@ Return null for an unknown scalar field and never invent a value.
           finishReason: agreementResult.finishReason,
           keys: Object.keys(parsed.data).filter((key) => parsed.data[key as keyof typeof parsed.data] != null),
         });
-        return { ok: true as const, data: parsed.data };
+        return { ok: true as const, data: parsed.data as Record<string, string | number | null> };
       }
 
       const primaryFile = files[0];
