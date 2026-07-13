@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Cloud, CloudUpload, RotateCcw, Check, ArrowLeft, Loader2, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
+import { formatDate } from "@/lib/format";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -16,13 +19,16 @@ import {
 } from "@/lib/google-drive.functions";
 
 export const Route = createFileRoute("/_authenticated/settings/cloud-backup")({
-  head: () => ({
-    meta: [
-      { title: "Pilve varundus — MyDropPocket" },
-      { name: "description", content: "Hoia oma tähtsad dokumendid turvaliselt oma isiklikus pilves." },
-      { name: "robots", content: "noindex" },
-    ],
-  }),
+  head: () => {
+    const title = i18n.t("cloudBackup.title");
+    return {
+      meta: [
+        { title: `${title} — MyDropPocket` },
+        { name: "description", content: i18n.t("cloudBackup.subtitle") },
+        { name: "robots", content: "noindex" },
+      ],
+    };
+  },
   component: CloudBackupPage,
 });
 
@@ -35,6 +41,7 @@ type Provider = {
 };
 
 function CloudBackupPage() {
+  const { t } = useTranslation();
   const [autoBackup, setAutoBackup] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
@@ -49,11 +56,11 @@ function CloudBackupPage() {
   const disconnectMut = useMutation({
     mutationFn: () => disconnectGoogleDrive(),
     onSuccess: () => {
-      toast.success("Google Drive lahutatud");
+      toast.success(t("cloudBackup.disconnected"));
       qc.invalidateQueries({ queryKey: ["google-drive-status"] });
     },
     onError: (e: unknown) => {
-      toast.error(e instanceof Error ? e.message : "Lahutamine ebaõnnestus");
+      toast.error(e instanceof Error ? e.message : t("cloudBackup.disconnectFailed"));
     },
   });
 
@@ -62,15 +69,15 @@ function CloudBackupPage() {
     try {
       const res = await syncBackupAll({ data: { lang: currentBackupLang() } });
       if ("skipped" in res && res.skipped) {
-        toast.error("Google Drive pole ühendatud");
+        toast.error(t("cloudBackup.notConnectedToast"));
         return;
       }
       if ("ok" in res && res.ok) {
         setLastBackup({ at: new Date().toISOString(), entries: res.entries, files: res.files });
-        toast.success(`Varundatud: ${res.entries} kirjet, ${res.files} faili`);
+        toast.success(t("cloudBackup.backedUp", { entries: res.entries, files: res.files }));
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Varundamine ebaõnnestus");
+      toast.error(e instanceof Error ? e.message : t("cloudBackup.backupFailed"));
     } finally {
       setBackingUp(false);
     }
@@ -84,10 +91,10 @@ function CloudBackupPage() {
       if (!data || data.type !== "mydroppocket:google-drive:oauth") return;
       setConnecting(false);
       if (data.ok) {
-        toast.success(`Google Drive ühendatud (${data.email ?? "OK"})`);
+        toast.success(t("cloudBackup.connectedToast", { email: data.email ?? "OK" }));
         qc.invalidateQueries({ queryKey: ["google-drive-status"] });
       } else {
-        toast.error(`Ühendus ebaõnnestus: ${data.error ?? "tundmatu viga"}`);
+        toast.error(t("cloudBackup.connectFailed", { error: data.error ?? t("cloudBackup.unknownError") }));
       }
     }
     window.addEventListener("message", onMessage);
@@ -98,7 +105,7 @@ function CloudBackupPage() {
     // Open popup synchronously in the click handler to avoid popup blockers.
     const popup = window.open("", "mydroppocket-gdrive", "width=560,height=680");
     if (!popup) {
-      toast.error("Popup blokeeriti. Luba popup'id ja proovi uuesti.");
+      toast.error(t("cloudBackup.popupBlocked"));
       return;
     }
     setConnecting(true);
@@ -113,7 +120,7 @@ function CloudBackupPage() {
         if (popup.closed) {
           clearInterval(timer);
           setConnecting((c) => {
-            if (c) toast.message("Sisselogimine tühistati");
+            if (c) toast.message(t("cloudBackup.signInCancelled"));
             return false;
           });
         }
@@ -121,7 +128,7 @@ function CloudBackupPage() {
     } catch (e) {
       popup.close();
       setConnecting(false);
-      toast.error(e instanceof Error ? e.message : "Ei suuda alustada ühendust");
+      toast.error(e instanceof Error ? e.message : t("cloudBackup.cannotStart"));
     }
   }
 
@@ -131,22 +138,22 @@ function CloudBackupPage() {
   const gdriveFolder = gdriveStatus?.connected ? gdriveStatus.folderName : undefined;
 
   const providers: Provider[] = [
-    { id: "gdrive", name: "Google Drive", platform: "Android · iOS · Web", connected: gdriveConnected },
-    { id: "icloud", name: "iCloud Drive", platform: "iPhone", connected: false, comingSoon: true },
-    { id: "dropbox", name: "Dropbox", platform: "Tulekul", connected: false, comingSoon: true },
-    { id: "onedrive", name: "OneDrive", platform: "Tulekul", connected: false, comingSoon: true },
+    { id: "gdrive", name: "Google Drive", platform: t("cloudBackup.platform.androidIosWeb"), connected: gdriveConnected },
+    { id: "icloud", name: "iCloud Drive", platform: t("cloudBackup.platform.iphone"), connected: false, comingSoon: true },
+    { id: "dropbox", name: "Dropbox", platform: t("cloudBackup.platform.comingSoon"), connected: false, comingSoon: true },
+    { id: "onedrive", name: "OneDrive", platform: t("cloudBackup.platform.comingSoon"), connected: false, comingSoon: true },
   ];
 
   const backupItems = [
-    "Garantiid",
-    "Tšekid",
-    "Lepingud",
-    "Järelmaksulepingud",
-    "Tulud ja kulud",
-    "Püsimaksed",
-    "Pildid",
-    "PDF failid",
-    "AI metaandmed",
+    t("cloudBackup.items.warranties"),
+    t("cloudBackup.items.receipts"),
+    t("cloudBackup.items.agreements"),
+    t("cloudBackup.items.installments"),
+    t("cloudBackup.items.expenses"),
+    t("cloudBackup.items.recurring"),
+    t("cloudBackup.items.images"),
+    t("cloudBackup.items.pdfs"),
+    t("cloudBackup.items.aiMeta"),
   ];
 
   return (
@@ -155,21 +162,18 @@ function CloudBackupPage() {
         to="/settings"
         className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" /> Seaded
+        <ArrowLeft className="h-4 w-4" /> {t("cloudBackup.backTo")}
       </Link>
 
       <div className="flex items-center gap-3">
         <Cloud className="h-8 w-8 text-primary" />
-        <h1 className="text-3xl font-bold">Pilve varundus</h1>
+        <h1 className="text-3xl font-bold">{t("cloudBackup.title")}</h1>
       </div>
-      <p className="mt-2 max-w-2xl text-muted-foreground">
-        Hoia oma tähtsad dokumendid turvaliselt oma isiklikus pilves. Kui telefon kaob või rakendus eemaldatakse,
-        saad oma andmed hiljem taastada.
-      </p>
+      <p className="mt-2 max-w-2xl text-muted-foreground">{t("cloudBackup.subtitle")}</p>
 
       <div className="mt-8 grid gap-6">
         <section className="card-soft p-6">
-          <h2 className="mb-4 text-lg font-semibold">Ühendatavad pilveteenused</h2>
+          <h2 className="mb-4 text-lg font-semibold">{t("cloudBackup.providersTitle")}</h2>
           <div className="grid gap-3">
             {providers.map((p) => (
               <div
@@ -185,7 +189,7 @@ function CloudBackupPage() {
                       <p className="font-medium">{p.name}</p>
                       {p.comingSoon && (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                          Tulekul
+                          {t("cloudBackup.comingSoon")}
                         </span>
                       )}
                     </div>
@@ -197,7 +201,7 @@ function CloudBackupPage() {
                         }`}
                       />
                       <span className="text-muted-foreground">
-                        {p.connected ? "Ühendatud" : "Pole ühendatud"}
+                        {p.connected ? t("cloudBackup.connected") : t("cloudBackup.notConnected")}
                       </span>
                     </div>
                     {p.id === "gdrive" && gdriveConnected && (
@@ -224,14 +228,14 @@ function CloudBackupPage() {
                     {connecting || disconnectMut.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : p.connected ? (
-                      "Lahuta"
+                      t("cloudBackup.disconnect")
                     ) : (
-                      "Ühenda"
+                      t("cloudBackup.connect")
                     )}
                   </Button>
                 ) : (
                   <Button variant="default" disabled className="sm:w-32">
-                    Ühenda
+                    {t("cloudBackup.connect")}
                   </Button>
                 )}
               </div>
@@ -242,17 +246,15 @@ function CloudBackupPage() {
         <section className="card-soft p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold">Automaatne pilve varundus</h2>
-              <p className="text-sm text-muted-foreground">
-                Varunda uued kirjed automaatselt valitud pilveteenusesse.
-              </p>
+              <h2 className="text-lg font-semibold">{t("cloudBackup.autoTitle")}</h2>
+              <p className="text-sm text-muted-foreground">{t("cloudBackup.autoDesc")}</p>
             </div>
             <Switch checked={autoBackup} onCheckedChange={setAutoBackup} />
           </div>
         </section>
 
         <section className="card-soft p-6">
-          <h2 className="mb-4 text-lg font-semibold">Varundatakse</h2>
+          <h2 className="mb-4 text-lg font-semibold">{t("cloudBackup.itemsTitle")}</h2>
           <ul className="grid gap-2 sm:grid-cols-2">
             {backupItems.map((item) => (
               <li key={item} className="flex items-center gap-2 text-sm">
@@ -264,13 +266,13 @@ function CloudBackupPage() {
         </section>
 
         <section className="card-soft p-6">
-          <h2 className="mb-2 text-lg font-semibold">Viimane varundus</h2>
+          <h2 className="mb-2 text-lg font-semibold">{t("cloudBackup.lastTitle")}</h2>
           {lastBackup ? (
             <p className="text-sm text-muted-foreground">
-              {new Date(lastBackup.at).toLocaleString()} · {lastBackup.entries} kirjet · {lastBackup.files} faili
+              {formatDate(lastBackup.at)} · {t("cloudBackup.backedUp", { entries: lastBackup.entries, files: lastBackup.files })}
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">Automaatne — uueneb iga muudatuse järel.</p>
+            <p className="text-sm text-muted-foreground">{t("cloudBackup.lastAuto")}</p>
           )}
         </section>
 
@@ -281,10 +283,10 @@ function CloudBackupPage() {
             onClick={runFullBackup}
           >
             {backingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudUpload className="mr-2 h-4 w-4" />}
-            {backingUp ? "Varundan..." : "Varunda kohe"}
+            {backingUp ? t("cloudBackup.backingUp") : t("cloudBackup.backupNow")}
           </Button>
           <Button variant="outline" disabled className="sm:w-auto">
-            <RotateCcw className="mr-2 h-4 w-4" /> Taasta varukoopiast
+            <RotateCcw className="mr-2 h-4 w-4" /> {t("cloudBackup.restore")}
           </Button>
         </div>
       </div>

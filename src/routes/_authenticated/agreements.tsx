@@ -1,3 +1,4 @@
+import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -95,7 +96,7 @@ function AgreementsPage() {
                     {r.agreement_number ? ` · #${r.agreement_number}` : ""}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {r.start_date ?? "—"} → {r.end_date ?? "—"}
+                    {formatDate(r.start_date)} → {formatDate(r.end_date)}
                     {r.monthly_payment ? ` · ${formatCurrency(Number(r.monthly_payment), r.currency ?? "EUR")}${t("agreements.perMonth")}` : ""}
                     {r.total_amount ? ` · ${t("agreements.totalPrefix", { amount: formatCurrency(Number(r.total_amount), r.currency ?? "EUR") })}` : ""}
                   </p>
