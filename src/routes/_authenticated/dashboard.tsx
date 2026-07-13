@@ -257,7 +257,9 @@ function Dashboard() {
                     <p className="truncate text-sm font-medium">{r.description || formatCategory("expenses", r.category)}</p>
                     <p className="text-xs text-muted-foreground">{formatDate(r.expense_date)} · {formatCategory("expenses", r.category)}</p>
                   </div>
-                  <p className="text-sm font-semibold">{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
+                  <p className={`text-sm font-semibold ${r.type === "income" ? "text-green-600" : "text-red-600"}`}>
+                    {r.type === "income" ? "+" : "−"}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}
+                  </p>
                 </li>
               ))}
             </ul>

@@ -130,7 +130,7 @@ function ExpensesPage() {
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">{formatDate(r.expense_date)} · {t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}{r.store ? ` · ${r.store}` : ""}</p>
                   </button>
-                  <p className={`shrink-0 text-lg font-semibold ${isIncome ? "text-green-600" : ""}`}>{isIncome ? "+" : "−"}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
+                  <p className={`shrink-0 text-lg font-semibold ${isIncome ? "text-green-600" : "text-red-600"}`}>{isIncome ? "+" : "−"}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
                 </div>
                 <div className="mt-3"><RecordActions filePath={r.file_path} fileName={r.file_name} onDelete={() => del(r)} /></div>
               </div>
@@ -152,17 +152,19 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => makeForm(row, prefill));
-  const [showUpload, setShowUpload] = useState(false);
+  const [inputMode, setInputMode] = useState<"voice" | "upload" | "manual" | null>(null);
   const [autoVoice, setAutoVoice] = useState(false);
 
   useEffect(() => {
     if (open) {
       setForm(makeForm(row, prefill));
       setFile(null);
-      setShowUpload(initialMode === "upload");
+      setInputMode(initialMode ?? null);
       setAutoVoice(initialMode === "voice");
     }
   }, [open, row, prefill, initialMode]);
+
+  const showUpload = inputMode === "upload";
 
   const isIncome = form.type === "income";
   const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
@@ -303,9 +305,10 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
             </div>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <span onClickCapture={() => setInputMode("voice")} className="contents">
             <VoiceInput
               context="expense_or_income"
-              variant="outline"
+              variant={inputMode === "voice" ? "secondary" : "outline"}
               className="h-11 w-full justify-center whitespace-nowrap"
               autoStart={autoVoice}
               onResult={(d) => {
@@ -335,10 +338,11 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
                 });
               }}
             />
-            <Button type="button" variant={showUpload ? "secondary" : "outline"} onClick={() => setShowUpload((v) => !v)} className="h-11 w-full justify-center whitespace-nowrap">
+            </span>
+            <Button type="button" variant={inputMode === "upload" ? "secondary" : "outline"} onClick={() => setInputMode("upload")} className="h-11 w-full justify-center whitespace-nowrap">
               <Upload className="mr-1.5 h-4 w-4" />{t("expenses.uploadReceipt")}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setShowUpload(false)} className="h-11 w-full justify-center whitespace-nowrap">
+            <Button type="button" variant={inputMode === "manual" ? "secondary" : "outline"} onClick={() => setInputMode("manual")} className="h-11 w-full justify-center whitespace-nowrap">
               <Pencil className="mr-1.5 h-4 w-4" />{t("expenses.fillManually")}
             </Button>
           </div>
