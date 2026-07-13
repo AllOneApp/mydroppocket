@@ -1,11 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Cloud, CloudUpload, RotateCcw, Check, ArrowLeft } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Cloud, CloudUpload, RotateCcw, Check, ArrowLeft, Loader2, FolderOpen } from "lucide-react";
+import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import {
+  startGoogleDriveConnect,
+  getGoogleDriveStatus,
+  disconnectGoogleDrive,
+} from "@/lib/google-drive.functions";
 
 export const Route = createFileRoute("/_authenticated/settings/cloud-backup")({
   head: () => ({
@@ -27,13 +33,86 @@ type Provider = {
 };
 
 function CloudBackupPage() {
-  const [providers, setProviders] = useState<Provider[]>([
-    { id: "gdrive", name: "Google Drive", platform: "Android", connected: false },
-    { id: "icloud", name: "iCloud Drive", platform: "iPhone", connected: false },
+  const [autoBackup, setAutoBackup] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const qc = useQueryClient();
+
+  const statusQuery = useQuery({
+    queryKey: ["google-drive-status"],
+    queryFn: () => getGoogleDriveStatus(),
+  });
+
+  const disconnectMut = useMutation({
+    mutationFn: () => disconnectGoogleDrive(),
+    onSuccess: () => {
+      toast.success("Google Drive lahutatud");
+      qc.invalidateQueries({ queryKey: ["google-drive-status"] });
+    },
+    onError: (e: unknown) => {
+      toast.error(e instanceof Error ? e.message : "Lahutamine ebaõnnestus");
+    },
+  });
+
+  // Listen for the popup's postMessage.
+  useEffect(() => {
+    function onMessage(ev: MessageEvent) {
+      if (ev.origin !== window.location.origin) return;
+      const data = ev.data as { type?: string; ok?: boolean; email?: string; error?: string } | null;
+      if (!data || data.type !== "mydroppocket:google-drive:oauth") return;
+      setConnecting(false);
+      if (data.ok) {
+        toast.success(`Google Drive ühendatud (${data.email ?? "OK"})`);
+        qc.invalidateQueries({ queryKey: ["google-drive-status"] });
+      } else {
+        toast.error(`Ühendus ebaõnnestus: ${data.error ?? "tundmatu viga"}`);
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [qc]);
+
+  async function handleConnectGoogle() {
+    // Open popup synchronously in the click handler to avoid popup blockers.
+    const popup = window.open("", "mydroppocket-gdrive", "width=560,height=680");
+    if (!popup) {
+      toast.error("Popup blokeeriti. Luba popup'id ja proovi uuesti.");
+      return;
+    }
+    setConnecting(true);
+    try {
+      const { authorizationUrl } = await startGoogleDriveConnect({
+        data: { origin: window.location.origin },
+      });
+      popup.location.href = authorizationUrl;
+
+      // Poll for the popup being closed manually.
+      const timer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(timer);
+          setConnecting((c) => {
+            if (c) toast.message("Sisselogimine tühistati");
+            return false;
+          });
+        }
+      }, 500);
+    } catch (e) {
+      popup.close();
+      setConnecting(false);
+      toast.error(e instanceof Error ? e.message : "Ei suuda alustada ühendust");
+    }
+  }
+
+  const gdriveStatus = statusQuery.data;
+  const gdriveConnected = gdriveStatus?.connected === true;
+  const gdriveEmail = gdriveStatus?.connected ? gdriveStatus.email : undefined;
+  const gdriveFolder = gdriveStatus?.connected ? gdriveStatus.folderName : undefined;
+
+  const providers: Provider[] = [
+    { id: "gdrive", name: "Google Drive", platform: "Android · iOS · Web", connected: gdriveConnected },
+    { id: "icloud", name: "iCloud Drive", platform: "iPhone", connected: false, comingSoon: true },
     { id: "dropbox", name: "Dropbox", platform: "Tulekul", connected: false, comingSoon: true },
     { id: "onedrive", name: "OneDrive", platform: "Tulekul", connected: false, comingSoon: true },
-  ]);
-  const [autoBackup, setAutoBackup] = useState(false);
+  ];
 
   const backupItems = [
     "Garantiid",
@@ -98,20 +177,40 @@ function CloudBackupPage() {
                         {p.connected ? "Ühendatud" : "Pole ühendatud"}
                       </span>
                     </div>
+                    {p.id === "gdrive" && gdriveConnected && (
+                      <div className="mt-1.5 space-y-0.5">
+                        {gdriveEmail && (
+                          <p className="text-xs text-foreground/80">{gdriveEmail}</p>
+                        )}
+                        {gdriveFolder && (
+                          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <FolderOpen className="h-3 w-3" /> {gdriveFolder}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <Button
-                  variant={p.connected ? "outline" : "default"}
-                  disabled={p.comingSoon}
-                  onClick={() => {
-                    setProviders((prev) =>
-                      prev.map((x) => (x.id === p.id ? { ...x, connected: !x.connected } : x)),
-                    );
-                  }}
-                  className="sm:w-32"
-                >
-                  {p.connected ? "Lahuta" : "Ühenda"}
-                </Button>
+                {p.id === "gdrive" ? (
+                  <Button
+                    variant={p.connected ? "outline" : "default"}
+                    disabled={connecting || disconnectMut.isPending || statusQuery.isLoading}
+                    onClick={() => (p.connected ? disconnectMut.mutate() : handleConnectGoogle())}
+                    className="sm:w-32"
+                  >
+                    {connecting || disconnectMut.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : p.connected ? (
+                      "Lahuta"
+                    ) : (
+                      "Ühenda"
+                    )}
+                  </Button>
+                ) : (
+                  <Button variant="default" disabled className="sm:w-32">
+                    Ühenda
+                  </Button>
+                )}
               </div>
             ))}
           </div>
