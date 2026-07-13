@@ -179,12 +179,13 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
         if (!filled) {
           toast.error(t("common.noDataFound", { defaultValue: "Dokumendist ei õnnestunud vajalikke andmeid leida." }));
         } else {
+          const normalizedDate = normalizeDateString(d.expense_date as string | null);
           setForm((f) => ({
             ...f,
             amount: d.amount != null ? String(d.amount) : f.amount,
             currency: (d.currency as string) || f.currency,
             store: store || f.store,
-            expense_date: (d.expense_date as string) || f.expense_date,
+            expense_date: normalizedDate || f.expense_date,
             category: (d.category as string) && EXPENSE_CATEGORIES.includes(d.category as string) ? (d.category as string) : f.category,
             description: (d.description as string) || (store ? `${store} ost` : f.description),
             notes: purchasedItems.length > 0 ? purchasedItems.join("\n") : f.notes,
@@ -206,13 +207,14 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
       const uid = userRes.user.id;
       let fileInfo: { path: string; name: string; mime: string } | null = null;
       if (file) fileInfo = await uploadFile(uid, "expense", file);
+      const normalizedExpenseDate = normalizeDateString(form.expense_date) ?? localDateString();
       const payload = {
         user_id: uid,
         type: form.type,
         amount: Number(form.amount),
         currency: form.currency,
         category: form.category,
-        expense_date: form.expense_date,
+        expense_date: normalizedExpenseDate,
         description: form.description || null,
         store: form.store || null,
         notes: form.notes || null,
