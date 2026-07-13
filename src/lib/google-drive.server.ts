@@ -410,6 +410,70 @@ export async function deleteDriveFile(opts: { accessToken: string; fileId: strin
 }
 
 /**
+ * Upsert raw bytes as a file by name inside a folder. If it exists → PATCH
+ * body, otherwise create via multipart upload.
+ */
+export async function upsertBytesInFolder(opts: {
+  accessToken: string;
+  parentId: string;
+  name: string;
+  mime: string;
+  bytes: Uint8Array;
+}): Promise<{ id: string; name: string }> {
+  const existing = await findFileInFolder({
+    accessToken: opts.accessToken,
+    parentId: opts.parentId,
+    name: opts.name,
+  });
+  if (existing) {
+    const res = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media&fields=id,name`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${opts.accessToken}`,
+          "Content-Type": opts.mime,
+        },
+        body: opts.bytes,
+      },
+    );
+    const text = await res.text();
+    if (!res.ok) throw new Error(`Drive file update failed (${res.status}): ${text}`);
+    return JSON.parse(text);
+  }
+  return uploadBytesToDriveFolder({
+    accessToken: opts.accessToken,
+    parentId: opts.parentId,
+    name: opts.name,
+    mime: opts.mime,
+    bytes: opts.bytes,
+  });
+}
+
+/**
+ * Delete any files matching a name inside a folder (trashes technical
+ * artifacts users shouldn't see, e.g. legacy *.json backup files).
+ */
+export async function deleteFilesByNameInFolder(opts: {
+  accessToken: string;
+  parentId: string;
+  name: string;
+}): Promise<number> {
+  const q = `name='${opts.name.replace(/'/g, "\\'")}' and '${opts.parentId}' in parents and trashed=false`;
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)&spaces=drive`,
+    { headers: { Authorization: `Bearer ${opts.accessToken}` } },
+  );
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Drive lookup failed (${res.status}): ${text}`);
+  const j = JSON.parse(text) as { files: { id: string }[] };
+  for (const f of j.files) {
+    await deleteDriveFile({ accessToken: opts.accessToken, fileId: f.id });
+  }
+  return j.files.length;
+}
+
+/**
  * Ensure a specific named subfolder exists under MyDropPocket. Updates the
  * cached subfolders_json map when it has to create it. Returns the folder id.
  */
