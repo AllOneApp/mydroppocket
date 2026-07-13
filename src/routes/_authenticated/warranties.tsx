@@ -15,6 +15,7 @@ import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile, warrantyStatus } from "@/lib/records";
+import { syncFileToGoogleDrive } from "@/lib/google-drive.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
@@ -175,10 +176,32 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
         notes: form.notes || null,
         ...(fileInfo ? { file_path: fileInfo.path, file_name: fileInfo.name, file_mime: fileInfo.mime } : {}),
       };
+      let recordId: string | null = null;
       if (row) {
-        await supabase.from("warranties").update(payload).eq("id", row.id);
+        const { error } = await supabase.from("warranties").update(payload).eq("id", row.id);
+        if (error) throw error;
+        recordId = row.id;
       } else {
-        await supabase.from("warranties").insert(payload);
+        const { data: inserted, error } = await supabase.from("warranties").insert(payload).select("id").single();
+        if (error) throw error;
+        recordId = inserted?.id ?? null;
+      }
+      if (fileInfo && recordId) {
+        try {
+          await syncFileToGoogleDrive({
+            data: {
+              table: "warranties",
+              recordId,
+              gdriveColumn: "gdrive_file_id",
+              folderKey: "warranty",
+              filePath: fileInfo.path,
+              fileName: fileInfo.name,
+              mime: fileInfo.mime,
+            },
+          });
+        } catch (err) {
+          console.warn("[gdrive] warranty sync failed", err);
+        }
       }
       qc.invalidateQueries({ queryKey: ["warranties"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });

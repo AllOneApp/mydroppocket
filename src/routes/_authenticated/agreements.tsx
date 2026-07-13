@@ -17,6 +17,7 @@ import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
+import { syncFileToGoogleDrive } from "@/lib/google-drive.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
 
@@ -175,8 +176,33 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         notes: form.notes || null,
         ...(fileInfo ? { file_path: fileInfo.path, file_name: fileInfo.name, file_mime: fileInfo.mime } : {}),
       };
-      if (row) await supabase.from("agreements").update(payload).eq("id", row.id);
-      else await supabase.from("agreements").insert(payload);
+      let recordId: string | null = null;
+      if (row) {
+        const { error } = await supabase.from("agreements").update(payload).eq("id", row.id);
+        if (error) throw error;
+        recordId = row.id;
+      } else {
+        const { data: inserted, error } = await supabase.from("agreements").insert(payload).select("id").single();
+        if (error) throw error;
+        recordId = inserted?.id ?? null;
+      }
+      if (fileInfo && recordId) {
+        try {
+          await syncFileToGoogleDrive({
+            data: {
+              table: "agreements",
+              recordId,
+              gdriveColumn: "gdrive_file_id",
+              folderKey: "agreement",
+              filePath: fileInfo.path,
+              fileName: fileInfo.name,
+              mime: fileInfo.mime,
+            },
+          });
+        } catch (err) {
+          console.warn("[gdrive] agreement sync failed", err);
+        }
+      }
       qc.invalidateQueries({ queryKey: ["agreements"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success(row ? t("common.updated") : t("agreements.added"));
