@@ -16,7 +16,7 @@ import { FileDrop } from "@/components/FileDrop";
 import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
-import { syncFileToGoogleDrive, syncBackupCategory } from "@/lib/google-drive.functions";
+import { syncFileToGoogleDrive, syncBackupCategory, currentBackupLang } from "@/lib/google-drive.functions";
 import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_authenticated/recurring")({
@@ -138,8 +138,8 @@ function RecurringPage() {
       toast.success(t("recurring.paidMarked"));
       setPayAsk({ instance: { ...inst, status: "paid" }, recurring: rec });
       try {
-        await syncBackupCategory({ data: { category: "recurring_payment_instances" } });
-        await syncBackupCategory({ data: { category: "recurring_payments" } });
+        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang() } });
+        await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("common.failed"));
@@ -157,8 +157,8 @@ function RecurringPage() {
     }
     await supabase.from("recurring_payments").delete().eq("id", r.id);
     try {
-      await syncBackupCategory({ data: { category: "recurring_payments" } });
-      await syncBackupCategory({ data: { category: "recurring_payment_instances" } });
+      await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } });
+      await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang() } });
     } catch (e) { console.warn("[gdrive] backup sync failed", e); }
     qc.invalidateQueries({ queryKey: ["recurring_payments"] });
     qc.invalidateQueries({ queryKey: ["recurring_instances"] });
@@ -429,7 +429,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           console.warn("[gdrive] recurring sync failed", err);
         }
       }
-      try { await syncBackupCategory({ data: { category: "recurring_payments" } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       qc.invalidateQueries({ queryKey: ["recurring_payments"] });
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
@@ -552,7 +552,7 @@ function AttachReceiptDialog({ data, onClose }: { data: { instance: Instance; re
       } catch (err) {
         console.warn("[gdrive] instance sync failed", err);
       }
-      try { await syncBackupCategory({ data: { category: "recurring_payment_instances" } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
       toast.success(t("common.saved"));
       onClose();

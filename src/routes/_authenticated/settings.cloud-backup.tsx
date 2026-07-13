@@ -12,6 +12,7 @@ import {
   getGoogleDriveStatus,
   disconnectGoogleDrive,
   syncBackupAll,
+  currentBackupLang,
 } from "@/lib/google-drive.functions";
 
 export const Route = createFileRoute("/_authenticated/settings/cloud-backup")({
@@ -59,7 +60,7 @@ function CloudBackupPage() {
   async function runFullBackup() {
     setBackingUp(true);
     try {
-      const res = await syncBackupAll();
+      const res = await syncBackupAll({ data: { lang: currentBackupLang() } });
       if ("skipped" in res && res.skipped) {
         toast.error("Google Drive pole ühendatud");
         return;

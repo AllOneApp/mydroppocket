@@ -2,6 +2,21 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /**
+ * Read the app's current language from the browser (i18next persists it in
+ * localStorage under `dp_lang`). Falls back to Estonian — the app default.
+ * Safe to call in SSR: returns "et" when window is absent.
+ */
+export function currentBackupLang(): "et" | "en" {
+  if (typeof window === "undefined") return "et";
+  try {
+    const v = window.localStorage.getItem("dp_lang");
+    return v === "en" ? "en" : "et";
+  } catch {
+    return "et";
+  }
+}
+
+/**
  * Start Google Drive OAuth. Returns the authorization URL to open in a popup.
  * Signed state carries the app user id back through Google.
  */
@@ -160,6 +175,8 @@ export type BackupCategory =
   | "recurring_payments"
   | "recurring_payment_instances";
 
+export type BackupLang = "et" | "en";
+
 const CATEGORY_TO_FOLDER: Record<BackupCategory, string> = {
   warranties: "Garantiid",
   expenses: "Tulud ja kulud",
@@ -168,13 +185,22 @@ const CATEGORY_TO_FOLDER: Record<BackupCategory, string> = {
   recurring_payment_instances: "Järelmaksulepingud",
 };
 
-// Kasutajale nähtav Exceli faili nimi kategooria kaustas.
-const CATEGORY_TO_XLSX: Record<BackupCategory, string> = {
-  warranties: "Garantiid.xlsx",
-  expenses: "Tulud ja kulud.xlsx",
-  agreements: "Lepingud.xlsx",
-  recurring_payments: "Püsimaksed.xlsx",
-  recurring_payment_instances: "Järelmaksulepingud.xlsx",
+// Kasutajale nähtav Exceli faili nimi kategooria kaustas — lokaliseeritud.
+const CATEGORY_XLSX_NAME: Record<BackupLang, Record<BackupCategory, string>> = {
+  et: {
+    warranties: "Garantiid.xlsx",
+    expenses: "Tulud ja kulud.xlsx",
+    agreements: "Lepingud.xlsx",
+    recurring_payments: "Püsimaksed.xlsx",
+    recurring_payment_instances: "Järelmaksulepingud.xlsx",
+  },
+  en: {
+    warranties: "Warranties.xlsx",
+    expenses: "Income and expenses.xlsx",
+    agreements: "Contracts.xlsx",
+    recurring_payments: "Recurring payments.xlsx",
+    recurring_payment_instances: "Installment contracts.xlsx",
+  },
 };
 
 const ALL_CATEGORIES: BackupCategory[] = [
@@ -185,12 +211,124 @@ const ALL_CATEGORIES: BackupCategory[] = [
   "recurring_payment_instances",
 ];
 
+// -----------------------------------------------------------------------------
+// Localised, user-friendly column projections. Technical fields (id, user_id,
+// file_path, file_mime, ocr_raw, gdrive_file_id, timestamps) are intentionally
+// omitted — the app keeps identifiers server-side.
+// -----------------------------------------------------------------------------
+
+function fmtAmount(v: unknown): string | number {
+  if (v === null || v === undefined || v === "") return "";
+  const n = Number(v);
+  return Number.isFinite(n) ? n : String(v);
+}
+
+function tExpenseType(v: unknown, lang: BackupLang): string {
+  const s = String(v ?? "").toLowerCase();
+  if (s === "income") return lang === "et" ? "Tulu" : "Income";
+  if (s === "expense") return lang === "et" ? "Kulu" : "Expense";
+  return String(v ?? "");
+}
+
+function tStatus(v: unknown, lang: BackupLang): string {
+  const s = String(v ?? "").toLowerCase();
+  const map: Record<string, [string, string]> = {
+    paid: ["Makstud", "Paid"],
+    pending: ["Ootel", "Pending"],
+    overdue: ["Tähtaeg möödas", "Overdue"],
+    cancelled: ["Tühistatud", "Cancelled"],
+  };
+  return map[s]?.[lang === "et" ? 0 : 1] ?? String(v ?? "");
+}
+
+function tFrequency(v: unknown, lang: BackupLang): string {
+  const s = String(v ?? "").toLowerCase();
+  const map: Record<string, [string, string]> = {
+    monthly: ["Kuine", "Monthly"],
+    bimonthly: ["Iga 2 kuu tagant", "Every 2 months"],
+    quarterly: ["Kvartaalne", "Quarterly"],
+    semiannual: ["Poolaastane", "Semi-annual"],
+    annual: ["Aastane", "Annual"],
+  };
+  return map[s]?.[lang === "et" ? 0 : 1] ?? String(v ?? "");
+}
+
+type Row = Record<string, unknown>;
+
+function projectRows(category: BackupCategory, rows: Row[], lang: BackupLang): Row[] {
+  const et = lang === "et";
+  switch (category) {
+    case "expenses":
+      return rows.map((r) => ({
+        [et ? "Kuupäev" : "Date"]: r.expense_date ?? "",
+        [et ? "Tüüp" : "Type"]: tExpenseType(r.type, lang),
+        [et ? "Kategooria" : "Category"]: r.category ?? "",
+        [et ? "Summa" : "Amount"]: fmtAmount(r.amount),
+        [et ? "Valuuta" : "Currency"]: r.currency ?? "",
+        [et ? "Kirjeldus" : "Description"]: r.description ?? "",
+        [et ? "Pood" : "Store"]: r.store ?? "",
+        [et ? "Märkused" : "Notes"]: r.notes ?? "",
+        [et ? "Manus" : "Attachment"]: r.file_name ?? "",
+      }));
+    case "warranties":
+      return rows.map((r) => ({
+        [et ? "Toode" : "Product"]: r.product_name ?? "",
+        [et ? "Pood" : "Store"]: r.store ?? "",
+        [et ? "Ostukuupäev" : "Purchase date"]: r.purchase_date ?? "",
+        [et ? "Garantii lõpp" : "Warranty expiry"]: r.warranty_expiry ?? "",
+        [et ? "Summa" : "Amount"]: fmtAmount(r.amount),
+        [et ? "Valuuta" : "Currency"]: r.currency ?? "",
+        [et ? "Märkused" : "Notes"]: r.notes ?? "",
+        [et ? "Manus" : "Attachment"]: r.file_name ?? "",
+      }));
+    case "agreements":
+      return rows.map((r) => ({
+        [et ? "Pealkiri" : "Title"]: r.title ?? "",
+        [et ? "Tüüp" : "Type"]: r.agreement_type ?? "",
+        [et ? "Ettevõte" : "Company"]: r.company ?? "",
+        [et ? "Lepingu nr" : "Agreement no."]: r.agreement_number ?? "",
+        [et ? "Algus" : "Start date"]: r.start_date ?? "",
+        [et ? "Lõpp" : "End date"]: r.end_date ?? "",
+        [et ? "Kuumakse" : "Monthly payment"]: fmtAmount(r.monthly_payment),
+        [et ? "Kogusumma" : "Total amount"]: fmtAmount(r.total_amount),
+        [et ? "Valuuta" : "Currency"]: r.currency ?? "",
+        [et ? "Märkused" : "Notes"]: r.notes ?? "",
+        [et ? "Manus" : "Attachment"]: r.file_name ?? "",
+      }));
+    case "recurring_payments":
+      return rows.map((r) => ({
+        [et ? "Teenus" : "Service"]: r.service_name ?? "",
+        [et ? "Pakkuja" : "Provider"]: r.provider ?? "",
+        [et ? "Kategooria" : "Category"]: r.category ?? "",
+        [et ? "Summa" : "Amount"]: fmtAmount(r.amount),
+        [et ? "Valuuta" : "Currency"]: r.currency ?? "",
+        [et ? "Sagedus" : "Frequency"]: tFrequency(r.frequency, lang),
+        [et ? "Järgmine maksekuupäev" : "Next due date"]: r.next_due_date ?? "",
+        [et ? "Algus" : "Start date"]: r.start_date ?? "",
+        [et ? "Lõpp" : "End date"]: r.end_date ?? "",
+        [et ? "Meeldetuletus (päeva enne)" : "Reminder (days before)"]: r.reminder_days_before ?? "",
+        [et ? "Märkused" : "Notes"]: r.notes ?? "",
+        [et ? "Lepingu fail" : "Contract file"]: r.contract_file_name ?? "",
+      }));
+    case "recurring_payment_instances":
+      return rows.map((r) => ({
+        [et ? "Maksekuupäev" : "Due date"]: r.due_date ?? "",
+        [et ? "Summa" : "Amount"]: fmtAmount(r.amount),
+        [et ? "Valuuta" : "Currency"]: r.currency ?? "",
+        [et ? "Staatus" : "Status"]: tStatus(r.status, lang),
+        [et ? "Makstud" : "Paid at"]: r.paid_at ?? "",
+        [et ? "Märkused" : "Notes"]: r.notes ?? "",
+        [et ? "Tšekk" : "Receipt"]: r.receipt_file_name ?? "",
+        [et ? "Arve" : "Invoice"]: r.invoice_file_name ?? "",
+      }));
+  }
+}
+
 async function rowsToXlsxBytes(
   rows: Array<Record<string, unknown>>,
   sheetName: string,
 ): Promise<Uint8Array> {
   const XLSX = await import("xlsx");
-  // Flatten unknown values so cells stay readable.
   const flat = rows.map((r) => {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(r)) {
@@ -214,6 +352,7 @@ async function writeCategoryXlsx(params: {
   rootId: string;
   subfolders: Record<string, string>;
   category: BackupCategory;
+  lang: BackupLang;
 }): Promise<{ count: number }> {
   const { ensureSubfolderId, upsertBytesInFolder, deleteFilesByNameInFolder } =
     await import("./google-drive.server");
@@ -231,19 +370,23 @@ async function writeCategoryXlsx(params: {
     subfolders: params.subfolders,
     name: folderName,
   });
-  const bytes = await rowsToXlsxBytes(rows, folderName);
+  const projected = projectRows(params.category, rows, params.lang);
+  const sheetName = params.lang === "et" ? folderName : (CATEGORY_XLSX_NAME.en[params.category].replace(/\.xlsx$/, ""));
+  const bytes = await rowsToXlsxBytes(projected, sheetName);
   await upsertBytesInFolder({
     accessToken: params.accessToken,
     parentId,
-    name: CATEGORY_TO_XLSX[params.category],
+    name: CATEGORY_XLSX_NAME[params.lang][params.category],
     mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     bytes,
   });
-  // Legacy cleanup: remove technical entries.json that used to live here.
+  // Legacy cleanup: remove technical entries.json + xlsx from the other language.
+  const otherLang: BackupLang = params.lang === "et" ? "en" : "et";
+  await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId, name: "entries.json" });
   await deleteFilesByNameInFolder({
     accessToken: params.accessToken,
     parentId,
-    name: "entries.json",
+    name: CATEGORY_XLSX_NAME[otherLang][params.category],
   });
   return { count: rows.length };
 }
@@ -252,29 +395,33 @@ async function writeBackupInfo(params: {
   accessToken: string;
   rootId: string;
   totals: { entries: number; files: number };
+  lang: BackupLang;
 }) {
   const { upsertBytesInFolder, deleteFilesByNameInFolder } = await import("./google-drive.server");
+  const et = params.lang === "et";
+  const keyLabel = et ? "Väli" : "Field";
+  const valLabel = et ? "Väärtus" : "Value";
   const info = [
-    { Väli: "Viimane varundus", Väärtus: new Date().toLocaleString("et-EE") },
-    { Väli: "Kirjeid kokku", Väärtus: params.totals.entries },
-    { Väli: "Faile kokku", Väärtus: params.totals.files },
-    { Väli: "Varunduse versioon", Väärtus: 1 },
-    { Väli: "Rakenduse versioon", Väärtus: "1.0.0" },
+    { [keyLabel]: et ? "Viimane varundus" : "Last backup", [valLabel]: new Date().toLocaleString(et ? "et-EE" : "en-GB") },
+    { [keyLabel]: et ? "Kirjeid kokku" : "Total entries", [valLabel]: params.totals.entries },
+    { [keyLabel]: et ? "Faile kokku" : "Total files", [valLabel]: params.totals.files },
+    { [keyLabel]: et ? "Varunduse versioon" : "Backup version", [valLabel]: 1 },
+    { [keyLabel]: et ? "Rakenduse versioon" : "App version", [valLabel]: "1.0.0" },
   ];
-  const bytes = await rowsToXlsxBytes(info, "Varunduse info");
+  const sheetName = et ? "Varunduse info" : "Backup info";
+  const bytes = await rowsToXlsxBytes(info, sheetName);
+  const fileName = et ? "Varunduse info.xlsx" : "Backup info.xlsx";
+  const otherName = et ? "Backup info.xlsx" : "Varunduse info.xlsx";
   await upsertBytesInFolder({
     accessToken: params.accessToken,
     parentId: params.rootId,
-    name: "Varunduse info.xlsx",
+    name: fileName,
     mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     bytes,
   });
-  // Legacy cleanup at root.
-  await deleteFilesByNameInFolder({
-    accessToken: params.accessToken,
-    parentId: params.rootId,
-    name: "backup-info.json",
-  });
+  // Legacy + other-language cleanup at root.
+  await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: "backup-info.json" });
+  await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: otherName });
 }
 
 async function countFilesForUser(
@@ -320,11 +467,12 @@ async function totalEntriesForUser(
  */
 export const syncBackupCategory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { category: BackupCategory }) => input)
+  .inputValidator((input: { category: BackupCategory; lang?: BackupLang }) => input)
   .handler(async ({ data, context }) => {
     const { getValidAccessTokenForUser } = await import("./google-drive.server");
     const conn = await getValidAccessTokenForUser(context.userId);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
+    const lang: BackupLang = data.lang === "en" ? "en" : "et";
     await writeCategoryXlsx({
       userId: context.userId,
       supabase: context.supabase,
@@ -332,10 +480,11 @@ export const syncBackupCategory = createServerFn({ method: "POST" })
       rootId: conn.rootId,
       subfolders: conn.subfolders,
       category: data.category,
+      lang,
     });
     const entries = await totalEntriesForUser(context.supabase, context.userId);
     const files = await countFilesForUser(context.supabase, context.userId);
-    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files } });
+    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files }, lang });
     return { ok: true as const };
   });
 
@@ -344,10 +493,12 @@ export const syncBackupCategory = createServerFn({ method: "POST" })
  */
 export const syncBackupAll = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input?: { lang?: BackupLang }) => input ?? {})
+  .handler(async ({ data, context }) => {
     const { getValidAccessTokenForUser } = await import("./google-drive.server");
     const conn = await getValidAccessTokenForUser(context.userId);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
+    const lang: BackupLang = data?.lang === "en" ? "en" : "et";
     let entries = 0;
     for (const c of ALL_CATEGORIES) {
       const r = await writeCategoryXlsx({
@@ -357,11 +508,12 @@ export const syncBackupAll = createServerFn({ method: "POST" })
         rootId: conn.rootId,
         subfolders: conn.subfolders,
         category: c,
+        lang,
       });
       entries += r.count;
     }
     const files = await countFilesForUser(context.supabase, context.userId);
-    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files } });
+    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files }, lang });
     return { ok: true as const, entries, files };
   });
 

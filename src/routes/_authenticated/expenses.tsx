@@ -19,7 +19,7 @@ import { DateRangeFilter, computeRange, localDateString, type DateRange } from "
 import { supabase } from "@/integrations/supabase/client";
 import { expensesQueryKey, expensesQueryOptions, type ExpenseEntryType, type ExpenseRow } from "@/lib/expenses";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
-import { syncFileToGoogleDrive, syncBackupCategory, deleteGoogleDriveFile } from "@/lib/google-drive.functions";
+import { syncFileToGoogleDrive, syncBackupCategory, deleteGoogleDriveFile, currentBackupLang } from "@/lib/google-drive.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
 
@@ -60,7 +60,7 @@ function ExpensesPage() {
       if (r.file_path) await deleteFile(r.file_path);
       const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
       if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
-      try { await syncBackupCategory({ data: { category: "expenses" } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       qc.setQueryData<Row[]>(expensesQueryKey, (current = []) => current.filter((entry) => entry.id !== r.id));
       await Promise.all([
         qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
@@ -279,7 +279,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
           console.warn("[gdrive] expense sync failed", err);
         }
       }
-      try { await syncBackupCategory({ data: { category: "expenses" } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
