@@ -305,7 +305,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
                     amount: d.amount != null ? String(d.amount) : f.amount,
                     currency: (d.currency as string) || f.currency,
                     store: (d.store as string) || f.store,
-                    expense_date: (d.expense_date as string) || f.expense_date,
+                    expense_date: normalizeDateString(d.expense_date as string | null) || f.expense_date,
                     category: nextCat,
                     description: (d.description as string) || f.description,
                   };
