@@ -193,7 +193,10 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
   async function scan() {
     // Scan the first pending file (image / PDF) to auto-fill the form.
     const target = pendingFiles[0];
-    if (!target) return;
+    if (!target) {
+      toast.error(t("file.pickFirst", { defaultValue: "Please add a file first" }));
+      return;
+    }
     setScanning(true);
     try {
       const base64 = await fileToBase64(target);
@@ -212,8 +215,14 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           title: f.title || (d.company as string) || "",
         }));
         toast.success(t("common.autoFilled"));
-      } else toast.error(res.error);
-    } catch (e) { toast.error(e instanceof Error ? e.message : t("common.scanFailed")); }
+      } else {
+        console.error("[scan] extract returned error", res.error);
+        toast.error(res.error);
+      }
+    } catch (e) {
+      console.error("[scan] failed", e);
+      toast.error(e instanceof Error ? e.message : t("common.scanFailed"));
+    }
     finally { setScanning(false); }
   }
 
