@@ -1,3 +1,4 @@
+import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Search as SearchIcon, ShieldCheck, Wallet, FileText } from "lucide-react";
