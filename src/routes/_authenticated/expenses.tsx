@@ -146,7 +146,7 @@ function ExpensesPage() {
 
 export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null; prefill: Partial<Row> | null; initialMode?: "voice" | "upload" | "manual" }) {
   const qc = useQueryClient();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const extract = useServerFn(extractDocument);
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -174,7 +174,8 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
     setScanning(true);
     try {
       const base64 = await fileToBase64(file);
-      const res = await extract({ data: { kind: "expense", mime: file.type || "application/octet-stream", base64 } });
+      const locale = (i18n.language?.toLowerCase().startsWith("et") ? "et" : "en") as "et" | "en";
+      const res = await extract({ data: { kind: "expense", mime: file.type || "application/octet-stream", base64, locale } });
       if (res.ok) {
         const d = res.data;
         const purchasedItems = Array.isArray(d.purchased_items)
