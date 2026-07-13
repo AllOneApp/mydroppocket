@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { computeRange } from "@/components/DateRangeFilter";
 import { supabase } from "@/integrations/supabase/client";
-import { expenseTotals, expensesQueryKey, type ExpenseRow } from "@/lib/expenses";
+import { expenseTotals, expensesQueryKey, expensesQueryOptions, type ExpenseRow } from "@/lib/expenses";
 import { formatCurrency, warrantyStatus } from "@/lib/records";
 import { deleteFile } from "@/lib/records";
 import { useTranslation } from "react-i18next";
@@ -63,6 +63,7 @@ function Dashboard() {
     }
   }
 
+  const { data: expenseRows = [] } = useQuery(expensesQueryOptions());
   const { data } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
@@ -70,17 +71,10 @@ function Dashboard() {
       if (userError) throw userError;
       if (!userData.user) throw new Error("Kasutaja sessiooni ei leitud.");
 
-      const [w, a, expensesResult] = await Promise.all([
+      const [w, a] = await Promise.all([
         supabase.from("warranties").select("*").order("warranty_expiry", { ascending: true }).limit(5),
         supabase.from("agreements").select("*").order("created_at", { ascending: false }).limit(5),
-        supabase
-          .from("expenses")
-          .select("*")
-          .eq("user_id", userData.user.id)
-          .order("expense_date", { ascending: false })
-          .order("created_at", { ascending: false }),
       ]);
-      if (expensesResult.error) throw expensesResult.error;
       const expiring = (w.data ?? []).filter((r) => {
         const s = warrantyStatus(r.warranty_expiry).tone;
         return s === "orange";
@@ -107,7 +101,6 @@ function Dashboard() {
       return {
         warranties: w.data ?? [],
         agreements: a.data ?? [],
-        expenses: (expensesResult.data ?? []) as ExpenseRow[],
         expiring,
         recurring: { paid: rpPaid, unpaid: rpUnpaid, overdue: rpOverdue, next: nextPending, nextRec },
       };
@@ -118,7 +111,6 @@ function Dashboard() {
     refetchOnReconnect: true,
   });
 
-  const expenseRows = data?.expenses ?? [];
   const totals = {
     today: expenseTotals(expenseRows, computeRange("today").from, computeRange("today").to),
     week: expenseTotals(expenseRows, computeRange("thisWeek").from, computeRange("thisWeek").to),
