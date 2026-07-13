@@ -3,23 +3,29 @@ import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { AGREEMENT_ANALYSIS_PROMPT, parseAgreementResponse } from "./agreement-extraction.server";
 import { createLovableAiGateway } from "./ai-gateway.server";
 
-const InputSchema = z.object({
-  kind: z.enum(["warranty", "expense", "agreement"]),
+const DocumentFileSchema = z.object({
+  name: z.string(),
   mime: z.string(),
   base64: z.string(),
 });
 
-const SUPPORTED_IMAGE_MIMES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif"];
-const SUPPORTED_DOC_MIMES = ["application/pdf"];
-// Approx byte size from base64 length. Gemini limit ~20MB inline.
-const MAX_INLINE_BYTES = 20 * 1024 * 1024;
+const InputSchema = z.object({
+  kind: z.enum(["warranty", "expense", "agreement"]),
+  mime: z.string().optional(),
+  base64: z.string().optional(),
+  files: z.array(DocumentFileSchema).optional(),
+});
 
 export const extractDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => InputSchema.parse(data))
   .handler(async ({ data }) => {
+    const supportedImageMimes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif"];
+    const supportedDocumentMimes = ["application/pdf"];
+    const maxInlineBytes = 20 * 1024 * 1024;
     const warrantySchema = z.object({
       product_name: z.string().nullable(),
       store: z.string().nullable(),
@@ -38,6 +44,8 @@ export const extractDocument = createServerFn({ method: "POST" })
       purchased_items: z.array(z.string()).nullable(),
     });
     const agreementSchema = z.object({
+      title: z.string().nullable(),
+      agreement_type: z.string().nullable(),
       company: z.string().nullable(),
       agreement_number: z.string().nullable(),
       start_date: z.string().nullable(),
@@ -45,6 +53,7 @@ export const extractDocument = createServerFn({ method: "POST" })
       monthly_payment: z.number().nullable(),
       total_amount: z.number().nullable(),
       currency: z.string().nullable(),
+      notes: z.string().nullable(),
     });
     const extractionPrompts = {
       warranty:
@@ -60,8 +69,7 @@ Return null for an unknown scalar field and never invent a value.
 - purchased_items: all purchased product/service row names in document order; omit prices, quantities, discounts, totals, payment lines and loyalty lines; return null only if no item row is readable
 - description: exactly "[store] ost" when store is known, otherwise null
 - category: one of Groceries, Fuel, Restaurant, Coffee, Shopping, Healthcare, Travel, Other when supported by the receipt, otherwise null.`,
-      agreement:
-        "Extract fields from this agreement/contract document. Dates in YYYY-MM-DD. Return null when unknown.",
+      agreement: AGREEMENT_ANALYSIS_PROMPT,
     };
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
@@ -75,36 +83,81 @@ Return null for an unknown scalar field and never invent a value.
           ? expenseSchema
           : agreementSchema;
 
-    const dataUrl = `data:${data.mime};base64,${data.base64}`;
-    const isImage = data.mime.startsWith("image/");
+    const files = data.files?.length
+      ? data.files
+      : data.mime && data.base64
+        ? [{ name: "document", mime: data.mime, base64: data.base64 }]
+        : [];
+    if (files.length === 0 || files.length > 20) {
+      console.error("[ocr] invalid file count", { kind: data.kind, count: files.length });
+      return { ok: false as const, error: "Please add between 1 and 20 document files." };
+    }
+    for (const [index, file] of files.entries()) {
+      const mime = file.mime.toLowerCase();
+      const isImage = mime.startsWith("image/");
+      const approxBytes = Math.floor((file.base64.length * 3) / 4);
+      if (!file.base64 || file.base64.length < 32) {
+        console.error("[ocr] empty or too small base64", { kind: data.kind, index, name: file.name, mime, len: file.base64.length });
+        return { ok: false as const, error: `File ${index + 1} is empty or unreadable.` };
+      }
+      if (approxBytes > maxInlineBytes) {
+        console.error("[ocr] file too large", { kind: data.kind, index, name: file.name, mime, approxBytes });
+        return { ok: false as const, error: `File ${index + 1} is too large (${(approxBytes / 1024 / 1024).toFixed(1)} MB). Max 20 MB.` };
+      }
+      const mimeOk = isImage ? supportedImageMimes.includes(mime) : supportedDocumentMimes.includes(mime);
+      if (!mimeOk) {
+        console.error("[ocr] unsupported mime", { kind: data.kind, index, name: file.name, mime });
+        return { ok: false as const, error: `Unsupported file format: ${file.mime || "unknown"}. Supported: JPG, PNG, WEBP, HEIC, PDF.` };
+      }
+    }
 
-    // ── Input validation ────────────────────────────────────────────────
-    if (!data.base64 || data.base64.length < 32) {
-      console.error("[ocr] empty or too small base64", { kind: data.kind, mime: data.mime, len: data.base64.length });
-      return { ok: false as const, error: "File is empty or unreadable." };
-    }
-    const approxBytes = Math.floor((data.base64.length * 3) / 4);
-    if (approxBytes > MAX_INLINE_BYTES) {
-      console.error("[ocr] file too large", { kind: data.kind, mime: data.mime, approxBytes });
-      return {
-        ok: false as const,
-        error: `File is too large (${(approxBytes / 1024 / 1024).toFixed(1)} MB). Max 20 MB.`,
-      };
-    }
-    const mimeOk = isImage
-      ? SUPPORTED_IMAGE_MIMES.includes(data.mime.toLowerCase())
-      : SUPPORTED_DOC_MIMES.includes(data.mime.toLowerCase());
-    if (!mimeOk) {
-      console.error("[ocr] unsupported mime", { kind: data.kind, mime: data.mime });
-      return {
-        ok: false as const,
-        error: `Unsupported file format: ${data.mime || "unknown"}. Supported: JPG, PNG, WEBP, HEIC, PDF.`,
-      };
-    }
-
-    console.info("[ocr] extracting", { kind: data.kind, mime: data.mime, approxBytes });
+    console.info("[ocr] extracting", {
+      kind: data.kind,
+      fileCount: files.length,
+      files: files.map((file, index) => ({ index, name: file.name, mime: file.mime, approxBytes: Math.floor((file.base64.length * 3) / 4) })),
+    });
 
     try {
+      if (data.kind === "agreement") {
+        const content: Array<Record<string, unknown>> = [{ type: "text", text: extractionPrompts.agreement }];
+        files.forEach((file, index) => {
+          content.push({ type: "text", text: `Agreement page/file ${index + 1} of ${files.length}: ${file.name}` });
+          const dataUrl = `data:${file.mime};base64,${file.base64}`;
+          if (file.mime.toLowerCase().startsWith("image/")) {
+            content.push({ type: "image", image: dataUrl });
+          } else {
+            content.push({ type: "file", data: dataUrl, mediaType: file.mime, filename: file.name });
+          }
+        });
+        const agreementResult = await generateText({
+          model,
+          messages: [{ role: "user", content: content as never }],
+        });
+        const rawResponse = agreementResult.text ?? "";
+        console.info("[ocr][agreement] AI raw response", rawResponse);
+        const parsed = parseAgreementResponse(rawResponse);
+        console.info("[ocr][agreement] OCR text", parsed.ocrText);
+        if (parsed.parserErrors.length > 0) console.error("[ocr][agreement] parser errors", parsed.parserErrors);
+        if (parsed.invalidFields.length > 0) console.error("[ocr][agreement] fields that failed normalization", parsed.invalidFields);
+        const hasAny = Object.values(parsed.data).some((value) => value !== null && value !== "");
+        if (!hasAny) {
+          console.error("[ocr][agreement] no usable fields", {
+            finishReason: agreementResult.finishReason,
+            parserErrors: parsed.parserErrors,
+            invalidFields: parsed.invalidFields,
+          });
+          return { ok: false as const, error: "No usable agreement details were found in the uploaded pages." };
+        }
+        console.info("[ocr][agreement] success", {
+          finishReason: agreementResult.finishReason,
+          keys: Object.keys(parsed.data).filter((key) => parsed.data[key as keyof typeof parsed.data] != null),
+        });
+        return { ok: true as const, data: parsed.data };
+      }
+
+      const primaryFile = files[0];
+      const dataUrl = `data:${primaryFile.mime};base64,${primaryFile.base64}`;
+      const isImage = primaryFile.mime.toLowerCase().startsWith("image/");
       const { output } = await generateText({
         model,
         output: Output.object({ schema: schema as z.ZodType<Record<string, unknown>> }),
@@ -118,7 +171,7 @@ Return null for an unknown scalar field and never invent a value.
                 : {
                     type: "file",
                     data: dataUrl,
-                    mediaType: data.mime,
+                    mediaType: primaryFile.mime,
                   },
             ],
           },
@@ -145,7 +198,7 @@ Return null for an unknown scalar field and never invent a value.
       const status = anyErr?.statusCode ?? anyErr?.status;
       console.error("[ocr] extract failed", {
         kind: data.kind,
-        mime: data.mime,
+        files: files.map((file) => ({ name: file.name, mime: file.mime })),
         status,
         message: anyErr?.message,
         responseBody: anyErr?.responseBody,
