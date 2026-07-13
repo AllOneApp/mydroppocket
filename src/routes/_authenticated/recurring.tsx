@@ -16,7 +16,7 @@ import { FileDrop } from "@/components/FileDrop";
 import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
-import { syncFileToGoogleDrive } from "@/lib/google-drive.functions";
+import { syncFileToGoogleDrive, syncBackupCategory } from "@/lib/google-drive.functions";
 import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_authenticated/recurring")({
