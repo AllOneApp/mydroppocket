@@ -1,7 +1,7 @@
-import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -13,14 +13,26 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileDrop } from "@/components/FileDrop";
+import { MultiFileDrop, type ExistingAttachment } from "@/components/MultiFileDrop";
 import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
-import { syncFileToGoogleDrive, syncBackupCategory, deleteGoogleDriveFile, currentBackupLang } from "@/lib/google-drive.functions";
+import { syncAgreementAttachments, syncBackupCategory, deleteGoogleDriveFile, deleteAgreementDriveFolder, currentBackupLang } from "@/lib/google-drive.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
+
+const MAX_AGREEMENT_ATTACHMENTS = 20;
+
+type AttachmentRow = {
+  id: string;
+  agreement_id: string;
+  file_path: string;
+  file_name: string;
+  file_mime: string | null;
+  gdrive_file_id: string | null;
+  sort_order: number;
+};
 
 export const Route = createFileRoute("/_authenticated/agreements")({
   head: () => ({ meta: [{ title: "Agreements — DropPocket" }] }),
@@ -59,10 +71,26 @@ function AgreementsPage() {
 
   async function del(r: Row) {
     if (!confirm(t("agreements.confirmDelete"))) return;
-    if (r.file_path) await deleteFile(r.file_path);
+    // Remove any attachments' storage files.
+    const { data: atts } = await supabase
+      .from("agreement_attachments")
+      .select("file_path")
+      .eq("agreement_id", r.id);
+    for (const a of (atts ?? []) as Array<{ file_path: string }>) {
+      try { await deleteFile(a.file_path); } catch (e) { console.warn("[storage] delete failed", e); }
+    }
+    if (r.file_path) { try { await deleteFile(r.file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+
+    // Drive: prefer removing the whole per-agreement folder if we have it.
+    const gdriveFolderId = (r as unknown as { gdrive_folder_id?: string | null }).gdrive_folder_id;
+    if (gdriveFolderId) {
+      try { await deleteAgreementDriveFolder({ data: { folderId: gdriveFolderId } }); } catch (e) { console.warn("[gdrive] folder delete failed", e); }
+    } else {
+      const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
+      if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
+    }
+
     await supabase.from("agreements").delete().eq("id", r.id);
-    const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
-    if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
     try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
     qc.invalidateQueries({ queryKey: ["agreements"] });
     toast.success(t("common.deleted"));
@@ -117,7 +145,12 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
   const qc = useQueryClient();
   const { t } = useTranslation();
   const extract = useServerFn(extractDocument);
-  const [file, setFile] = useState<File | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [existing, setExisting] = useState<ExistingAttachment[]>([]);
+  // IDs of attachments the user removed in the dialog — deleted on save.
+  const [removedExistingIds, setRemovedExistingIds] = useState<string[]>([]);
+  // Track legacy single-file removal (agreements.file_path).
+  const [legacyRemoved, setLegacyRemoved] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => ({
@@ -133,12 +166,38 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
     notes: row?.notes ?? "",
   }));
 
+  // Load existing attachments when editing.
+  useEffect(() => {
+    if (!open) return;
+    setPendingFiles([]);
+    setRemovedExistingIds([]);
+    setLegacyRemoved(false);
+    if (!row) { setExisting([]); return; }
+    (async () => {
+      const { data } = await supabase
+        .from("agreement_attachments")
+        .select("id, file_path, file_name, sort_order")
+        .eq("agreement_id", row.id)
+        .order("sort_order", { ascending: true });
+      const list: ExistingAttachment[] = ((data ?? []) as Array<{ id: string; file_path: string; file_name: string }>).map(
+        (a) => ({ id: a.id, name: a.file_name, filePath: a.file_path }),
+      );
+      // Include legacy single file if present and not already mirrored as an attachment.
+      if (row.file_path && !list.some((a) => a.filePath === row.file_path)) {
+        list.unshift({ id: "__legacy__", name: row.file_name ?? "Fail", filePath: row.file_path });
+      }
+      setExisting(list);
+    })();
+  }, [open, row]);
+
   async function scan() {
-    if (!file) return;
+    // Scan the first pending file (image / PDF) to auto-fill the form.
+    const target = pendingFiles[0];
+    if (!target) return;
     setScanning(true);
     try {
-      const base64 = await fileToBase64(file);
-      const res = await extract({ data: { kind: "agreement", mime: file.type || "application/octet-stream", base64 } });
+      const base64 = await fileToBase64(target);
+      const res = await extract({ data: { kind: "agreement", mime: target.type || "application/octet-stream", base64 } });
       if (res.ok) {
         const d = res.data;
         setForm((f) => ({
@@ -164,9 +223,8 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
     try {
       const { data: userRes } = await supabase.auth.getUser();
       const uid = userRes.user!.id;
-      let fileInfo: { path: string; name: string; mime: string } | null = null;
-      if (file) fileInfo = await uploadFile(uid, "agreement", file);
-      const payload = {
+
+      const basePayload: Record<string, unknown> = {
         user_id: uid,
         title: form.title,
         agreement_type: form.agreement_type,
@@ -178,35 +236,73 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         total_amount: form.total_amount ? Number(form.total_amount) : null,
         currency: form.currency,
         notes: form.notes || null,
-        ...(fileInfo ? { file_path: fileInfo.path, file_name: fileInfo.name, file_mime: fileInfo.mime } : {}),
       };
+      if (legacyRemoved) {
+        basePayload.file_path = null;
+        basePayload.file_name = null;
+        basePayload.file_mime = null;
+      }
+
       let recordId: string | null = null;
       if (row) {
-        const { error } = await supabase.from("agreements").update(payload).eq("id", row.id);
+        const { error } = await supabase.from("agreements").update(basePayload).eq("id", row.id);
         if (error) throw error;
         recordId = row.id;
       } else {
-        const { data: inserted, error } = await supabase.from("agreements").insert(payload).select("id").single();
+        const { data: inserted, error } = await supabase.from("agreements").insert(basePayload).select("id").single();
         if (error) throw error;
         recordId = inserted?.id ?? null;
       }
-      if (fileInfo && recordId) {
-        try {
-          await syncFileToGoogleDrive({
-            data: {
-              table: "agreements",
-              recordId,
-              gdriveColumn: "gdrive_file_id",
-              folderKey: "agreement",
-              filePath: fileInfo.path,
-              fileName: fileInfo.name,
-              mime: fileInfo.mime,
-            },
+
+      // Remove any attachments the user unchecked (excluding legacy pseudo-id).
+      for (const attId of removedExistingIds) {
+        if (attId === "__legacy__") continue;
+        const { data: att } = await supabase
+          .from("agreement_attachments")
+          .select("file_path, gdrive_file_id")
+          .eq("id", attId)
+          .maybeSingle();
+        if (att) {
+          const a = att as { file_path: string; gdrive_file_id: string | null };
+          try { await deleteFile(a.file_path); } catch (err) { console.warn("[storage] delete failed", err); }
+          if (a.gdrive_file_id) {
+            try { await deleteGoogleDriveFile({ data: { fileId: a.gdrive_file_id } }); } catch (err) { console.warn("[gdrive] delete failed", err); }
+          }
+        }
+        await supabase.from("agreement_attachments").delete().eq("id", attId);
+      }
+      // If legacy file was removed, drop it from storage + Drive.
+      if (legacyRemoved && row?.file_path) {
+        try { await deleteFile(row.file_path); } catch (err) { console.warn("[storage] delete legacy failed", err); }
+        const gdid = (row as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
+        if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (err) { console.warn("[gdrive] delete legacy failed", err); } }
+      }
+
+      // Upload each new pending file → insert attachment row.
+      if (recordId) {
+        let order = existing.length; // rough starting position
+        for (const f of pendingFiles) {
+          const info = await uploadFile(uid, "agreement", f);
+          const { error: attErr } = await supabase.from("agreement_attachments").insert({
+            agreement_id: recordId,
+            user_id: uid,
+            file_path: info.path,
+            file_name: info.name,
+            file_mime: info.mime,
+            file_size: f.size,
+            sort_order: order++,
           });
+          if (attErr) throw attErr;
+        }
+
+        // Sync all attachments to per-agreement Drive folder.
+        try {
+          await syncAgreementAttachments({ data: { agreementId: recordId } });
         } catch (err) {
-          console.warn("[gdrive] agreement sync failed", err);
+          console.warn("[gdrive] agreement attachments sync failed", err);
         }
       }
+
       try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       qc.invalidateQueries({ queryKey: ["agreements"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
@@ -238,7 +334,22 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               }))}
             />
           </div>
-          <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
+          <MultiFileDrop
+            existing={existing.filter((a) => !removedExistingIds.includes(a.id))}
+            pending={pendingFiles}
+            maxFiles={MAX_AGREEMENT_ATTACHMENTS}
+            onAddFiles={(files) => setPendingFiles((prev) => [...prev, ...files])}
+            onRemovePending={(idx) => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
+            onRemoveExisting={(id) => {
+              setRemovedExistingIds((prev) => [...prev, id]);
+              if (id === "__legacy__") setLegacyRemoved(true);
+            }}
+          />
+          {pendingFiles.length > 0 && (
+            <Button type="button" variant="outline" size="sm" onClick={scan} disabled={scanning} className="w-full">
+              {scanning ? t("file.scanning") : t("file.autoFill")}
+            </Button>
+          )}
           <div><Label>{t("agreements.titleField")} *</Label><Input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
           <div><Label>{t("agreements.type")}</Label>
             <Select value={form.agreement_type} onValueChange={(v) => setForm({ ...form, agreement_type: v })}>
