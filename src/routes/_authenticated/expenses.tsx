@@ -179,12 +179,13 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
         if (!filled) {
           toast.error(t("common.noDataFound", { defaultValue: "Dokumendist ei õnnestunud vajalikke andmeid leida." }));
         } else {
+          const normalizedDate = normalizeDateString(d.expense_date as string | null);
           setForm((f) => ({
             ...f,
             amount: d.amount != null ? String(d.amount) : f.amount,
             currency: (d.currency as string) || f.currency,
             store: store || f.store,
-            expense_date: (d.expense_date as string) || f.expense_date,
+            expense_date: normalizedDate || f.expense_date,
             category: (d.category as string) && EXPENSE_CATEGORIES.includes(d.category as string) ? (d.category as string) : f.category,
             description: (d.description as string) || (store ? `${store} ost` : f.description),
             notes: purchasedItems.length > 0 ? purchasedItems.join("\n") : f.notes,
@@ -206,13 +207,14 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
       const uid = userRes.user.id;
       let fileInfo: { path: string; name: string; mime: string } | null = null;
       if (file) fileInfo = await uploadFile(uid, "expense", file);
+      const normalizedExpenseDate = normalizeDateString(form.expense_date) ?? localDateString();
       const payload = {
         user_id: uid,
         type: form.type,
         amount: Number(form.amount),
         currency: form.currency,
         category: form.category,
-        expense_date: form.expense_date,
+        expense_date: normalizedExpenseDate,
         description: form.description || null,
         store: form.store || null,
         notes: form.notes || null,
@@ -303,7 +305,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
                     amount: d.amount != null ? String(d.amount) : f.amount,
                     currency: (d.currency as string) || f.currency,
                     store: (d.store as string) || f.store,
-                    expense_date: (d.expense_date as string) || f.expense_date,
+                    expense_date: normalizeDateString(d.expense_date as string | null) || f.expense_date,
                     category: nextCat,
                     description: (d.description as string) || f.description,
                   };
@@ -365,4 +367,30 @@ function makeForm(row: Row | null, prefill: Partial<Row> | null) {
     store: row?.store ?? prefill?.store ?? "",
     notes: row?.notes ?? "",
   };
+}
+
+// Normalize any date-ish string coming from OCR/AI to YYYY-MM-DD (local).
+// Supports: "YYYY-MM-DD", "DD.MM.YYYY", "DD/MM/YYYY", "DD-MM-YYYY", ISO timestamps.
+// Returns null when input cannot be parsed.
+function normalizeDateString(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const s = String(input).trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
+  if (m) {
+    const d = m[1].padStart(2, "0");
+    const mo = m[2].padStart(2, "0");
+    let y = m[3];
+    if (y.length === 2) y = (Number(y) > 70 ? "19" : "20") + y;
+    return `${y}-${mo}-${d}`;
+  }
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const mo = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${d}`;
+  }
+  return null;
 }
