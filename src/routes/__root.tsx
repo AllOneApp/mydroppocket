@@ -160,6 +160,13 @@ function RootComponent() {
       router.invalidate();
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
       if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        void subscribeExpenses();
+      }
+      if (event === "SIGNED_OUT" && expensesChannel) {
+        void supabase.removeChannel(expensesChannel);
+        expensesChannel = null;
+      }
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         void (async () => {
           const { data: u } = await supabase.auth.getUser();
           if (!u.user) return;
