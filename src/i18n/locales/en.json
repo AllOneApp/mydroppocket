@@ -197,7 +197,9 @@
     "attachmentsCount": "{{count}} / {{max}} files added",
     "attachmentsMaxReached": "Maximum number of files is {{max}}.",
     "attachmentsEmpty": "No attachments added yet.",
-    "attachmentsHint": "Images and PDFs — up to {{max}} files per agreement."
+    "attachmentsHint": "Images and PDFs — up to {{max}} files per agreement.",
+    "analysisNoData": "No agreement details were found on the uploaded pages.",
+    "analysisFailed": "Agreement analysis failed. The technical reason was saved to the logs."
   },
   "search": {
     "title": "Search",
@@ -277,7 +279,10 @@
     "drop": "Drop a file or click to upload",
     "types": "Photo, image or PDF",
     "scanning": "Scanning with AI…",
-    "autoFill": "✨ Auto-fill from document"
+    "autoFill": "✨ Auto-fill from document",
+    "pickFirst": "Add at least one file first.",
+    "empty": "The selected file is empty.",
+    "readFailedAt": "Could not read file {{index}}."
   },
   "notFound": {
     "title": "Page not found",

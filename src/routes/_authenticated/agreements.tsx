@@ -191,38 +191,44 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
   }, [open, row]);
 
   async function scan() {
-    // Scan the first pending file (image / PDF) to auto-fill the form.
-    const target = pendingFiles[0];
-    if (!target) {
+    if (pendingFiles.length === 0) {
       toast.error(t("file.pickFirst", { defaultValue: "Please add a file first" }));
       return;
     }
-    if (target.size === 0) {
-      console.error("[scan] file is empty", { name: target.name });
-      toast.error("Selected file is empty.");
+    const emptyFile = pendingFiles.find((file) => file.size === 0);
+    if (emptyFile) {
+      console.error("[scan] agreement file is empty", { name: emptyFile.name });
+      toast.error(t("file.empty", { defaultValue: "The selected file is empty." }));
       return;
     }
-    console.info("[scan] agreement starting", { name: target.name, type: target.type, size: target.size });
+    console.info("[scan] agreement starting", {
+      fileCount: pendingFiles.length,
+      files: pendingFiles.map((file, index) => ({ index, name: file.name, type: file.type, size: file.size })),
+    });
     setScanning(true);
     try {
-      const base64 = await fileToBase64(target);
-      if (!base64) {
-        console.error("[scan] fileToBase64 returned empty");
-        toast.error("Could not read file contents.");
-        return;
-      }
-      const res = await extract({ data: { kind: "agreement", mime: target.type || "application/octet-stream", base64 } });
+      const files = await Promise.all(pendingFiles.map(async (file, index) => {
+        const base64 = await fileToBase64(file);
+        if (!base64) throw new Error(t("file.readFailedAt", { defaultValue: "Could not read file {{index}}.", index: index + 1 }));
+        return { name: file.name, mime: file.type || "application/octet-stream", base64 };
+      }));
+      const res = await extract({ data: { kind: "agreement", files } });
       console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
-        const filled = [d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency]
+        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes]
           .some((v) => v !== null && v !== undefined && v !== "");
         if (!filled) {
-          toast.error(t("common.noDataFound", { defaultValue: "No usable data found on the document." }));
+          toast.error(t("agreements.analysisNoData"));
           return;
         }
+        const agreementType = typeof d.agreement_type === "string" && TYPES.some((type) => type.value === d.agreement_type)
+          ? d.agreement_type
+          : null;
         setForm((f) => ({
           ...f,
+          title: (d.title as string) || f.title || (d.company as string) || "",
+          agreement_type: agreementType || f.agreement_type,
           company: (d.company as string) || f.company,
           agreement_number: (d.agreement_number as string) || f.agreement_number,
           start_date: (d.start_date as string) || f.start_date,
@@ -230,12 +236,12 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           monthly_payment: d.monthly_payment != null ? String(d.monthly_payment) : f.monthly_payment,
           total_amount: d.total_amount != null ? String(d.total_amount) : f.total_amount,
           currency: (d.currency as string) || f.currency,
-          title: f.title || (d.company as string) || "",
+          notes: (d.notes as string) || f.notes,
         }));
         toast.success(t("common.autoFilled"));
       } else {
         console.error("[scan] extract returned error", res.error);
-        toast.error(res.error);
+        toast.error(t("agreements.analysisFailed"));
       }
     } catch (e) {
       console.error("[scan] failed", e);
