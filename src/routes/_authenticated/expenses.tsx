@@ -19,6 +19,7 @@ import { DateRangeFilter, computeRange, localDateString, type DateRange } from "
 import { supabase } from "@/integrations/supabase/client";
 import { expensesQueryKey, expensesQueryOptions, type ExpenseEntryType, type ExpenseRow } from "@/lib/expenses";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
+import { syncFileToGoogleDrive } from "@/lib/google-drive.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
 
@@ -258,6 +259,23 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
           b.expense_date.localeCompare(a.expense_date),
         );
       });
+      if (fileInfo && savedRow?.id) {
+        try {
+          await syncFileToGoogleDrive({
+            data: {
+              table: "expenses",
+              recordId: savedRow.id,
+              gdriveColumn: "gdrive_file_id",
+              folderKey: "expense",
+              filePath: fileInfo.path,
+              fileName: fileInfo.name,
+              mime: fileInfo.mime,
+            },
+          });
+        } catch (err) {
+          console.warn("[gdrive] expense sync failed", err);
+        }
+      }
       await Promise.all([
         qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
