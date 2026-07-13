@@ -27,7 +27,7 @@
     "deleted": "Deleted",
     "failed": "Failed",
     "scanFailed": "Scan failed",
-    "autoFilled": "Fields auto-filled",
+    "autoFilled": "Data was successfully filled from the document.",
     "noDataFound": "Could not extract data from the document.",
     "back": "Back"
   },

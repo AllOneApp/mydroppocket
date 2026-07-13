@@ -27,7 +27,7 @@
     "deleted": "Kustutatud",
     "failed": "Ebaõnnestus",
     "scanFailed": "Skaneerimine ebaõnnestus",
-    "autoFilled": "Väljad täidetud automaatselt",
+    "autoFilled": "Andmed täideti edukalt dokumendist.",
     "noDataFound": "Dokumendist ei õnnestunud vajalikke andmeid leida.",
     "back": "Tagasi"
   },

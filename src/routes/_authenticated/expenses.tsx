@@ -170,7 +170,11 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
       const res = await extract({ data: { kind: "expense", mime: file.type || "application/octet-stream", base64 } });
       if (res.ok) {
         const d = res.data;
-        const filled = [d.amount, d.currency, d.store, d.expense_date, d.category, d.description]
+        const purchasedItems = Array.isArray(d.purchased_items)
+          ? d.purchased_items.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+          : [];
+        const store = typeof d.store === "string" ? d.store.trim() : "";
+        const filled = [d.amount, d.currency, store, d.expense_date, d.category, d.description, d.vat, ...purchasedItems]
           .some((v) => v !== null && v !== undefined && v !== "");
         if (!filled) {
           toast.error(t("common.noDataFound", { defaultValue: "Dokumendist ei õnnestunud vajalikke andmeid leida." }));
@@ -179,10 +183,11 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
             ...f,
             amount: d.amount != null ? String(d.amount) : f.amount,
             currency: (d.currency as string) || f.currency,
-            store: (d.store as string) || f.store,
+            store: store || f.store,
             expense_date: (d.expense_date as string) || f.expense_date,
             category: (d.category as string) && EXPENSE_CATEGORIES.includes(d.category as string) ? (d.category as string) : f.category,
-            description: (d.description as string) || f.description,
+            description: (d.description as string) || (store ? `${store} ost` : f.description),
+            notes: purchasedItems.length > 0 ? purchasedItems.join("\n") : f.notes,
           }));
           toast.success(t("common.autoFilled"));
         }
@@ -263,7 +268,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] min-w-0 max-w-full overflow-x-hidden overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("expenses.editTitle") : t("expenses.addTitle")}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="space-y-4">
           <div className="flex flex-wrap items-center justify-center gap-2">
@@ -313,7 +318,9 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
             </Button>
           </div>
           {(showUpload || file) && (
-            <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
+            <div className="w-full min-w-0 max-w-full overflow-hidden">
+              <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
+            </div>
           )}
           <div className="grid grid-cols-2 gap-3">
             <div><Label>{t("expenses.amount")} *</Label><Input type="number" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
