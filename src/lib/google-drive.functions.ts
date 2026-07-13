@@ -135,12 +135,15 @@ export const syncFileToGoogleDrive = createServerFn({ method: "POST" })
     // Persist the drive file id on the record using the admin client to avoid
     // fighting the generated types for the new column.
     const patch: Record<string, string> = { [data.gdriveColumn]: uploaded.id };
-    const { error: updErr } = await supabaseAdmin
-      .from(data.table)
+    const { error: updErr } = await (supabaseAdmin.from(data.table) as unknown as {
+      update: (v: Record<string, string>) => {
+        eq: (c: string, v: string) => { eq: (c: string, v: string) => Promise<{ error: unknown }> };
+      };
+    })
       .update(patch)
       .eq("id", data.recordId)
       .eq("user_id", context.userId);
-    if (updErr) throw updErr;
+    if (updErr) throw updErr as Error;
 
     return { ok: true as const, fileId: uploaded.id };
   });
