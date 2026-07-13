@@ -15,7 +15,7 @@ export function FileDrop({
   const [drag, setDrag] = useState(false);
   const { t } = useTranslation();
   return (
-    <div>
+    <div className="w-full min-w-0 max-w-full overflow-hidden">
       <div
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
@@ -25,14 +25,14 @@ export function FileDrop({
           if (f) onFile(f);
         }}
         onClick={() => ref.current?.click()}
-        className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+        className={`flex w-full min-w-0 max-w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
           drag ? "border-primary bg-accent/40" : "border-border hover:bg-muted/40"
         }`}
       >
         {file ? (
           <div className="flex w-full min-w-0 items-center gap-3">
             <FileIcon className="h-5 w-5 shrink-0 text-primary" />
-            <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left text-sm">{file.name}</div>
+            <div className="min-w-0 flex-1 truncate text-left text-sm" title={file.name}>{file.name}</div>
             <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={(e) => { e.stopPropagation(); onFile(null); }}>
               <X className="h-4 w-4" />
             </Button>
