@@ -102,9 +102,10 @@ function CloudBackupPage() {
     }
   }
 
-  const gdriveConnected = statusQuery.data?.connected === true;
-  const gdriveEmail = gdriveConnected ? statusQuery.data.email : undefined;
-  const gdriveFolder = gdriveConnected ? statusQuery.data.folderName : undefined;
+  const gdriveStatus = statusQuery.data;
+  const gdriveConnected = gdriveStatus?.connected === true;
+  const gdriveEmail = gdriveStatus?.connected ? gdriveStatus.email : undefined;
+  const gdriveFolder = gdriveStatus?.connected ? gdriveStatus.folderName : undefined;
 
   const providers: Provider[] = [
     { id: "gdrive", name: "Google Drive", platform: "Android · iOS · Web", connected: gdriveConnected },
