@@ -216,7 +216,7 @@ export async function ensureMyDropPocketStructure(accessToken: string): Promise<
   subfolders: { name: string; id: string }[];
 }> {
   const root = await findOrCreateFolder({ accessToken, name: "MyDropPocket" });
-  const names = ["Garantiid", "Tšekid", "Lepingud", "Järelmaksulepingud", "Tulud ja kulud", "Pildid", "PDF failid"];
+  const names = ["Garantiid", "Tšekid", "Lepingud", "Järelmaksulepingud", "Püsimaksed", "Tulud ja kulud", "Pildid", "PDF failid"];
   const subfolders: { name: string; id: string }[] = [];
   for (const name of names) {
     const f = await findOrCreateFolder({ accessToken, name, parentId: root.id });
