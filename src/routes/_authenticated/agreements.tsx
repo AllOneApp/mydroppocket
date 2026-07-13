@@ -197,12 +197,30 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       toast.error(t("file.pickFirst", { defaultValue: "Please add a file first" }));
       return;
     }
+    if (target.size === 0) {
+      console.error("[scan] file is empty", { name: target.name });
+      toast.error("Selected file is empty.");
+      return;
+    }
+    console.info("[scan] agreement starting", { name: target.name, type: target.type, size: target.size });
     setScanning(true);
     try {
       const base64 = await fileToBase64(target);
+      if (!base64) {
+        console.error("[scan] fileToBase64 returned empty");
+        toast.error("Could not read file contents.");
+        return;
+      }
       const res = await extract({ data: { kind: "agreement", mime: target.type || "application/octet-stream", base64 } });
+      console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
+        const filled = [d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency]
+          .some((v) => v !== null && v !== undefined && v !== "");
+        if (!filled) {
+          toast.error(t("common.noDataFound", { defaultValue: "No usable data found on the document." }));
+          return;
+        }
         setForm((f) => ({
           ...f,
           company: (d.company as string) || f.company,
