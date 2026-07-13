@@ -137,7 +137,10 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
   }));
 
   async function scan() {
-    if (!file) return;
+    if (!file) {
+      toast.error(t("file.pickFirst", { defaultValue: "Please add a file first" }));
+      return;
+    }
     setScanning(true);
     try {
       const base64 = await fileToBase64(file);
@@ -154,9 +157,11 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
         }));
         toast.success(t("common.autoFilled"));
       } else {
+        console.error("[scan] extract returned error", res.error);
         toast.error(res.error);
       }
     } catch (e) {
+      console.error("[scan] failed", e);
       toast.error(e instanceof Error ? e.message : t("common.scanFailed"));
     } finally { setScanning(false); }
   }
@@ -219,9 +224,9 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden p-4 sm:w-full sm:max-w-lg sm:p-6">
         <DialogHeader><DialogTitle>{row ? t("warranties.editTitle") : t("warranties.addTitle")}</DialogTitle></DialogHeader>
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} className="w-full min-w-0 max-w-full space-y-4 overflow-hidden">
           <div className="flex justify-end">
             <VoiceInput
               context="warranty"

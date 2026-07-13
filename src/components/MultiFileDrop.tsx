@@ -105,10 +105,10 @@ export function MultiFileDrop({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full">
+    <div className="w-full min-w-0 max-w-full overflow-hidden">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-sm font-medium">{title}</div>
-        <div className="text-xs text-muted-foreground">{countLabel}</div>
+        <div className="min-w-0 truncate text-sm font-medium">{title}</div>
+        <div className="shrink-0 text-xs text-muted-foreground">{countLabel}</div>
       </div>
 
       <div
@@ -147,20 +147,20 @@ export function MultiFileDrop({
           <p className="text-xs text-muted-foreground">{emptyLabel}</p>
         )}
         {existing.map((a) => (
-          <div key={a.id} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+          <div key={a.id} className="flex w-full min-w-0 max-w-full items-center gap-1 overflow-hidden rounded-lg border bg-card px-2 py-2 text-sm sm:gap-2 sm:px-3">
             <FileIcon className="h-4 w-4 shrink-0 text-primary" />
             <button type="button" onClick={() => openExisting(a)} className="min-w-0 flex-1 truncate text-left hover:text-primary" title={a.name}>{a.name}</button>
-            <Button type="button" variant="ghost" size="icon" onClick={() => openExisting(a)} aria-label="view"><Eye className="h-4 w-4" /></Button>
-            <Button type="button" variant="ghost" size="icon" onClick={() => downloadExisting(a)} aria-label="download"><Download className="h-4 w-4" /></Button>
-            <Button type="button" variant="ghost" size="icon" onClick={() => onRemoveExisting(a.id)} aria-label="remove"><X className="h-4 w-4" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => openExisting(a)} aria-label="view"><Eye className="h-4 w-4" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => downloadExisting(a)} aria-label="download"><Download className="h-4 w-4" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => onRemoveExisting(a.id)} aria-label="remove"><X className="h-4 w-4" /></Button>
           </div>
         ))}
         {pending.map((f, i) => (
-          <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-lg border border-dashed bg-primary/5 px-3 py-2 text-sm">
+          <div key={`${f.name}-${i}`} className="flex w-full min-w-0 max-w-full items-center gap-1 overflow-hidden rounded-lg border border-dashed bg-primary/5 px-2 py-2 text-sm sm:gap-2 sm:px-3">
             <FileIcon className="h-4 w-4 shrink-0 text-primary" />
             <div className="min-w-0 flex-1 truncate" title={f.name}>{f.name}</div>
-            <span className="shrink-0 text-xs text-muted-foreground">{Math.ceil(f.size / 1024)} KB</span>
-            <Button type="button" variant="ghost" size="icon" onClick={() => onRemovePending(i)} aria-label="remove"><X className="h-4 w-4" /></Button>
+            <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{Math.ceil(f.size / 1024)} KB</span>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => onRemovePending(i)} aria-label="remove"><X className="h-4 w-4" /></Button>
           </div>
         ))}
       </div>
