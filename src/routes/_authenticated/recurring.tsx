@@ -429,6 +429,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           console.warn("[gdrive] recurring sync failed", err);
         }
       }
+      try { await syncBackupCategory({ data: { category: "recurring_payments" } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       qc.invalidateQueries({ queryKey: ["recurring_payments"] });
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
@@ -551,6 +552,7 @@ function AttachReceiptDialog({ data, onClose }: { data: { instance: Instance; re
       } catch (err) {
         console.warn("[gdrive] instance sync failed", err);
       }
+      try { await syncBackupCategory({ data: { category: "recurring_payment_instances" } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
       toast.success(t("common.saved"));
       onClose();
