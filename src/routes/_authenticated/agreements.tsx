@@ -224,7 +224,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       const { data: userRes } = await supabase.auth.getUser();
       const uid = userRes.user!.id;
 
-      const basePayload: Record<string, unknown> = {
+      const basePayload = {
         user_id: uid,
         title: form.title,
         agreement_type: form.agreement_type,
@@ -236,12 +236,8 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         total_amount: form.total_amount ? Number(form.total_amount) : null,
         currency: form.currency,
         notes: form.notes || null,
+        ...(legacyRemoved ? { file_path: null, file_name: null, file_mime: null } : {}),
       };
-      if (legacyRemoved) {
-        basePayload.file_path = null;
-        basePayload.file_name = null;
-        basePayload.file_mime = null;
-      }
 
       let recordId: string | null = null;
       if (row) {
@@ -249,7 +245,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         if (error) throw error;
         recordId = row.id;
       } else {
-        const { data: inserted, error } = await supabase.from("agreements").insert(basePayload).select("id").single();
+        const { data: inserted, error } = await supabase.from("agreements").insert(basePayload as never).select("id").single();
         if (error) throw error;
         recordId = inserted?.id ?? null;
       }
