@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { pickLang, setLang, type Lang } from "@/i18n";
 import { registerPwa } from "@/pwa/register";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { expensesQueryKey } from "@/lib/expenses";
 
 function NotFoundComponent() {
   const { t } = useTranslation();
@@ -171,6 +172,19 @@ function RootComponent() {
         })();
       }
     });
+    const expensesChannel = supabase
+      .channel("expenses-dashboard-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "expenses" },
+        () => {
+          void Promise.all([
+            queryClient.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
+            queryClient.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
+          ]);
+        },
+      )
+      .subscribe();
     // On first mount, if a session exists, hydrate language from profile.
     void (async () => {
       const { data: u } = await supabase.auth.getUser();
@@ -182,7 +196,10 @@ function RootComponent() {
         .maybeSingle();
       if (p?.language) await setLang(pickLang(p.language) as Lang);
     })();
-    return () => data.subscription.unsubscribe();
+    return () => {
+      data.subscription.unsubscribe();
+      void supabase.removeChannel(expensesChannel);
+    };
   }, [router, queryClient]);
 
   return (
