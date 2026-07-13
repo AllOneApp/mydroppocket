@@ -83,6 +83,8 @@
     "recentExpenses": "Hiljutised kulud",
     "upcomingWarranties": "Aeguvad garantiid",
     "viewAll": "Vaata kõiki",
+    "viewMore": "Vaata täpsemalt",
+    "noEntries": "Selle perioodi kirjeid pole",
     "noExpenses": "Kulusid pole veel",
     "noWarranties": "Garantiisid pole veel"
   },

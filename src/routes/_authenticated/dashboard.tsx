@@ -1,15 +1,30 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown, Repeat, Plus, Mic, Upload, Pencil } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
 import { computeRange } from "@/components/DateRangeFilter";
 import { supabase } from "@/integrations/supabase/client";
-import { expenseTotals, expensesQueryOptions } from "@/lib/expenses";
+import { expenseTotals, expensesQueryOptions, expensesQueryKey, type ExpenseRow } from "@/lib/expenses";
 import { formatCurrency, warrantyStatus } from "@/lib/records";
+import { deleteFile } from "@/lib/records";
 import { useTranslation } from "react-i18next";
 import { ExpenseDialog } from "./expenses";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — DropPocket" }] }),
@@ -18,12 +33,36 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function Dashboard() {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickMode, setQuickMode] = useState<"voice" | "upload" | "manual">("manual");
   function openQuick(mode: "voice" | "upload" | "manual") {
     setQuickMode(mode);
     setQuickOpen(true);
   }
+  const [periodKey, setPeriodKey] = useState<null | "today" | "week" | "month" | "year">(null);
+  const [editRow, setEditRow] = useState<ExpenseRow | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteRow, setDeleteRow] = useState<ExpenseRow | null>(null);
+
+  async function performDelete(r: ExpenseRow) {
+    try {
+      const { error } = await supabase.from("expenses").delete().eq("id", r.id);
+      if (error) throw error;
+      if (r.file_path) await deleteFile(r.file_path);
+      qc.setQueryData<ExpenseRow[]>(expensesQueryKey, (current = []) => current.filter((e) => e.id !== r.id));
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
+      ]);
+      toast.success(t("common.deleted"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("common.failed"));
+    } finally {
+      setDeleteRow(null);
+    }
+  }
+
   const { data: expenseRows = [] } = useQuery(expensesQueryOptions());
   const { data } = useQuery({
     queryKey: ["dashboard"],
@@ -174,7 +213,16 @@ function Dashboard() {
             const label = k === "today" ? t("expenses.today") : k === "week" ? t("expenses.thisWeek") : k === "month" ? t("expenses.thisMonth") : t("expenses.thisYear");
             return (
               <div key={k} className="card-soft p-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+                  <button
+                    type="button"
+                    onClick={() => setPeriodKey(k)}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    {t("dashboard.viewMore")}
+                  </button>
+                </div>
                 <div className="mt-3 space-y-1.5 text-sm">
                   <div className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><TrendingUp className="h-3.5 w-3.5 text-green-600" />{t("expenses.income")}</span><span className="font-medium text-green-600">{formatCurrency(p.income)}</span></div>
                   <div className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><TrendingDown className="h-3.5 w-3.5 text-red-600" />{t("expenses.expense")}</span><span className="font-medium text-red-600">{formatCurrency(p.expense)}</span></div>
@@ -231,6 +279,97 @@ function Dashboard() {
           ) : <EmptyState msg={t("dashboard.noWarranties")} />}
         </div>
       </div>
+
+      {(() => {
+        if (!periodKey) return null;
+        const rangeMap = {
+          today: { range: computeRange("today"), label: t("expenses.today") },
+          week: { range: computeRange("thisWeek"), label: t("expenses.thisWeek") },
+          month: { range: computeRange("thisMonth"), label: t("expenses.thisMonth") },
+          year: { range: computeRange("thisYear"), label: t("expenses.thisYear") },
+        } as const;
+        const { range, label } = rangeMap[periodKey];
+        const rows = expenseRows.filter((r) => r.expense_date >= range.from && r.expense_date <= range.to);
+        const inc = rows.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
+        const exp = rows.filter((r) => r.type === "expense").reduce((s, r) => s + Number(r.amount), 0);
+        const bal = inc - exp;
+        return (
+          <Dialog open={!!periodKey} onOpenChange={(o) => !o && setPeriodKey(null)}>
+            <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-2xl">
+              <DialogHeader className="border-b border-border p-6 pb-4">
+                <DialogTitle>{label}</DialogTitle>
+              </DialogHeader>
+              <div className="flex-1 overflow-y-auto p-6">
+                {rows.length === 0 ? (
+                  <EmptyState msg={t("dashboard.noEntries")} />
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {rows.map((r) => {
+                      const isIncome = r.type === "income";
+                      const catLabel = t(`expenses.categories.${r.category}` as const, { defaultValue: r.category });
+                      return (
+                        <li key={r.id} className="flex items-start justify-between gap-3 py-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="flex items-center gap-2 truncate text-sm font-medium">
+                              {isIncome ? <TrendingUp className="h-3.5 w-3.5 shrink-0 text-green-600" /> : <TrendingDown className="h-3.5 w-3.5 shrink-0 text-red-600" />}
+                              <span className="truncate">{r.description || catLabel}</span>
+                            </p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{r.expense_date} · {catLabel}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <p className={`text-sm font-semibold ${isIncome ? "text-green-600" : "text-red-600"}`}>
+                              {isIncome ? "+" : "−"}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}
+                            </p>
+                            <Button size="icon" variant="ghost" aria-label={t("common.edit")} onClick={() => { setEditRow(r); setEditOpen(true); }}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" aria-label={t("common.delete")} onClick={() => setDeleteRow(r)} className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              <div className="border-t border-border p-6 pt-4">
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("expenses.income")}</p>
+                    <p className="mt-0.5 font-bold text-green-600">{formatCurrency(inc)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("expenses.expense")}</p>
+                    <p className="mt-0.5 font-bold text-red-600">{formatCurrency(exp)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("expenses.balance")}</p>
+                    <p className={`mt-0.5 font-bold ${bal >= 0 ? "text-green-600" : "text-red-600"}`}>{formatCurrency(bal)}</p>
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      <ExpenseDialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (!o) setEditRow(null); }} row={editRow} prefill={null} />
+
+      <AlertDialog open={!!deleteRow} onOpenChange={(o) => !o && setDeleteRow(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("expenses.confirmDelete")}</AlertDialogTitle>
+            <AlertDialogDescription>&nbsp;</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel", { defaultValue: "Loobu" })}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (deleteRow) void performDelete(deleteRow); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t("common.delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
