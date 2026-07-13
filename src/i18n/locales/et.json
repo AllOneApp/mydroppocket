@@ -28,6 +28,7 @@
     "failed": "Ebaõnnestus",
     "scanFailed": "Skaneerimine ebaõnnestus",
     "autoFilled": "Väljad täidetud automaatselt",
+    "noDataFound": "Dokumendist ei õnnestunud vajalikke andmeid leida.",
     "back": "Tagasi"
   },
   "nav": {
