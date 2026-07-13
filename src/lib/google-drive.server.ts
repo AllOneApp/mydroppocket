@@ -216,7 +216,7 @@ export async function ensureMyDropPocketStructure(accessToken: string): Promise<
   subfolders: { name: string; id: string }[];
 }> {
   const root = await findOrCreateFolder({ accessToken, name: "MyDropPocket" });
-  const names = ["Garantiid", "Tšekid", "Lepingud", "Järelmaksulepingud", "Tulud ja kulud", "Pildid", "PDF failid"];
+  const names = ["Garantiid", "Tšekid", "Lepingud", "Järelmaksulepingud", "Püsimaksed", "Tulud ja kulud", "Pildid", "PDF failid"];
   const subfolders: { name: string; id: string }[] = [];
   for (const name of names) {
     const f = await findOrCreateFolder({ accessToken, name, parentId: root.id });
@@ -337,4 +337,100 @@ export async function uploadBytesToDriveFolder(opts: {
   const text = await res.text();
   if (!res.ok) throw new Error(`Drive upload failed (${res.status}): ${text}`);
   return JSON.parse(text);
+}
+
+// ---------- Upsert / delete helpers used by JSON backup ----------
+
+async function findFileInFolder(opts: {
+  accessToken: string;
+  parentId: string;
+  name: string;
+}): Promise<{ id: string } | null> {
+  const q = `name='${opts.name.replace(/'/g, "\\'")}' and '${opts.parentId}' in parents and trashed=false`;
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&spaces=drive`,
+    { headers: { Authorization: `Bearer ${opts.accessToken}` } },
+  );
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Drive file lookup failed (${res.status}): ${text}`);
+  const j = JSON.parse(text) as { files: { id: string }[] };
+  return j.files[0] ?? null;
+}
+
+/**
+ * Upsert a JSON file by name inside a folder. If it exists → PATCH body,
+ * otherwise create via multipart upload.
+ */
+export async function upsertJsonInFolder(opts: {
+  accessToken: string;
+  parentId: string;
+  name: string;
+  json: unknown;
+}): Promise<{ id: string; name: string }> {
+  const bytes = new TextEncoder().encode(JSON.stringify(opts.json, null, 2));
+  const existing = await findFileInFolder({
+    accessToken: opts.accessToken,
+    parentId: opts.parentId,
+    name: opts.name,
+  });
+  if (existing) {
+    const res = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media&fields=id,name`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${opts.accessToken}`,
+          "Content-Type": "application/json; charset=UTF-8",
+        },
+        body: bytes,
+      },
+    );
+    const text = await res.text();
+    if (!res.ok) throw new Error(`Drive JSON update failed (${res.status}): ${text}`);
+    return JSON.parse(text);
+  }
+  return uploadBytesToDriveFolder({
+    accessToken: opts.accessToken,
+    parentId: opts.parentId,
+    name: opts.name,
+    mime: "application/json",
+    bytes,
+  });
+}
+
+export async function deleteDriveFile(opts: { accessToken: string; fileId: string }): Promise<void> {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${opts.fileId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${opts.accessToken}` },
+  });
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    throw new Error(`Drive delete failed (${res.status}): ${text}`);
+  }
+}
+
+/**
+ * Ensure a specific named subfolder exists under MyDropPocket. Updates the
+ * cached subfolders_json map when it has to create it. Returns the folder id.
+ */
+export async function ensureSubfolderId(opts: {
+  userId: string;
+  accessToken: string;
+  rootId: string;
+  subfolders: Record<string, string>;
+  name: string;
+}): Promise<string> {
+  if (opts.subfolders[opts.name]) return opts.subfolders[opts.name];
+  const created = await findOrCreateFolder({
+    accessToken: opts.accessToken,
+    name: opts.name,
+    parentId: opts.rootId,
+  });
+  const next = { ...opts.subfolders, [opts.name]: created.id };
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  await supabaseAdmin
+    .from("google_drive_connections")
+    .update({ subfolders_json: next, updated_at: new Date().toISOString() })
+    .eq("user_id", opts.userId);
+  return created.id;
 }

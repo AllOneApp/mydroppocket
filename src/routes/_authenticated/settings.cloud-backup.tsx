@@ -11,6 +11,7 @@ import {
   startGoogleDriveConnect,
   getGoogleDriveStatus,
   disconnectGoogleDrive,
+  syncBackupAll,
 } from "@/lib/google-drive.functions";
 
 export const Route = createFileRoute("/_authenticated/settings/cloud-backup")({
@@ -35,6 +36,8 @@ type Provider = {
 function CloudBackupPage() {
   const [autoBackup, setAutoBackup] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+  const [lastBackup, setLastBackup] = useState<{ at: string; entries: number; files: number } | null>(null);
   const qc = useQueryClient();
 
   const statusQuery = useQuery({
@@ -52,6 +55,25 @@ function CloudBackupPage() {
       toast.error(e instanceof Error ? e.message : "Lahutamine ebaõnnestus");
     },
   });
+
+  async function runFullBackup() {
+    setBackingUp(true);
+    try {
+      const res = await syncBackupAll();
+      if ("skipped" in res && res.skipped) {
+        toast.error("Google Drive pole ühendatud");
+        return;
+      }
+      if ("ok" in res && res.ok) {
+        setLastBackup({ at: new Date().toISOString(), entries: res.entries, files: res.files });
+        toast.success(`Varundatud: ${res.entries} kirjet, ${res.files} faili`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Varundamine ebaõnnestus");
+    } finally {
+      setBackingUp(false);
+    }
+  }
 
   // Listen for the popup's postMessage.
   useEffect(() => {
@@ -242,15 +264,23 @@ function CloudBackupPage() {
 
         <section className="card-soft p-6">
           <h2 className="mb-2 text-lg font-semibold">Viimane varundus</h2>
-          <p className="text-sm text-muted-foreground">Pole veel varundatud.</p>
+          {lastBackup ? (
+            <p className="text-sm text-muted-foreground">
+              {new Date(lastBackup.at).toLocaleString()} · {lastBackup.entries} kirjet · {lastBackup.files} faili
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Automaatne — uueneb iga muudatuse järel.</p>
+          )}
         </section>
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button
             className="brand-gradient-bg text-primary-foreground sm:w-auto"
-            disabled
+            disabled={!gdriveConnected || backingUp}
+            onClick={runFullBackup}
           >
-            <CloudUpload className="mr-2 h-4 w-4" /> Varunda kohe
+            {backingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudUpload className="mr-2 h-4 w-4" />}
+            {backingUp ? "Varundan..." : "Varunda kohe"}
           </Button>
           <Button variant="outline" disabled className="sm:w-auto">
             <RotateCcw className="mr-2 h-4 w-4" /> Taasta varukoopiast
