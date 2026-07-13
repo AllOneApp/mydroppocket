@@ -37,6 +37,7 @@ export function VoiceInput({ context, onResult, size = "sm", variant = "outline"
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const autoStartedRef = useRef(false);
+  const startedAtRef = useRef<number>(0);
 
   async function start() {
     try {
@@ -56,6 +57,7 @@ export function VoiceInput({ context, onResult, size = "sm", variant = "outline"
         finish(rec.mimeType || "audio/webm");
       };
       rec.start();
+      startedAtRef.current = Date.now();
       recorderRef.current = rec;
       setState("recording");
       console.info("[VoiceInput] client:recording", { context, mime: rec.mimeType });
@@ -82,9 +84,10 @@ export function VoiceInput({ context, onResult, size = "sm", variant = "outline"
   async function finish(mimeType: string) {
     setState("processing");
     try {
+      const elapsedMs = Date.now() - (startedAtRef.current || Date.now());
       const blob = new Blob(chunksRef.current, { type: mimeType });
       console.info("[VoiceInput] client:finish", { context, mimeType, blobSize: blob.size, chunks: chunksRef.current.length });
-      if (blob.size < 1024) {
+      if (elapsedMs < 1000 || blob.size < 1024) {
         toast.error(t("voice.tooShort"));
         setState("idle");
         return;
