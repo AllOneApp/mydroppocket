@@ -168,6 +168,15 @@ const CATEGORY_TO_FOLDER: Record<BackupCategory, string> = {
   recurring_payment_instances: "Järelmaksulepingud",
 };
 
+// Kasutajale nähtav Exceli faili nimi kategooria kaustas.
+const CATEGORY_TO_XLSX: Record<BackupCategory, string> = {
+  warranties: "Garantiid.xlsx",
+  expenses: "Tulud ja kulud.xlsx",
+  agreements: "Lepingud.xlsx",
+  recurring_payments: "Püsimaksed.xlsx",
+  recurring_payment_instances: "Järelmaksulepingud.xlsx",
+};
+
 const ALL_CATEGORIES: BackupCategory[] = [
   "warranties",
   "expenses",
@@ -176,7 +185,28 @@ const ALL_CATEGORIES: BackupCategory[] = [
   "recurring_payment_instances",
 ];
 
-async function writeCategoryJson(params: {
+function rowsToXlsxBytes(rows: Array<Record<string, unknown>>, sheetName: string): Uint8Array {
+  // Lazy require so xlsx is only pulled in on the server.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const XLSX = require("xlsx") as typeof import("xlsx");
+  // Flatten unknown values so cells stay readable.
+  const flat = rows.map((r) => {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(r)) {
+      if (v === null || v === undefined) out[k] = "";
+      else if (typeof v === "object") out[k] = JSON.stringify(v);
+      else out[k] = v;
+    }
+    return out;
+  });
+  const ws = XLSX.utils.json_to_sheet(flat);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31) || "Andmed");
+  const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  return new Uint8Array(buf);
+}
+
+async function writeCategoryXlsx(params: {
   userId: string;
   supabase: import("@supabase/supabase-js").SupabaseClient;
   accessToken: string;
@@ -184,7 +214,8 @@ async function writeCategoryJson(params: {
   subfolders: Record<string, string>;
   category: BackupCategory;
 }): Promise<{ count: number }> {
-  const { ensureSubfolderId, upsertJsonInFolder } = await import("./google-drive.server");
+  const { ensureSubfolderId, upsertBytesInFolder, deleteFilesByNameInFolder } =
+    await import("./google-drive.server");
   const { data, error } = await params.supabase
     .from(params.category)
     .select("*")
@@ -199,18 +230,19 @@ async function writeCategoryJson(params: {
     subfolders: params.subfolders,
     name: folderName,
   });
-  const payload = {
-    backupVersion: 1,
-    category: params.category,
-    exportedAt: new Date().toISOString(),
-    count: rows.length,
-    entries: rows,
-  };
-  await upsertJsonInFolder({
+  const bytes = rowsToXlsxBytes(rows, folderName);
+  await upsertBytesInFolder({
+    accessToken: params.accessToken,
+    parentId,
+    name: CATEGORY_TO_XLSX[params.category],
+    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    bytes,
+  });
+  // Legacy cleanup: remove technical entries.json that used to live here.
+  await deleteFilesByNameInFolder({
     accessToken: params.accessToken,
     parentId,
     name: "entries.json",
-    json: payload,
   });
   return { count: rows.length };
 }
@@ -220,18 +252,27 @@ async function writeBackupInfo(params: {
   rootId: string;
   totals: { entries: number; files: number };
 }) {
-  const { upsertJsonInFolder } = await import("./google-drive.server");
-  await upsertJsonInFolder({
+  const { upsertBytesInFolder, deleteFilesByNameInFolder } = await import("./google-drive.server");
+  const info = [
+    { Väli: "Viimane varundus", Väärtus: new Date().toLocaleString("et-EE") },
+    { Väli: "Kirjeid kokku", Väärtus: params.totals.entries },
+    { Väli: "Faile kokku", Väärtus: params.totals.files },
+    { Väli: "Varunduse versioon", Väärtus: 1 },
+    { Väli: "Rakenduse versioon", Väärtus: "1.0.0" },
+  ];
+  const bytes = rowsToXlsxBytes(info, "Varunduse info");
+  await upsertBytesInFolder({
+    accessToken: params.accessToken,
+    parentId: params.rootId,
+    name: "Varunduse info.xlsx",
+    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    bytes,
+  });
+  // Legacy cleanup at root.
+  await deleteFilesByNameInFolder({
     accessToken: params.accessToken,
     parentId: params.rootId,
     name: "backup-info.json",
-    json: {
-      backupVersion: 1,
-      lastBackup: new Date().toISOString(),
-      entries: params.totals.entries,
-      files: params.totals.files,
-      appVersion: "1.0.0",
-    },
   });
 }
 
