@@ -130,7 +130,7 @@ function ExpensesPage() {
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">{formatDate(r.expense_date)} · {t(`expenses.categories.${r.category}` as const, { defaultValue: r.category })}{r.store ? ` · ${r.store}` : ""}</p>
                   </button>
-                  <p className={`shrink-0 text-lg font-semibold ${isIncome ? "text-green-600" : ""}`}>{isIncome ? "+" : "−"}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
+                  <p className={`shrink-0 text-lg font-semibold ${isIncome ? "text-green-600" : "text-red-600"}`}>{isIncome ? "+" : "−"}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
                 </div>
                 <div className="mt-3"><RecordActions filePath={r.file_path} fileName={r.file_name} onDelete={() => del(r)} /></div>
               </div>
@@ -152,17 +152,19 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => makeForm(row, prefill));
-  const [showUpload, setShowUpload] = useState(false);
+  const [inputMode, setInputMode] = useState<"voice" | "upload" | "manual" | null>(null);
   const [autoVoice, setAutoVoice] = useState(false);
 
   useEffect(() => {
     if (open) {
       setForm(makeForm(row, prefill));
       setFile(null);
-      setShowUpload(initialMode === "upload");
+      setInputMode(initialMode ?? null);
       setAutoVoice(initialMode === "voice");
     }
   }, [open, row, prefill, initialMode]);
+
+  const showUpload = inputMode === "upload";
 
   const isIncome = form.type === "income";
   const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
