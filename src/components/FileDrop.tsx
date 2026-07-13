@@ -30,10 +30,10 @@ export function FileDrop({
         }`}
       >
         {file ? (
-          <div className="flex w-full items-center gap-3">
-            <FileIcon className="h-5 w-5 text-primary" />
-            <div className="flex-1 truncate text-left text-sm">{file.name}</div>
-            <Button type="button" variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onFile(null); }}>
+          <div className="flex w-full min-w-0 items-center gap-3">
+            <FileIcon className="h-5 w-5 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left text-sm">{file.name}</div>
+            <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={(e) => { e.stopPropagation(); onFile(null); }}>
               <X className="h-4 w-4" />
             </Button>
           </div>
