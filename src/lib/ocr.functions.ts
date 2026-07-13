@@ -11,6 +11,11 @@ const InputSchema = z.object({
   base64: z.string(),
 });
 
+const SUPPORTED_IMAGE_MIMES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif"];
+const SUPPORTED_DOC_MIMES = ["application/pdf"];
+// Approx byte size from base64 length. Gemini limit ~20MB inline.
+const MAX_INLINE_BYTES = 20 * 1024 * 1024;
+
 export const extractDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => InputSchema.parse(data))
