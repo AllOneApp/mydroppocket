@@ -26,7 +26,11 @@ export function FileDrop({
         }}
         onClick={() => ref.current?.click()}
         className={`flex w-full min-w-0 max-w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
-          drag ? "border-primary bg-accent/40" : "border-border hover:bg-muted/40"
+          drag
+            ? "border-primary bg-primary/15"
+            : file
+              ? "border-primary/60 bg-primary/5"
+              : "border-primary bg-primary/10 hover:bg-primary/15 animate-pulse"
         }`}
       >
         {file ? (
@@ -39,9 +43,9 @@ export function FileDrop({
           </div>
         ) : (
           <>
-            <UploadCloud className="mb-2 h-6 w-6 text-muted-foreground" />
-            <p className="text-sm font-medium">{t("file.drop")}</p>
-            <p className="text-xs text-muted-foreground">{t("file.types")}</p>
+            <UploadCloud className="mb-2 h-6 w-6 text-primary" />
+            <p className="text-sm font-medium text-primary">{t("file.drop")}</p>
+            <p className="text-xs text-primary/70">{t("file.types")}</p>
           </>
         )}
         <input
