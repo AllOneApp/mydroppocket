@@ -141,12 +141,30 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
       toast.error(t("file.pickFirst", { defaultValue: "Please add a file first" }));
       return;
     }
+    if (file.size === 0) {
+      console.error("[scan] file is empty", { name: file.name });
+      toast.error("Selected file is empty.");
+      return;
+    }
+    console.info("[scan] warranty starting", { name: file.name, type: file.type, size: file.size });
     setScanning(true);
     try {
       const base64 = await fileToBase64(file);
+      if (!base64) {
+        console.error("[scan] fileToBase64 returned empty");
+        toast.error("Could not read file contents.");
+        return;
+      }
       const res = await extract({ data: { kind: "warranty", mime: file.type || "application/octet-stream", base64 } });
+      console.info("[scan] warranty response", res);
       if (res.ok) {
         const d = res.data;
+        const filled = [d.product_name, d.store, d.purchase_date, d.amount, d.currency]
+          .some((v) => v !== null && v !== undefined && v !== "");
+        if (!filled) {
+          toast.error(t("common.noDataFound", { defaultValue: "No usable data found on the document." }));
+          return;
+        }
         setForm((f) => ({
           ...f,
           product_name: (d.product_name as string) || f.product_name,
