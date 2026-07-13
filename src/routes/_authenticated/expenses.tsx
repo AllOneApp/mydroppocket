@@ -270,7 +270,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] min-w-0 max-w-full overflow-x-hidden overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("expenses.editTitle") : t("expenses.addTitle")}</DialogTitle></DialogHeader>
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} className="w-full min-w-0 max-w-full space-y-4 overflow-hidden">
           <div className="flex flex-wrap items-center justify-center gap-2">
             <div className="inline-flex rounded-lg border border-border p-0.5">
               <button type="button" onClick={() => setForm({ ...form, type: "expense", category: EXPENSE_CATEGORIES.includes(form.category) ? form.category : "Other" })} className={`rounded-md px-3 py-1.5 text-sm ${!isIncome ? "bg-red-500 text-white" : "text-muted-foreground"}`}>{t("expenses.typeExpense")}</button>
