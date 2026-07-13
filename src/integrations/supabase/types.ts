@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      agreement_attachments: {
+        Row: {
+          agreement_id: string
+          created_at: string
+          file_mime: string | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          gdrive_file_id: string | null
+          id: string
+          sort_order: number
+          user_id: string
+        }
+        Insert: {
+          agreement_id: string
+          created_at?: string
+          file_mime?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          gdrive_file_id?: string | null
+          id?: string
+          sort_order?: number
+          user_id: string
+        }
+        Update: {
+          agreement_id?: string
+          created_at?: string
+          file_mime?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          gdrive_file_id?: string | null
+          id?: string
+          sort_order?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_attachments_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "agreements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agreements: {
         Row: {
           agreement_number: string | null
@@ -26,6 +73,7 @@ export type Database = {
           file_name: string | null
           file_path: string | null
           gdrive_file_id: string | null
+          gdrive_folder_id: string | null
           id: string
           monthly_payment: number | null
           notes: string | null
@@ -47,6 +95,7 @@ export type Database = {
           file_name?: string | null
           file_path?: string | null
           gdrive_file_id?: string | null
+          gdrive_folder_id?: string | null
           id?: string
           monthly_payment?: number | null
           notes?: string | null
@@ -68,6 +117,7 @@ export type Database = {
           file_name?: string | null
           file_path?: string | null
           gdrive_file_id?: string | null
+          gdrive_folder_id?: string | null
           id?: string
           monthly_payment?: number | null
           notes?: string | null
