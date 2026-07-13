@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { pickLang, setLang, type Lang } from "@/i18n";
 import { Cloud, ChevronRight } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/settings")({
+export const Route = createFileRoute("/_authenticated/settings/")({
   head: () => ({ meta: [{ title: "Settings — DropPocket" }] }),
   component: SettingsPage,
 });
