@@ -268,25 +268,36 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
           </div>
           <div className="grid grid-cols-3 gap-2">
             <VoiceInput
-              context={isIncome ? "income" : "expense"}
+              context="expense_or_income"
               variant="outline"
               className="h-11 w-full justify-center"
               autoStart={autoVoice}
-              onResult={(d) => setForm((f) => ({
-                ...f,
-                // Never let the AI override the user-selected entry type.
-                amount: d.amount != null ? String(d.amount) : f.amount,
-                currency: (d.currency as string) || f.currency,
-                store: (d.store as string) || f.store,
-                expense_date: (d.expense_date as string) || f.expense_date,
-                category: (() => {
-                  const c = d.category as string | undefined;
-                  if (!c) return f.category;
-                  const allowed = f.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-                  return allowed.includes(c) ? c : f.category;
-                })(),
-                description: (d.description as string) || f.description,
-              }))}
+              onResult={(d) => {
+                const aiType = d.type === "income" || d.type === "expense" ? d.type : null;
+                if (!aiType) {
+                  toast(t("voice.pickType", { defaultValue: "Kas soovid lisada selle tuluna või kuluna?" }));
+                }
+                setForm((f) => {
+                  const nextType: EntryType = aiType ?? f.type;
+                  const allowed = nextType === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+                  const rawCat = d.category as string | undefined;
+                  const nextCat = rawCat && allowed.includes(rawCat)
+                    ? rawCat
+                    : (nextType !== f.type
+                        ? (nextType === "income" ? "Salary" : "Other")
+                        : f.category);
+                  return {
+                    ...f,
+                    type: nextType,
+                    amount: d.amount != null ? String(d.amount) : f.amount,
+                    currency: (d.currency as string) || f.currency,
+                    store: (d.store as string) || f.store,
+                    expense_date: (d.expense_date as string) || f.expense_date,
+                    category: nextCat,
+                    description: (d.description as string) || f.description,
+                  };
+                });
+              }}
             />
             <Button type="button" variant={showUpload ? "secondary" : "outline"} onClick={() => setShowUpload((v) => !v)} className="h-11 w-full justify-center">
               <Upload className="mr-1.5 h-4 w-4" />{t("expenses.uploadReceipt")}

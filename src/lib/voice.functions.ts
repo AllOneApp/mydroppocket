@@ -144,8 +144,15 @@ function promptFor(kind: (typeof Kinds)[number], lang: string) {
       return `The user is attaching a document and describing what it belongs to. Detect which module (warranties/expenses/agreements) and the key search keyword (product name, company, or store). ${langNote}`;
     case "recurring_payment":
       return `Extract a recurring payment (subscription, utility, installment, streaming, insurance, etc.) from a spoken note. Detect service_name, provider, category, amount, currency, frequency (monthly/bimonthly/quarterly/semiannual/annual), due_day (day of month), start_date, end_date and next_due_date. Map Estonian frequency words: "iga kuu"→monthly, "kord aastas"/"aastane"→annual, "kord kvartalis"→quarterly, "iga 2 kuu tagant"→bimonthly, "kord poolaastas"→semiannual. Map Estonian category words to English: telefon→Phone, internet→Internet, elekter→Electricity, vesi→Water, prügi→Waste, kindlustus→Insurance, voogedastus/striiming→Streaming, tarkvara→Software, liising→Leasing, järelmaks→Installment, kodulaen→Mortgage, tellimus→Subscription, kommunaal→Utilities, TV/kaabel→TV, pilv→CloudStorage. Full dates like "15. august 2026" become YYYY-MM-DD (2026-08-15). Currency defaults to EUR. ${langNote}`;
-    default:
-      return `Extract a financial record from a spoken note. Decide type=expense (spending) or income (received). Pick a category from: expense=${ExpenseCategories.join(", ")}; income=${IncomeCategories.join(", ")}. Map Estonian words to these categories: toit/toidukaubad→Groceries, kütus/bensiin→Fuel, restoran/söök väljas→Restaurant, kohv→Coffee, juuksur→Hairdresser, küüned→Nails, ost/pood/riided→Shopping, arst/apteek/tervis→Healthcare, reis/reisimine→Travel, lemmikloom→Pets; palk→Salary, müük→Sale, kingitus→Gift, investeering/dividend→Investment, tagastus→Refund. "Prisma/Rimi/Selver/Maxima/Coop" are grocery stores → store field, category=Groceries. Currency defaults to EUR. If no date is given use today (${t}). ${langNote}`;
+      return `Extract a financial record from a spoken note in natural Estonian. You MUST decide type=expense (spending) or income (received) whenever the user makes it clear.
+
+ALWAYS set type=income when the transcript contains any of these Estonian words or phrases (case-insensitive, any form): "tulu", "tuludesse", "tuluna", "sissetulek", "sissetulekuna", "palk"/"palka", "müügitulu", "teenisin", "teenis", "laekus", "laekumine", "sain palka", "sain raha", "kandis üle mulle". Never treat these as expense.
+
+ALWAYS set type=expense when the transcript contains any of these Estonian words or phrases: "kulu", "kuludesse", "kuluna", "ostsin", "ost", "maksin", "tasusin", "arve", "arved", "makse", "kulutasin", "raha läks". Never treat these as income.
+
+If the transcript contains NEITHER an income nor an expense keyword AND does not otherwise clearly imply which one it is (e.g. "lisa 30 eurot", "lisa uus kirje", "pane see kirja"), set type=null so the UI can ask the user. Do not guess.
+
+Pick a category from: expense=${ExpenseCategories.join(", ")}; income=${IncomeCategories.join(", ")}. Map Estonian words to these categories: toit/toidukaubad→Groceries, kütus/bensiin→Fuel, restoran/söök väljas→Restaurant, kohv→Coffee, juuksur→Hairdresser, küüned→Nails, ost/pood/riided→Shopping, arst/apteek/tervis→Healthcare, reis/reisimine→Travel, lemmikloom→Pets; palk→Salary, müük→Sale, kingitus→Gift, investeering/dividend→Investment, tagastus→Refund. "Prisma/Rimi/Selver/Maxima/Coop/Maxima/Coop/Kaubamaja" are grocery stores → store field, category=Groceries. "Tele2/Elisa/Telia" are telecom providers → store field. Fill every field you can infer (amount, currency, store, category, description, expense_date). Currency defaults to EUR. If no date is given use today (${t}). ${langNote}`;
   }
 }
 
@@ -220,9 +227,20 @@ function normalizeVoiceOutput(kind: (typeof Kinds)[number], output: Record<strin
       väljaminek: "expense",
       valjaminek: "expense",
       expense: "expense",
+      ostsin: "expense",
+      ost: "expense",
+      maksin: "expense",
+      tasusin: "expense",
+      arve: "expense",
       tulu: "income",
       sissetulek: "income",
       income: "income",
+      palk: "income",
+      palka: "income",
+      teenisin: "income",
+      laekus: "income",
+      müügitulu: "income",
+      muugitulu: "income",
     }, ["expense", "income"]);
     normalized.category = normalizeCategory(normalized.category, {
       toit: "Groceries",
