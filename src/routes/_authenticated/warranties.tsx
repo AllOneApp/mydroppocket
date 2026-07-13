@@ -219,9 +219,9 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden p-4 sm:w-full sm:max-w-lg sm:p-6">
         <DialogHeader><DialogTitle>{row ? t("warranties.editTitle") : t("warranties.addTitle")}</DialogTitle></DialogHeader>
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} className="w-full min-w-0 max-w-full space-y-4 overflow-hidden">
           <div className="flex justify-end">
             <VoiceInput
               context="warranty"
