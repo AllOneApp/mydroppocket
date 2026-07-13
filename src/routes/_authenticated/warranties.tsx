@@ -15,7 +15,7 @@ import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile, warrantyStatus } from "@/lib/records";
-import { syncFileToGoogleDrive } from "@/lib/google-drive.functions";
+import { syncFileToGoogleDrive, syncBackupCategory, deleteGoogleDriveFile } from "@/lib/google-drive.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
@@ -60,6 +60,9 @@ function WarrantiesPage() {
     if (!confirm(t("warranties.confirmDelete"))) return;
     if (r.file_path) await deleteFile(r.file_path);
     await supabase.from("warranties").delete().eq("id", r.id);
+    const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
+    if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
+    try { await syncBackupCategory({ data: { category: "warranties" } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
     qc.invalidateQueries({ queryKey: ["warranties"] });
     toast.success(t("common.deleted"));
   }
@@ -203,6 +206,7 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
           console.warn("[gdrive] warranty sync failed", err);
         }
       }
+      try { await syncBackupCategory({ data: { category: "warranties" } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       qc.invalidateQueries({ queryKey: ["warranties"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success(row ? t("common.updated") : t("warranties.added"));
