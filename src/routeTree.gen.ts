@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedWarrantiesRouteImport } from './routes/_authenticated/warranties'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedRecurringRouteImport } from './routes/_authenticated/recurring'
 import { Route as AuthenticatedExpensesRouteImport } from './routes/_authenticated/expenses'
@@ -47,6 +48,11 @@ const AuthenticatedWarrantiesRoute = AuthenticatedWarrantiesRouteImport.update({
   path: '/warranties',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSearchRoute = AuthenticatedSearchRouteImport.update({
   id: '/search',
   path: '/search',
@@ -74,15 +80,15 @@ const AuthenticatedAgreementsRoute = AuthenticatedAgreementsRouteImport.update({
 } as any)
 const AuthenticatedSettingsIndexRoute =
   AuthenticatedSettingsIndexRouteImport.update({
-    id: '/settings/',
-    path: '/settings/',
-    getParentRoute: () => AuthenticatedRouteRoute,
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedSettingsCloudBackupRoute =
   AuthenticatedSettingsCloudBackupRouteImport.update({
-    id: '/settings/cloud-backup',
-    path: '/settings/cloud-backup',
-    getParentRoute: () => AuthenticatedRouteRoute,
+    id: '/cloud-backup',
+    path: '/cloud-backup',
+    getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const ApiPublicGoogleDriveCallbackRoute =
   ApiPublicGoogleDriveCallbackRouteImport.update({
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/expenses': typeof AuthenticatedExpensesRoute
   '/recurring': typeof AuthenticatedRecurringRoute
   '/search': typeof AuthenticatedSearchRoute
+  '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/warranties': typeof AuthenticatedWarrantiesRoute
   '/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -130,6 +137,7 @@ export interface FileRoutesById {
   '/_authenticated/expenses': typeof AuthenticatedExpensesRoute
   '/_authenticated/recurring': typeof AuthenticatedRecurringRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/_authenticated/warranties': typeof AuthenticatedWarrantiesRoute
   '/_authenticated/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -146,6 +154,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/recurring'
     | '/search'
+    | '/settings'
     | '/warranties'
     | '/settings/cloud-backup'
     | '/settings/'
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/_authenticated/expenses'
     | '/_authenticated/recurring'
     | '/_authenticated/search'
+    | '/_authenticated/settings'
     | '/_authenticated/warranties'
     | '/_authenticated/settings/cloud-backup'
     | '/_authenticated/settings/'
@@ -226,6 +236,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWarrantiesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/search': {
       id: '/_authenticated/search'
       path: '/search'
@@ -263,17 +280,17 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/settings/': {
       id: '/_authenticated/settings/'
-      path: '/settings'
+      path: '/'
       fullPath: '/settings/'
       preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/settings/cloud-backup': {
       id: '/_authenticated/settings/cloud-backup'
-      path: '/settings/cloud-backup'
+      path: '/cloud-backup'
       fullPath: '/settings/cloud-backup'
       preLoaderRoute: typeof AuthenticatedSettingsCloudBackupRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/api/public/google-drive/callback': {
       id: '/api/public/google-drive/callback'
@@ -285,15 +302,29 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedSettingsRouteChildren {
+  AuthenticatedSettingsCloudBackupRoute: typeof AuthenticatedSettingsCloudBackupRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
+}
+
+const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
+  AuthenticatedSettingsCloudBackupRoute: AuthenticatedSettingsCloudBackupRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
+}
+
+const AuthenticatedSettingsRouteWithChildren =
+  AuthenticatedSettingsRoute._addFileChildren(
+    AuthenticatedSettingsRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAgreementsRoute: typeof AuthenticatedAgreementsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedExpensesRoute: typeof AuthenticatedExpensesRoute
   AuthenticatedRecurringRoute: typeof AuthenticatedRecurringRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
   AuthenticatedWarrantiesRoute: typeof AuthenticatedWarrantiesRoute
-  AuthenticatedSettingsCloudBackupRoute: typeof AuthenticatedSettingsCloudBackupRoute
-  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -302,9 +333,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedExpensesRoute: AuthenticatedExpensesRoute,
   AuthenticatedRecurringRoute: AuthenticatedRecurringRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRouteWithChildren,
   AuthenticatedWarrantiesRoute: AuthenticatedWarrantiesRoute,
-  AuthenticatedSettingsCloudBackupRoute: AuthenticatedSettingsCloudBackupRoute,
-  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
