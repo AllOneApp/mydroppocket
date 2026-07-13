@@ -434,7 +434,7 @@ export async function upsertBytesInFolder(opts: {
           Authorization: `Bearer ${opts.accessToken}`,
           "Content-Type": opts.mime,
         },
-        body: opts.bytes,
+        body: opts.bytes as BodyInit,
       },
     );
     const text = await res.text();
