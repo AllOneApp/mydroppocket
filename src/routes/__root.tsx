@@ -209,7 +209,7 @@ function RootComponent() {
     })();
     return () => {
       data.subscription.unsubscribe();
-      void supabase.removeChannel(expensesChannel);
+      if (expensesChannel) void supabase.removeChannel(expensesChannel);
     };
   }, [router, queryClient]);
 
