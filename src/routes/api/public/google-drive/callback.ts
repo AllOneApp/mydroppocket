@@ -84,6 +84,7 @@ export const Route = createFileRoute("/api/public/google-drive/callback")({
 
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+          const subfoldersMap = Object.fromEntries(folders.subfolders.map((s) => [s.name, s.id]));
           const { error } = await supabaseAdmin.from("google_drive_connections").upsert(
             {
               user_id: state.userId,
@@ -95,6 +96,7 @@ export const Route = createFileRoute("/api/public/google-drive/callback")({
               scope: tokens.scope,
               root_folder_id: folders.rootId,
               root_folder_name: folders.rootName,
+              subfolders_json: subfoldersMap,
               updated_at: new Date().toISOString(),
             },
             { onConflict: "user_id" },
