@@ -2,6 +2,21 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /**
+ * Read the app's current language from the browser (i18next persists it in
+ * localStorage under `dp_lang`). Falls back to Estonian — the app default.
+ * Safe to call in SSR: returns "et" when window is absent.
+ */
+export function currentBackupLang(): "et" | "en" {
+  if (typeof window === "undefined") return "et";
+  try {
+    const v = window.localStorage.getItem("dp_lang");
+    return v === "en" ? "en" : "et";
+  } catch {
+    return "et";
+  }
+}
+
+/**
  * Start Google Drive OAuth. Returns the authorization URL to open in a popup.
  * Signed state carries the app user id back through Google.
  */
