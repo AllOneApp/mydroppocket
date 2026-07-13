@@ -20,6 +20,7 @@ import { Route as AuthenticatedRecurringRouteImport } from './routes/_authentica
 import { Route as AuthenticatedExpensesRouteImport } from './routes/_authenticated/expenses'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAgreementsRouteImport } from './routes/_authenticated/agreements'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedSettingsCloudBackupRouteImport } from './routes/_authenticated/settings.cloud-backup'
 import { Route as ApiPublicGoogleDriveCallbackRouteImport } from './routes/api/public/google-drive/callback'
 
@@ -77,6 +78,12 @@ const AuthenticatedAgreementsRoute = AuthenticatedAgreementsRouteImport.update({
   path: '/agreements',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 const AuthenticatedSettingsCloudBackupRoute =
   AuthenticatedSettingsCloudBackupRouteImport.update({
     id: '/cloud-backup',
@@ -102,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/warranties': typeof AuthenticatedWarrantiesRoute
   '/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/google-drive/callback': typeof ApiPublicGoogleDriveCallbackRoute
 }
 export interface FileRoutesByTo {
@@ -113,9 +121,9 @@ export interface FileRoutesByTo {
   '/expenses': typeof AuthenticatedExpensesRoute
   '/recurring': typeof AuthenticatedRecurringRoute
   '/search': typeof AuthenticatedSearchRoute
-  '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/warranties': typeof AuthenticatedWarrantiesRoute
   '/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
   '/api/public/google-drive/callback': typeof ApiPublicGoogleDriveCallbackRoute
 }
 export interface FileRoutesById {
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/_authenticated/warranties': typeof AuthenticatedWarrantiesRoute
   '/_authenticated/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/google-drive/callback': typeof ApiPublicGoogleDriveCallbackRoute
 }
 export interface FileRouteTypes {
@@ -148,6 +157,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/warranties'
     | '/settings/cloud-backup'
+    | '/settings/'
     | '/api/public/google-drive/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -159,9 +169,9 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/recurring'
     | '/search'
-    | '/settings'
     | '/warranties'
     | '/settings/cloud-backup'
+    | '/settings'
     | '/api/public/google-drive/callback'
   id:
     | '__root__'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/warranties'
     | '/_authenticated/settings/cloud-backup'
+    | '/_authenticated/settings/'
     | '/api/public/google-drive/callback'
   fileRoutesById: FileRoutesById
 }
@@ -267,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAgreementsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
     '/_authenticated/settings/cloud-backup': {
       id: '/_authenticated/settings/cloud-backup'
       path: '/cloud-backup'
@@ -286,10 +304,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedSettingsRouteChildren {
   AuthenticatedSettingsCloudBackupRoute: typeof AuthenticatedSettingsCloudBackupRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
   AuthenticatedSettingsCloudBackupRoute: AuthenticatedSettingsCloudBackupRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
 const AuthenticatedSettingsRouteWithChildren =
@@ -330,13 +350,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
