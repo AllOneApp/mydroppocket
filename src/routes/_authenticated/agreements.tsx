@@ -310,9 +310,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden p-4 sm:w-full sm:max-w-lg sm:p-6">
         <DialogHeader><DialogTitle>{row ? t("agreements.editTitle") : t("agreements.addTitle")}</DialogTitle></DialogHeader>
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} className="w-full min-w-0 max-w-full space-y-4 overflow-hidden">
           <div className="flex justify-end">
             <VoiceInput
               context="agreement"
@@ -342,7 +342,13 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             }}
           />
           {pendingFiles.length > 0 && (
-            <Button type="button" variant="outline" size="sm" onClick={scan} disabled={scanning} className="w-full">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => { void scan(); }}
+              disabled={scanning}
+              className="w-full"
+            >
               {scanning ? t("file.scanning") : t("file.autoFill")}
             </Button>
           )}
