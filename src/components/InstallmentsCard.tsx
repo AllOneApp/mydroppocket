@@ -354,39 +354,39 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
     </div>
 
     <Dialog open={!!payDialog} onOpenChange={(o) => { if (!o) setPayDialog(null); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-md gap-3 p-4 sm:p-6 max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-primary" />
             {t("installments.payDialogTitle", { defaultValue: "Makse andmed" })}
           </DialogTitle>
-          <DialogDescription>{payDialog?.row.title}</DialogDescription>
+          <DialogDescription className="break-words">{payDialog?.row.title}</DialogDescription>
         </DialogHeader>
         {payDialog && (
           <div className="space-y-3">
             <PayField
               label={t("installments.payeeName", { defaultValue: "Saaja nimi" })}
               value={payDialog.row.payee_name ?? ""}
-              copiedMsg={copiedMsg}
+              copiedMsg={t("installments.copied.payeeName", { defaultValue: "Saaja nimi kopeeritud" })}
               failedMsg={failedMsg}
             />
             <PayField
               label={t("agreements.bank", { defaultValue: "Pank" })}
               value={payDialog.row.bank ?? ""}
-              copiedMsg={copiedMsg}
+              copiedMsg={t("installments.copied.bank", { defaultValue: "Pank kopeeritud" })}
               failedMsg={failedMsg}
             />
             <PayField
               label={t("agreements.iban", { defaultValue: "Pangakonto (IBAN)" })}
               value={payDialog.row.iban ?? ""}
-              copiedMsg={copiedMsg}
+              copiedMsg={t("installments.copied.iban", { defaultValue: "Pangakonto kopeeritud" })}
               failedMsg={failedMsg}
               mono
             />
             <PayField
               label={t("agreements.referenceNumber", { defaultValue: "Viitenumber" })}
               value={payDialog.row.reference_number ?? ""}
-              copiedMsg={copiedMsg}
+              copiedMsg={t("installments.copied.reference", { defaultValue: "Viitenumber kopeeritud" })}
               failedMsg={failedMsg}
               mono
             />
@@ -394,7 +394,7 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
               label={t("installments.amount", { defaultValue: "Summa" })}
               value={formatCurrency(payDialog.amount, payDialog.row.currency ?? "EUR")}
               copyValue={String(payDialog.amount.toFixed(2))}
-              copiedMsg={copiedMsg}
+              copiedMsg={t("installments.copied.amount", { defaultValue: "Summa kopeeritud" })}
               failedMsg={failedMsg}
             />
             <PayField
@@ -409,7 +409,7 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
                       defaultValue: "Järelmaksu makse",
                     })
               }
-              copiedMsg={copiedMsg}
+              copiedMsg={t("installments.copied.description", { defaultValue: "Selgitus kopeeritud" })}
               failedMsg={failedMsg}
             />
           </div>
@@ -479,8 +479,11 @@ function PayField({
   return (
     <div className="rounded-lg border bg-card p-3">
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      <div className="mt-1 flex items-center gap-2">
-        <p className={`min-w-0 flex-1 truncate text-sm font-semibold ${mono ? "font-mono" : ""}`}>
+      <div className="mt-1 flex items-start gap-2">
+        <p
+          className={`min-w-0 flex-1 text-sm font-semibold [overflow-wrap:anywhere] break-words ${mono ? "font-mono" : ""}`}
+          title={value || undefined}
+        >
           {value || "—"}
         </p>
         <button
