@@ -703,32 +703,17 @@ function OverviewPage() {
       {/* Upcoming timeline */}
       <Section title={t("overview.upcoming", { defaultValue: "Tulevased kohustused (30 päeva)" })}>
         <div className="card-soft p-4">
-          {timeline.length === 0 ? (
-            <Empty />
-          ) : (
-            <ul className="divide-y divide-border">
-              {timeline.slice(0, 20).map((item, i) => {
-                const days = Math.max(0, Math.round((new Date(item.date + "T00:00:00").getTime() - Date.now()) / 86400000));
-                const rel = days === 0 ? "Täna" : days === 1 ? "Homme" : `${days} päeva pärast`;
-                const Icon = item.icon;
-                const badge = item.kind === "warranty" ? "bg-orange-100 text-orange-700" : item.kind === "installment" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700";
-                return (
-                  <li key={i} className="flex items-center gap-3 py-2.5">
-                    <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${badge}`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{item.label}</p>
-                      <p className="text-xs text-muted-foreground">📅 {rel} · {formatDate(item.date)}</p>
-                    </div>
-                    {item.amount !== undefined && (
-                      <p className="text-sm font-semibold">{formatCurrency(item.amount)}</p>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          {(() => {
+            const upcoming = events.filter((e) => e.date >= today && e.date <= in30Iso);
+            if (upcoming.length === 0) return <Empty />;
+            return (
+              <ul className="divide-y divide-border">
+                {upcoming.slice(0, 30).map((e) => (
+                  <EventRow key={e.id} e={e} today={today} tomorrowIso={tomorrowIso} next7Iso={next7Iso} t={t} />
+                ))}
+              </ul>
+            );
+          })()}
         </div>
       </Section>
 
