@@ -18,6 +18,7 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile, warrantyStatus } from "@/lib/records";
 import { syncFileToGoogleDrive, syncBackupCategory, deleteGoogleDriveFile, currentBackupLang } from "@/lib/google-drive.functions";
+import { syncWarranty, removeCalendarSource } from "@/lib/google-calendar.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
@@ -68,6 +69,7 @@ function WarrantiesPage() {
       if (r.file_path) { try { await deleteFile(r.file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
       const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
       if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
+      try { await removeCalendarSource({ data: { sourceType: "warranty", sourceId: r.id } }); } catch (e) { console.warn("[gcal] warranty remove failed", e); }
       try { await syncBackupCategory({ data: { category: "warranties", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["warranties"], refetchType: "active" }),
@@ -249,6 +251,9 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
         }
       }
       try { await syncBackupCategory({ data: { category: "warranties", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      if (recordId) {
+        try { await syncWarranty({ data: { warrantyId: recordId } }); } catch (e) { console.warn("[gcal] warranty sync failed", e); }
+      }
       qc.invalidateQueries({ queryKey: ["warranties"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success(row ? t("common.updated") : t("warranties.added"));
