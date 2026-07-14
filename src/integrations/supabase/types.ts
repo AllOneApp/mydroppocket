@@ -254,6 +254,7 @@ export type Database = {
         Row: {
           access_token_ciphertext: string
           access_token_expires_at: string
+          agreement_reminder_days: number[]
           calendar_id: string | null
           calendar_name: string
           connected_at: string
@@ -263,13 +264,18 @@ export type Database = {
           refresh_token_ciphertext: string
           reminder_minutes: number[]
           scope: string
+          sync_agreements: boolean
           sync_installments: boolean
+          sync_recurring: boolean
+          sync_warranties: boolean
           updated_at: string
           user_id: string
+          warranty_reminder_days: number[]
         }
         Insert: {
           access_token_ciphertext: string
           access_token_expires_at: string
+          agreement_reminder_days?: number[]
           calendar_id?: string | null
           calendar_name?: string
           connected_at?: string
@@ -279,13 +285,18 @@ export type Database = {
           refresh_token_ciphertext: string
           reminder_minutes?: number[]
           scope: string
+          sync_agreements?: boolean
           sync_installments?: boolean
+          sync_recurring?: boolean
+          sync_warranties?: boolean
           updated_at?: string
           user_id: string
+          warranty_reminder_days?: number[]
         }
         Update: {
           access_token_ciphertext?: string
           access_token_expires_at?: string
+          agreement_reminder_days?: number[]
           calendar_id?: string | null
           calendar_name?: string
           connected_at?: string
@@ -295,9 +306,13 @@ export type Database = {
           refresh_token_ciphertext?: string
           reminder_minutes?: number[]
           scope?: string
+          sync_agreements?: boolean
           sync_installments?: boolean
+          sync_recurring?: boolean
+          sync_warranties?: boolean
           updated_at?: string
           user_id?: string
+          warranty_reminder_days?: number[]
         }
         Relationships: []
       }
