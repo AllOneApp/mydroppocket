@@ -145,6 +145,48 @@ export type Database = {
         }
         Relationships: []
       }
+      calendar_events: {
+        Row: {
+          calendar_id: string
+          created_at: string
+          event_date: string
+          google_event_id: string
+          id: string
+          sequence: number
+          source_id: string
+          source_type: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calendar_id: string
+          created_at?: string
+          event_date: string
+          google_event_id: string
+          id?: string
+          sequence?: number
+          source_id: string
+          source_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calendar_id?: string
+          created_at?: string
+          event_date?: string
+          google_event_id?: string
+          id?: string
+          sequence?: number
+          source_id?: string
+          source_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           amount: number
@@ -200,6 +242,57 @@ export type Database = {
           ocr_raw?: Json | null
           store?: string | null
           type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      google_calendar_connections: {
+        Row: {
+          access_token_ciphertext: string
+          access_token_expires_at: string
+          calendar_id: string | null
+          calendar_name: string
+          connected_at: string
+          google_email: string
+          google_sub: string
+          id: string
+          refresh_token_ciphertext: string
+          reminder_minutes: number[]
+          scope: string
+          sync_installments: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_ciphertext: string
+          access_token_expires_at: string
+          calendar_id?: string | null
+          calendar_name?: string
+          connected_at?: string
+          google_email: string
+          google_sub: string
+          id?: string
+          refresh_token_ciphertext: string
+          reminder_minutes?: number[]
+          scope: string
+          sync_installments?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_ciphertext?: string
+          access_token_expires_at?: string
+          calendar_id?: string | null
+          calendar_name?: string
+          connected_at?: string
+          google_email?: string
+          google_sub?: string
+          id?: string
+          refresh_token_ciphertext?: string
+          reminder_minutes?: number[]
+          scope?: string
+          sync_installments?: boolean
           updated_at?: string
           user_id?: string
         }

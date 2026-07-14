@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/records";
 import { formatDate } from "@/lib/format";
+import { syncInstallmentAgreement } from "@/lib/google-calendar.functions";
 import {
   Dialog,
   DialogContent,
@@ -159,6 +160,13 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
         .update({ payments_made: next })
         .eq("id", d.row.id);
       if (error) throw error;
+      // Best-effort: after marking paid, refresh the tracked Google Calendar event
+      // (removes the just-paid one and creates the next). No-op if not connected.
+      try {
+        await syncInstallmentAgreement({ data: { agreementId: d.row.id } });
+      } catch (e) {
+        console.warn("[gcal] sync after markPaid failed", e);
+      }
       return next;
     },
     onSuccess: () => {

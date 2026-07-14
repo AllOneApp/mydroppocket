@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 import { pickLang, setLang, type Lang } from "@/i18n";
-import { Cloud, ChevronRight } from "lucide-react";
+import { Cloud, ChevronRight, Calendar } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   head: () => ({ meta: [{ title: "Settings — DropPocket" }] }),
@@ -120,6 +120,28 @@ function SettingsPage() {
             <div>
               <p className="font-semibold">{t("settings.cloudBackup")}</p>
               <p className="text-sm text-muted-foreground">{t("settings.cloudBackupDesc")}</p>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </Link>
+
+        <Link
+          to="/settings/calendar-sync"
+          className="card-soft flex items-center justify-between gap-4 p-6 transition-colors hover:bg-accent/40"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+              <Calendar className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold">
+                {t("settings.calendarSync", { defaultValue: "Kalendri sünkroonimine" })}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t("settings.calendarSyncDesc", {
+                  defaultValue: "Ühenda Google Calendar ja lase MyDropPocketil ise maksed lisada.",
+                })}
+              </p>
             </div>
           </div>
           <ChevronRight className="h-5 w-5 text-muted-foreground" />
