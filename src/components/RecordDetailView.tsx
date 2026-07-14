@@ -62,25 +62,25 @@ export function RecordDetailView({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto overflow-x-hidden p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="break-words pr-8 text-xl leading-tight">{title}</DialogTitle>
-            {subtitle && <p className="break-words text-sm text-muted-foreground">{subtitle}</p>}
+        <DialogContent className="max-h-[95vh] w-[calc(100vw-0.5rem)] max-w-2xl overflow-y-auto overflow-x-hidden p-3 sm:w-[calc(100vw-1rem)] sm:p-6">
+          <DialogHeader className="min-w-0">
+            <DialogTitle className="pr-8 text-lg leading-tight [overflow-wrap:anywhere] sm:text-xl">{title}</DialogTitle>
+            {subtitle && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">{subtitle}</p>}
           </DialogHeader>
 
-          <div className="mt-4 space-y-6">
+          <div className="mt-4 min-w-0 space-y-6">
             {/* Info grid */}
             <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
               {fields.map((f, i) => (
                 <div key={i} className={`min-w-0 ${f.full ? "sm:col-span-2" : ""}`}>
                   <div className="text-xs uppercase tracking-wide text-muted-foreground">{f.label}</div>
-                  <div className="mt-0.5 text-sm font-medium [overflow-wrap:anywhere]">{f.value ?? "—"}</div>
+                  <div className="mt-0.5 min-w-0 whitespace-pre-wrap text-sm font-medium [overflow-wrap:anywhere]">{f.value ?? "—"}</div>
                 </div>
               ))}
             </div>
 
             {/* Attachments */}
-            <section>
+            <section className="min-w-0">
               <h3 className="mb-2 text-sm font-semibold">
                 {t("common.attachedDocuments", { defaultValue: "Lisatud dokumendid" })}
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
@@ -92,7 +92,7 @@ export function RecordDetailView({
                   {t("common.noAttachments", { defaultValue: "Lisatud faile pole." })}
                 </p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="min-w-0 space-y-2">
                   {attachments.map((a) => (
                     <li key={a.id} className="flex w-full min-w-0 items-center gap-2 rounded-lg border bg-card px-2 py-2 sm:px-3">
                       {isImage(a)
@@ -110,11 +110,11 @@ export function RecordDetailView({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="shrink-0"
+                        className="h-8 shrink-0 px-2"
                         onClick={() => setViewingFile({ name: a.name, filePath: a.filePath, mime: a.mime ?? null })}
                       >
-                        <Eye className="mr-1 h-3.5 w-3.5" />
-                        {t("common.open", { defaultValue: "Ava" })}
+                        <Eye className="h-3.5 w-3.5 sm:mr-1" />
+                        <span className="hidden sm:inline">{t("common.open", { defaultValue: "Ava" })}</span>
                       </Button>
                     </li>
                   ))}
