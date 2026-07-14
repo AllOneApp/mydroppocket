@@ -1,12 +1,31 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CreditCard, ArrowRight, Copy, Calendar, Wallet } from "lucide-react";
+import { CreditCard, ArrowRight, Copy, Calendar, Wallet, Check, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/records";
 import { formatDate } from "@/lib/format";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Row = {
   id: string;
@@ -20,6 +39,7 @@ type Row = {
   iban: string | null;
   bank: string | null;
   reference_number: string | null;
+  payments_made: number | null;
 };
 
 type Derived = {
@@ -28,6 +48,8 @@ type Derived = {
   amount: number;
   remaining: number | null;
   daysUntil: number;
+  paid: number;
+  totalPayments: number | null;
 };
 
 function addMonths(iso: string, n: number): string {
@@ -60,10 +82,8 @@ function derive(row: Row, todayIso: string): Derived | null {
     totalPayments = Math.max(1, monthsBetween(row.start_date, row.end_date) + 1);
   }
 
-  // Payment schedule: due dates at start_date, start_date+1m, ...
-  // paid count = number of due dates strictly before today.
-  const elapsed = Math.max(0, monthsBetween(row.start_date, todayIso));
-  const paid = totalPayments ? Math.min(elapsed, totalPayments) : elapsed;
+  // Manually tracked paid count via payments_made.
+  const paid = Math.max(0, Number(row.payments_made ?? 0));
   if (totalPayments && paid >= totalPayments) return null; // fully paid
 
   const nextDue = addMonths(row.start_date, paid);
@@ -73,7 +93,7 @@ function derive(row: Row, todayIso: string): Derived | null {
   const due = new Date(nextDue + "T00:00:00").getTime();
   const daysUntil = Math.round((due - today) / 86400000);
 
-  return { row, nextDue, amount: monthly, remaining, daysUntil };
+  return { row, nextDue, amount: monthly, remaining, daysUntil, paid, totalPayments };
 }
 
 function toneFor(daysUntil: number): "green" | "yellow" | "red" {
@@ -99,16 +119,9 @@ function toneDotClass(tone: "green" | "yellow" | "red"): string {
     : "bg-red-500";
 }
 
-async function copyPaymentDetails(d: Derived, copiedMsg: string, failedMsg: string) {
-  const parts: string[] = [];
-  if (d.row.iban) parts.push(`IBAN: ${d.row.iban}`);
-  if (d.row.bank) parts.push(`Pank: ${d.row.bank}`);
-  if (d.row.reference_number) parts.push(`Viitenumber: ${d.row.reference_number}`);
-  parts.push(`Summa: ${formatCurrency(d.amount, d.row.currency ?? "EUR")}`);
-  parts.push(`Selgitus: ${d.row.title}`);
-  const text = parts.join("\n");
+async function copyText(value: string, copiedMsg: string, failedMsg: string) {
   try {
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(value);
     toast.success(copiedMsg);
   } catch {
     toast.error(failedMsg);
@@ -117,13 +130,16 @@ async function copyPaymentDetails(d: Derived, copiedMsg: string, failedMsg: stri
 
 export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = {}) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [payDialog, setPayDialog] = useState<Derived | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: rows } = useQuery({
     queryKey: ["dashboard-installments"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("agreements")
-        .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number")
+        .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made")
         .eq("agreement_type", "installment");
       if (error) throw error;
       return (data ?? []) as Row[];
@@ -131,6 +147,28 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: async (d: Derived) => {
+      const next = d.paid + 1;
+      const { error } = await supabase
+        .from("agreements")
+        .update({ payments_made: next })
+        .eq("id", d.row.id);
+      if (error) throw error;
+      return next;
+    },
+    onSuccess: () => {
+      toast.success(t("installments.markedPaid", { defaultValue: "Makse märgitud tasutuks" }));
+      void queryClient.invalidateQueries({ queryKey: ["dashboard-installments"] });
+      void queryClient.invalidateQueries({ queryKey: ["agreements"] });
+      setConfirmOpen(false);
+      setPayDialog(null);
+    },
+    onError: () => {
+      toast.error(t("common.failed", { defaultValue: "Ebaõnnestus" }));
+    },
   });
 
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -166,6 +204,7 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
   const failedMsg = t("common.failed", { defaultValue: "Ebaõnnestus" });
 
   return (
+    <>
     <div className="mt-6">
       <div className="card-soft p-6">
         <div className="mb-4 flex items-center justify-between">
@@ -290,20 +329,144 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
 
                 <button
                   type="button"
-                  onClick={() => {
-                    void copyPaymentDetails(d, copiedMsg, failedMsg);
-                  }}
+                  onClick={() => setPayDialog(d)}
                   className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg brand-gradient-bg px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50 sm:w-auto"
-                  disabled={!d.row.iban && !d.row.reference_number}
                   aria-label={t("installments.pay", { defaultValue: "Maksa" })}
                 >
-                  <Copy className="h-3 w-3" />
+                  <CreditCard className="h-3 w-3" />
                   {t("installments.pay", { defaultValue: "Maksa" })}
                 </button>
               </li>
             );
           })}
         </ul>
+      </div>
+    </div>
+
+    <Dialog open={!!payDialog} onOpenChange={(o) => { if (!o) setPayDialog(null); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-primary" />
+            {t("installments.payDialogTitle", { defaultValue: "Makse andmed" })}
+          </DialogTitle>
+          <DialogDescription>{payDialog?.row.title}</DialogDescription>
+        </DialogHeader>
+        {payDialog && (
+          <div className="space-y-3">
+            <PayField
+              label={t("agreements.bank", { defaultValue: "Pank" })}
+              value={payDialog.row.bank ?? ""}
+              copiedMsg={copiedMsg}
+              failedMsg={failedMsg}
+            />
+            <PayField
+              label={t("agreements.iban", { defaultValue: "Pangakonto (IBAN)" })}
+              value={payDialog.row.iban ?? ""}
+              copiedMsg={copiedMsg}
+              failedMsg={failedMsg}
+              mono
+            />
+            <PayField
+              label={t("agreements.referenceNumber", { defaultValue: "Viitenumber" })}
+              value={payDialog.row.reference_number ?? ""}
+              copiedMsg={copiedMsg}
+              failedMsg={failedMsg}
+              mono
+            />
+            <PayField
+              label={t("installments.amount", { defaultValue: "Summa" })}
+              value={formatCurrency(payDialog.amount, payDialog.row.currency ?? "EUR")}
+              copyValue={String(payDialog.amount.toFixed(2))}
+              copiedMsg={copiedMsg}
+              failedMsg={failedMsg}
+            />
+            <PayField
+              label={t("installments.description", { defaultValue: "Selgitus" })}
+              value={payDialog.row.title}
+              copiedMsg={copiedMsg}
+              failedMsg={failedMsg}
+            />
+          </div>
+        )}
+        <DialogFooter className="mt-2 sm:flex-col sm:space-x-0 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            {t("installments.markPaid", { defaultValue: "Märgi makstuks" })}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {t("installments.confirmTitle", { defaultValue: "Kas oled kindel, et see makse on tasutud?" })}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {t("installments.confirmDesc", {
+              defaultValue: "See märgib makse MyDropPocketis tasutuks. Pangamakset ei tehta.",
+            })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t("common.cancel", { defaultValue: "Tühista" })}</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              if (payDialog) markPaidMutation.mutate(payDialog);
+            }}
+            disabled={markPaidMutation.isPending}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <Check className="mr-1 h-4 w-4" />
+            {t("installments.confirmYes", { defaultValue: "Jah, märgi makstuks" })}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
+  );
+}
+
+function PayField({
+  label,
+  value,
+  copyValue,
+  copiedMsg,
+  failedMsg,
+  mono,
+}: {
+  label: string;
+  value: string;
+  copyValue?: string;
+  copiedMsg: string;
+  failedMsg: string;
+  mono?: boolean;
+}) {
+  const toCopy = (copyValue ?? value).trim();
+  const disabled = !toCopy;
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      <div className="mt-1 flex items-center gap-2">
+        <p className={`min-w-0 flex-1 truncate text-sm font-semibold ${mono ? "font-mono" : ""}`}>
+          {value || "—"}
+        </p>
+        <button
+          type="button"
+          onClick={() => void copyText(toCopy, copiedMsg, failedMsg)}
+          disabled={disabled}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs font-medium transition hover:bg-muted disabled:opacity-50"
+          aria-label={`Copy ${label}`}
+        >
+          <Copy className="h-3 w-3" />
+        </button>
       </div>
     </div>
   );

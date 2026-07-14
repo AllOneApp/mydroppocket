@@ -233,12 +233,9 @@ function AgreementDetail({
   }
   let paidCount = 0;
   let isPaidOff = false;
-  if (isInstallment && row?.start_date && monthly > 0 && totalPayments) {
-    const today = new Date();
-    const a = new Date(row.start_date + "T00:00:00");
-    let m = (today.getFullYear() - a.getFullYear()) * 12 + (today.getMonth() - a.getMonth());
-    if (today.getDate() < a.getDate()) m -= 1;
-    paidCount = Math.min(Math.max(0, m), totalPayments);
+  if (isInstallment && row && totalPayments) {
+    const raw = Number((row as unknown as { payments_made?: number | null }).payments_made ?? 0);
+    paidCount = Math.min(Math.max(0, raw), totalPayments);
     isPaidOff = paidCount >= totalPayments;
   }
 
