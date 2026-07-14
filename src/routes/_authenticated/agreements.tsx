@@ -2,7 +2,7 @@ import { formatDate } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 
@@ -51,8 +51,38 @@ type Row = {
   id: string; title: string; agreement_type: string; company: string | null; agreement_number: string | null;
   start_date: string | null; end_date: string | null; monthly_payment: number | null; total_amount: number | null;
   currency: string | null; notes: string | null;
+  iban: string | null; bank: string | null; reference_number: string | null;
   file_path: string | null; file_name: string | null;
 };
+
+const BANK_OPTIONS = ["Swedbank", "SEB", "LHV", "Coop Pank", "Luminor", "Inbank", "Bigbank", "Holm Bank", "TF Bank"];
+
+function CopyableValue({ value }: { value: string | null | undefined }) {
+  const { t } = useTranslation();
+  if (!value) return <>—</>;
+  async function onCopy() {
+    try {
+      await navigator.clipboard.writeText(value as string);
+      toast.success(t("agreements.copied", { defaultValue: "Copied" }));
+    } catch {
+      toast.error(t("common.failed"));
+    }
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="break-all">{value}</span>
+      <button
+        type="button"
+        onClick={() => { void onCopy(); }}
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-accent"
+        aria-label={t("agreements.copy", { defaultValue: "Copy" })}
+        title={t("agreements.copy", { defaultValue: "Copy" })}
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </button>
+    </span>
+  );
+}
 
 function AgreementsPage() {
   const qc = useQueryClient();
