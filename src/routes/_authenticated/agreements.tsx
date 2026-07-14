@@ -19,6 +19,7 @@ import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
 import { syncAgreementAttachments, syncBackupCategory, deleteGoogleDriveFile, deleteAgreementDriveFolder, currentBackupLang } from "@/lib/google-drive.functions";
+import { syncInstallmentAgreement } from "@/lib/google-calendar.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
 
@@ -491,6 +492,10 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       }
 
       try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      // Best-effort: if this is an installment, refresh its Google Calendar event.
+      if (recordId && form.agreement_type === "installment") {
+        try { await syncInstallmentAgreement({ data: { agreementId: recordId } }); } catch (e) { console.warn("[gcal] installment sync failed", e); }
+      }
       qc.invalidateQueries({ queryKey: ["agreements"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success(row ? t("common.updated") : t("agreements.added"));
