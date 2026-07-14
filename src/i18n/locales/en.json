@@ -43,7 +43,8 @@
     "installments": "Installments",
     "agreements": "Agreements",
     "search": "Search",
-    "settings": "Settings"
+    "settings": "Settings",
+    "overview": "Overview"
   },
   "landing": {
     "badge": "AI-powered receipt scanning",
