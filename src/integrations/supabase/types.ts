@@ -65,6 +65,7 @@ export type Database = {
         Row: {
           agreement_number: string | null
           agreement_type: string
+          bank: string | null
           company: string | null
           created_at: string
           currency: string | null
@@ -74,10 +75,12 @@ export type Database = {
           file_path: string | null
           gdrive_file_id: string | null
           gdrive_folder_id: string | null
+          iban: string | null
           id: string
           monthly_payment: number | null
           notes: string | null
           ocr_raw: Json | null
+          reference_number: string | null
           start_date: string | null
           title: string
           total_amount: number | null
@@ -87,6 +90,7 @@ export type Database = {
         Insert: {
           agreement_number?: string | null
           agreement_type?: string
+          bank?: string | null
           company?: string | null
           created_at?: string
           currency?: string | null
@@ -96,10 +100,12 @@ export type Database = {
           file_path?: string | null
           gdrive_file_id?: string | null
           gdrive_folder_id?: string | null
+          iban?: string | null
           id?: string
           monthly_payment?: number | null
           notes?: string | null
           ocr_raw?: Json | null
+          reference_number?: string | null
           start_date?: string | null
           title: string
           total_amount?: number | null
@@ -109,6 +115,7 @@ export type Database = {
         Update: {
           agreement_number?: string | null
           agreement_type?: string
+          bank?: string | null
           company?: string | null
           created_at?: string
           currency?: string | null
@@ -118,10 +125,12 @@ export type Database = {
           file_path?: string | null
           gdrive_file_id?: string | null
           gdrive_folder_id?: string | null
+          iban?: string | null
           id?: string
           monthly_payment?: number | null
           notes?: string | null
           ocr_raw?: Json | null
+          reference_number?: string | null
           start_date?: string | null
           title?: string
           total_amount?: number | null
