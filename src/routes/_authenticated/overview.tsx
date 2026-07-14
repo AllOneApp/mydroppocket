@@ -819,3 +819,99 @@ function recurringEmoji(category: string | null, name: string): string {
   if (/mortg|hüpo|leasing|loan/.test(c)) return "🏦";
   return "🔁";
 }
+
+type EventRowProps = {
+  e: {
+    id: string;
+    date: string;
+    kind: "installment" | "recurring" | "warranty" | "agreement_end";
+    title: string;
+    emoji: string;
+    typeLabel: string;
+    amount?: number;
+    currency?: string;
+    href: string;
+    action: "pay" | "view";
+  };
+  today: string;
+  tomorrowIso: string;
+  next7Iso: string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+};
+
+function EventRow({ e, today, tomorrowIso, next7Iso, t }: EventRowProps) {
+  const overdue = e.date < today;
+  const isToday = e.date === today;
+  const isTomorrow = e.date === tomorrowIso;
+  const in7 = e.date <= next7Iso;
+
+  const tone: "red" | "yellow" | "green" =
+    overdue || isToday ? "red" : in7 ? "yellow" : "green";
+  const dotClass =
+    tone === "red" ? "bg-red-500" : tone === "yellow" ? "bg-yellow-500" : "bg-green-500";
+  const badgeClass =
+    tone === "red"
+      ? "bg-red-50 text-red-700 border-red-200"
+      : tone === "yellow"
+      ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+      : "bg-green-50 text-green-700 border-green-200";
+
+  const days = Math.round(
+    (new Date(e.date + "T00:00:00").getTime() - new Date(today + "T00:00:00").getTime()) / 86400000,
+  );
+  const rel = overdue
+    ? t("overview.overdueDays", { defaultValue: "{{n}} p hilinenud", n: -days })
+    : isToday
+    ? t("overview.today", { defaultValue: "Täna" })
+    : isTomorrow
+    ? t("overview.tomorrow", { defaultValue: "Homme" })
+    : t("overview.inDays", { defaultValue: "{{n}} p pärast", n: days });
+
+  return (
+    <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <div className="flex flex-col items-center rounded-lg border bg-muted/30 px-2 py-1 text-center sm:min-w-[64px]">
+          <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
+          <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {formatDate(e.date).replace(/,.*/, "")}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">
+            <span className="mr-1" aria-hidden>{e.emoji}</span>
+            {e.title}
+          </p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+            <span>{e.typeLabel}</span>
+            <span className={`rounded-full border px-1.5 py-0.5 text-[10px] ${badgeClass}`}>{rel}</span>
+          </div>
+        </div>
+        {e.amount !== undefined && (
+          <p className="shrink-0 text-sm font-semibold">
+            {formatCurrency(e.amount, e.currency ?? "EUR")}
+          </p>
+        )}
+      </div>
+      <Link
+        to={e.href}
+        className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:ml-3 ${
+          e.action === "pay"
+            ? "brand-gradient-bg text-primary-foreground hover:opacity-90"
+            : "border bg-card hover:bg-muted"
+        }`}
+      >
+        {e.action === "pay" ? (
+          <>
+            <CreditCard className="h-3.5 w-3.5" />
+            {t("overview.pay", { defaultValue: "Maksa" })}
+          </>
+        ) : (
+          <>
+            <Eye className="h-3.5 w-3.5" />
+            {t("overview.view", { defaultValue: "Vaata" })}
+          </>
+        )}
+      </Link>
+    </li>
+  );
+}
