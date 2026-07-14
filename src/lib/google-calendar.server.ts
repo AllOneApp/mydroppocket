@@ -345,6 +345,7 @@ type AgreementRow = {
   payments_made: number | null;
   agreement_number: string | null;
   payee_name: string | null;
+  payment_day_of_month: number | null;
 };
 
 function addMonths(iso: string, n: number): string {
@@ -366,11 +367,53 @@ function monthsBetween(from: string, to: string): number {
 }
 
 interface InstallmentPlan {
-  nextDue: string;
+  schedule: string[]; // ISO date for each installment (index = sequence)
   paid: number;
-  totalPayments: number | null;
+  totalPayments: number;
   amount: number;
   finished: boolean;
+}
+
+function pad2(n: number) {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+/**
+ * Compute the ISO date for a given installment sequence (0-based).
+ * Uses `payment_day_of_month` (1..31) when set:
+ *   - First payment (seq=0) is the nearest day-of-month on or after start_date.
+ *     If start_date's day <= dom → same month; otherwise → next month.
+ *   - Subsequent payments add one month each, clamped to the month's last day.
+ * If payment_day_of_month is not set, falls back to start_date + seq months.
+ */
+function installmentDate(startIso: string, seq: number, dom: number | null): string {
+  const [ys, ms, ds] = startIso.split("-").map((n) => parseInt(n, 10));
+  if (!dom || dom < 1 || dom > 31) {
+    // Fallback: legacy behaviour, add months to start date.
+    const d = new Date(ys, ms - 1, ds);
+    const dayOrig = d.getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + seq);
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(dayOrig, last));
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+  // First payment month
+  let year = ys;
+  let month0 = ms - 1; // 0-based
+  const lastDayStart = new Date(year, month0 + 1, 0).getDate();
+  const domInStartMonth = Math.min(dom, lastDayStart);
+  if (ds > domInStartMonth) {
+    // start_date already past this month's due day → first payment next month
+    month0 += 1;
+  }
+  // Add seq months
+  month0 += seq;
+  year += Math.floor(month0 / 12);
+  month0 = ((month0 % 12) + 12) % 12;
+  const lastDay = new Date(year, month0 + 1, 0).getDate();
+  const day = Math.min(dom, lastDay);
+  return `${year}-${pad2(month0 + 1)}-${pad2(day)}`;
 }
 
 function planInstallment(row: AgreementRow): InstallmentPlan | null {
@@ -384,17 +427,29 @@ function planInstallment(row: AgreementRow): InstallmentPlan | null {
   } else if (row.end_date) {
     totalPayments = Math.max(1, monthsBetween(row.start_date, row.end_date) + 1);
   }
+  if (totalPayments === null) return null;
+
+  const dom = row.payment_day_of_month != null ? Number(row.payment_day_of_month) : null;
+  const schedule: string[] = [];
+  for (let i = 0; i < totalPayments; i++) {
+    schedule.push(installmentDate(row.start_date, i, dom));
+  }
   const paid = Math.max(0, Number(row.payments_made ?? 0));
-  const finished = totalPayments !== null && paid >= totalPayments;
-  const nextDue = addMonths(row.start_date, paid);
-  return { nextDue, paid, totalPayments, amount: monthly, finished };
+  const finished = paid >= totalPayments;
+  return { schedule, paid, totalPayments, amount: monthly, finished };
 }
 
 function formatAmount(n: number, currency: string): string {
   return `${n.toFixed(2).replace(".", ",")} ${currency}`;
 }
 
-function buildInstallmentEvent(row: AgreementRow, plan: InstallmentPlan, reminderMinutes: number[]): EventInput {
+function buildInstallmentEvent(
+  row: AgreementRow,
+  plan: InstallmentPlan,
+  seq: number,
+  date: string,
+  reminderMinutes: number[],
+): EventInput {
   const currency = row.currency ?? "EUR";
   const lines: string[] = [];
   if (row.bank) lines.push(`Pank: ${row.bank}`);
@@ -403,13 +458,11 @@ function buildInstallmentEvent(row: AgreementRow, plan: InstallmentPlan, reminde
   if (row.reference_number) lines.push(`Viitenumber: ${row.reference_number}`);
   lines.push(`Summa: ${formatAmount(plan.amount, currency)}`);
   if (row.agreement_number) lines.push(`Lepingu nr: ${row.agreement_number}`);
-  if (plan.totalPayments !== null) {
-    lines.push(`Makse ${plan.paid + 1}/${plan.totalPayments}`);
-  }
+  lines.push(`Makse ${seq + 1}/${plan.totalPayments}`);
   return {
-    title: `💳 ${row.title} – järelmaks`,
+    title: `💳 ${row.title} – makse ${seq + 1}/${plan.totalPayments}`,
     description: lines.join("\n"),
-    date: plan.nextDue,
+    date,
     reminderMinutes,
   };
 }
@@ -423,7 +476,12 @@ function buildInstallmentEvent(row: AgreementRow, plan: InstallmentPlan, reminde
 export async function syncInstallmentForUser(opts: {
   userId: string;
   agreementId: string;
-}): Promise<{ status: "created" | "updated" | "removed" | "skipped" | "not-connected" }> {
+}): Promise<{
+  status: "created" | "updated" | "removed" | "skipped" | "not-connected";
+  created?: number;
+  updated?: number;
+  removed?: number;
+}> {
   const conn = await getValidCalendarAccessTokenForUser(opts.userId);
   if (!conn) return { status: "not-connected" };
   if (!conn.syncInstallments) return { status: "skipped" };
@@ -434,7 +492,7 @@ export async function syncInstallmentForUser(opts: {
   const { data: agRow, error: agErr } = await dbAny
     .from("agreements")
     .select(
-      "id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, user_id",
+      "id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, payment_day_of_month, user_id",
     )
     .eq("id", opts.agreementId)
     .maybeSingle();
@@ -445,101 +503,127 @@ export async function syncInstallmentForUser(opts: {
   const row = agRow as unknown as AgreementRow;
   const plan = planInstallment(row);
 
-  // Look up existing tracked event
-  const { data: trackedData } = await dbAny
+  // Look up all existing tracked events for this agreement.
+  const { data: trackedRows } = await dbAny
     .from("calendar_events")
-    .select("id, google_event_id, calendar_id, event_date, status")
+    .select("id, sequence, google_event_id, calendar_id, event_date, status")
     .eq("user_id", opts.userId)
     .eq("source_type", "installment")
-    .eq("source_id", opts.agreementId)
-    .maybeSingle();
-  const tracked = trackedData as null | {
+    .eq("source_id", opts.agreementId);
+  const tracked = (trackedRows ?? []) as Array<{
     id: string;
+    sequence: number;
     google_event_id: string;
     calendar_id: string;
     event_date: string;
     status: string;
+  }>;
+  const bySeq = new Map<number, (typeof tracked)[number]>();
+  for (const t of tracked) bySeq.set(t.sequence, t);
+
+  let created = 0;
+  let updated = 0;
+  let removed = 0;
+
+  const deleteTracked = async (t: (typeof tracked)[number]) => {
+    try {
+      await deleteEvent({
+        accessToken: conn.accessToken,
+        calendarId: t.calendar_id,
+        eventId: t.google_event_id,
+      });
+    } catch (e) {
+      console.warn("[gcal] delete failed", e);
+    }
+    await dbAny.from("calendar_events").delete().eq("id", t.id);
+    removed++;
   };
 
-  // If plan invalid or finished, remove any existing tracked event.
-  if (!plan || plan.finished) {
-    if (tracked) {
-      try {
-        await deleteEvent({
-          accessToken: conn.accessToken,
-          calendarId: tracked.calendar_id,
-          eventId: tracked.google_event_id,
-        });
-      } catch (e) {
-        console.warn("[gcal] delete failed", e);
-      }
-      await dbAny.from("calendar_events").delete().eq("id", tracked.id);
-      return { status: "removed" };
+  // Plan invalid → remove everything tracked.
+  if (!plan) {
+    for (const t of tracked) await deleteTracked(t);
+    return { status: removed > 0 ? "removed" : "skipped", removed };
+  }
+
+  // Desired sequences = [paid .. total-1]. Everything else tracked must go.
+  const desiredSeqs = new Set<number>();
+  for (let i = plan.paid; i < plan.totalPayments; i++) desiredSeqs.add(i);
+
+  for (const t of tracked) {
+    if (!desiredSeqs.has(t.sequence)) {
+      await deleteTracked(t);
     }
-    return { status: "skipped" };
   }
 
-  const desired = buildInstallmentEvent(row, plan, conn.reminderMinutes);
-
-  if (!tracked) {
-    const created = await createEvent({
-      accessToken: conn.accessToken,
-      calendarId: conn.calendarId,
-      event: desired,
-    });
-    await dbAny.from("calendar_events").insert({
-      user_id: opts.userId,
-      source_type: "installment",
-      source_id: opts.agreementId,
-      sequence: plan.paid,
-      google_event_id: created.id,
-      calendar_id: conn.calendarId,
-      event_date: plan.nextDue,
-      status: "active",
-    });
-    return { status: "created" };
-  }
-
-  // Update in place (whether date changed or content changed).
-  try {
-    await patchEvent({
-      accessToken: conn.accessToken,
-      calendarId: tracked.calendar_id,
-      eventId: tracked.google_event_id,
-      event: desired,
-    });
-    await dbAny
-      .from("calendar_events")
-      .update({
-        event_date: plan.nextDue,
-        sequence: plan.paid,
+  // Upsert desired events.
+  for (const seq of desiredSeqs) {
+    const date = plan.schedule[seq];
+    const desired = buildInstallmentEvent(row, plan, seq, date, conn.reminderMinutes);
+    const existing = bySeq.get(seq);
+    if (!existing) {
+      const c = await createEvent({
+        accessToken: conn.accessToken,
+        calendarId: conn.calendarId,
+        event: desired,
+      });
+      await dbAny.from("calendar_events").insert({
+        user_id: opts.userId,
+        source_type: "installment",
+        source_id: opts.agreementId,
+        sequence: seq,
+        google_event_id: c.id,
         calendar_id: conn.calendarId,
+        event_date: date,
         status: "active",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", tracked.id);
-    return { status: "updated" };
-  } catch (e) {
-    // If the event was deleted in Google, recreate.
-    console.warn("[gcal] patch failed, recreating", e);
-    const created = await createEvent({
-      accessToken: conn.accessToken,
-      calendarId: conn.calendarId,
-      event: desired,
-    });
-    await dbAny
-      .from("calendar_events")
-      .update({
-        google_event_id: created.id,
-        calendar_id: conn.calendarId,
-        event_date: plan.nextDue,
-        sequence: plan.paid,
-        status: "active",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", tracked.id);
-    return { status: "created" };
+      });
+      created++;
+      continue;
+    }
+    // Only patch if date changed or calendar changed. (Skip cheap no-ops.)
+    if (existing.event_date === date && existing.calendar_id === conn.calendarId) {
+      continue;
+    }
+    try {
+      await patchEvent({
+        accessToken: conn.accessToken,
+        calendarId: existing.calendar_id,
+        eventId: existing.google_event_id,
+        event: desired,
+      });
+      await dbAny
+        .from("calendar_events")
+        .update({
+          event_date: date,
+          calendar_id: conn.calendarId,
+          status: "active",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+      updated++;
+    } catch (e) {
+      console.warn("[gcal] patch failed, recreating", e);
+      const c = await createEvent({
+        accessToken: conn.accessToken,
+        calendarId: conn.calendarId,
+        event: desired,
+      });
+      await dbAny
+        .from("calendar_events")
+        .update({
+          google_event_id: c.id,
+          calendar_id: conn.calendarId,
+          event_date: date,
+          status: "active",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+      created++;
+    }
   }
+
+  const status: "created" | "updated" | "removed" | "skipped" =
+    created > 0 ? "created" : updated > 0 ? "updated" : removed > 0 ? "removed" : "skipped";
+  return { status, created, updated, removed };
 }
 
 export async function syncAllInstallmentsForUser(userId: string): Promise<{
@@ -567,10 +651,16 @@ export async function syncAllInstallmentsForUser(userId: string): Promise<{
   for (const r of rows) {
     try {
       const res = await syncInstallmentForUser({ userId, agreementId: r.id });
-      if (res.status === "created") created++;
-      else if (res.status === "updated") updated++;
-      else if (res.status === "removed") removed++;
-      else skipped++;
+      created += res.created ?? 0;
+      updated += res.updated ?? 0;
+      removed += res.removed ?? 0;
+      if (
+        (res.created ?? 0) === 0 &&
+        (res.updated ?? 0) === 0 &&
+        (res.removed ?? 0) === 0
+      ) {
+        skipped++;
+      }
     } catch (e) {
       console.warn("[gcal] sync installment failed", r.id, e);
       skipped++;
