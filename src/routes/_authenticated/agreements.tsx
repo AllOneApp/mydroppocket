@@ -316,6 +316,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
     bank: row?.bank ?? "",
     reference_number: row?.reference_number ?? "",
     payee_name: row?.payee_name ?? "",
+    payment_day_of_month: row?.payment_day_of_month != null ? String(row.payment_day_of_month) : "",
   }));
 
   // Load existing attachments when editing.
@@ -369,7 +370,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
-        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes, d.iban, d.bank, d.reference_number, d.payee_name]
+        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes, d.iban, d.bank, d.reference_number, d.payee_name, d.payment_day_of_month]
           .some((v) => v !== null && v !== undefined && v !== "");
         if (!filled) {
           toast.error(t("agreements.analysisNoData"));
@@ -394,6 +395,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           bank: (d.bank as string) || f.bank,
           reference_number: (d.reference_number as string) || f.reference_number,
           payee_name: (d.payee_name as string) || f.payee_name,
+          payment_day_of_month: d.payment_day_of_month != null ? String(d.payment_day_of_month) : f.payment_day_of_month,
         }));
         toast.success(t("common.autoFilled"));
       } else {
@@ -430,6 +432,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         bank: form.bank || null,
         reference_number: form.reference_number ? form.reference_number.replace(/\s+/g, "") : null,
         payee_name: form.payee_name || null,
+        payment_day_of_month: form.payment_day_of_month ? Number(form.payment_day_of_month) : null,
         ...(legacyRemoved ? { file_path: null, file_name: null, file_mime: null } : {}),
       };
 
