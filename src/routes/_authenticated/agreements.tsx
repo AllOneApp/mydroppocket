@@ -268,6 +268,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
     total_amount: row?.total_amount?.toString() ?? "",
     currency: row?.currency ?? "EUR",
     notes: row?.notes ?? "",
+    iban: row?.iban ?? "",
+    bank: row?.bank ?? "",
+    reference_number: row?.reference_number ?? "",
   }));
 
   // Load existing attachments when editing.
