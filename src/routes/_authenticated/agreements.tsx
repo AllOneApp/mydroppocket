@@ -380,6 +380,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         total_amount: form.total_amount ? Number(form.total_amount) : null,
         currency: form.currency,
         notes: form.notes || null,
+        iban: form.iban ? form.iban.replace(/\s+/g, "").toUpperCase() : null,
+        bank: form.bank || null,
+        reference_number: form.reference_number ? form.reference_number.replace(/\s+/g, "") : null,
         ...(legacyRemoved ? { file_path: null, file_name: null, file_mime: null } : {}),
       };
 
