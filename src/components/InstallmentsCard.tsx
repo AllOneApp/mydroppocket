@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CreditCard, ArrowRight, Copy } from "lucide-react";
+import { CreditCard, ArrowRight, Copy, Calendar, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
@@ -91,6 +91,14 @@ function toneClass(tone: "green" | "yellow" | "red"): string {
     : "text-red-600";
 }
 
+function toneDotClass(tone: "green" | "yellow" | "red"): string {
+  return tone === "green"
+    ? "bg-green-500"
+    : tone === "yellow"
+    ? "bg-yellow-500"
+    : "bg-red-500";
+}
+
 async function copyPaymentDetails(d: Derived, copiedMsg: string, failedMsg: string) {
   const parts: string[] = [];
   if (d.row.iban) parts.push(`IBAN: ${d.row.iban}`);
@@ -146,6 +154,13 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
     .reduce((s, d) => s + d.amount, 0);
   const overdue = derived.filter((d) => d.daysUntil < 0).length;
   const next = derived[0];
+  const totalRemaining = derived.reduce(
+    (s, d) => (d.remaining !== null ? s + d.amount * d.remaining : s),
+    0,
+  );
+  const avgMonthly = derived.length > 0
+    ? derived.reduce((s, d) => s + d.amount, 0) / derived.length
+    : 0;
 
   const copiedMsg = t("agreements.copied", { defaultValue: "Kopeeritud" });
   const failedMsg = t("common.failed", { defaultValue: "Ebaõnnestus" });
@@ -176,7 +191,7 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <MiniStat
             label={t("installments.active", { defaultValue: "Aktiivseid lepinguid" })}
             value={String(derived.length)}
@@ -188,48 +203,97 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
             tone="orange"
           />
           <MiniStat
+            label={t("installments.totalRemaining", { defaultValue: "Kokku jäänud tasuda" })}
+            value={formatCurrency(totalRemaining)}
+            tone="orange"
+          />
+          <MiniStat
+            label={t("installments.avgMonthly", { defaultValue: "Keskmine kuumakse" })}
+            value={formatCurrency(avgMonthly)}
+            tone="green"
+          />
+          <MiniStat
             label={t("installments.overdue", { defaultValue: "Hilinenud" })}
             value={String(overdue)}
             tone={overdue > 0 ? "red" : "green"}
           />
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {t("installments.nextDue", { defaultValue: "Järgmine makse" })}
-            </p>
-            <p className="mt-1 text-base font-bold">{next ? formatDate(next.nextDue) : "—"}</p>
-          </div>
         </div>
 
-        <ul className="mt-5 divide-y divide-border">
+        {next && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            <span className="font-medium">
+              {t("installments.nextDue", { defaultValue: "Järgmine makse" })}:
+            </span>{" "}
+            {formatDate(next.nextDue)}
+          </p>
+        )}
+
+        <ul className="mt-5 space-y-3">
           {(fullPage ? derived : derived.slice(0, 5)).map((d) => {
             const tone = toneFor(d.daysUntil);
             return (
-              <li key={d.row.id} className="flex items-center justify-between gap-3 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{d.row.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    <span className={toneClass(tone)}>📅 {formatDate(d.nextDue)}</span>
-                    {" · "}
-                    <span className="font-semibold">
-                      {formatCurrency(d.amount, d.row.currency ?? "EUR")}
-                    </span>
-                    {d.remaining !== null && (
-                      <>
-                        {" · "}
-                        {t("installments.remainingCount", {
-                          defaultValue: "Jäänud {{count}}",
-                          count: d.remaining,
-                        })}
-                      </>
-                    )}
+              <li
+                key={d.row.id}
+                className="rounded-xl border bg-card p-3 sm:p-4"
+              >
+                <div className="flex items-start gap-2">
+                  <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <p className="min-w-0 flex-1 text-sm font-semibold [overflow-wrap:anywhere]">
+                    {d.row.title}
                   </p>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${toneClass(tone)}`}
+                    aria-hidden
+                  >
+                    <span className={`mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle ${toneDotClass(tone)}`} />
+                    {d.daysUntil < 0
+                      ? t("installments.overdue", { defaultValue: "Hilinenud" })
+                      : d.daysUntil === 0
+                      ? t("installments.today", { defaultValue: "Täna" })
+                      : t("installments.inDays", { defaultValue: "{{n}} p", n: d.daysUntil })}
+                  </span>
                 </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1 text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      {t("installments.nextDue", { defaultValue: "Järgmine makse" })}
+                    </p>
+                    <p className={`mt-0.5 font-semibold ${toneClass(tone)}`}>
+                      {formatDate(d.nextDue)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1 text-muted-foreground">
+                      <Wallet className="h-3 w-3" />
+                      {t("installments.amount", { defaultValue: "Summa" })}
+                    </p>
+                    <p className="mt-0.5 font-semibold">
+                      {formatCurrency(d.amount, d.row.currency ?? "EUR")}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-muted-foreground">
+                      {t("installments.remainingLabel", { defaultValue: "Jäänud" })}
+                    </p>
+                    <p className="mt-0.5 font-semibold">
+                      {d.remaining !== null
+                        ? t("installments.remainingCountFull", {
+                            defaultValue: "{{count}} makset",
+                            count: d.remaining,
+                          })
+                        : "—"}
+                    </p>
+                  </div>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => {
                     void copyPaymentDetails(d, copiedMsg, failedMsg);
                   }}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg brand-gradient-bg px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg brand-gradient-bg px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50 sm:w-auto"
                   disabled={!d.row.iban && !d.row.reference_number}
                   aria-label={t("installments.pay", { defaultValue: "Maksa" })}
                 >
