@@ -514,7 +514,8 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 
       try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       // Best-effort: if this is an installment, refresh its Google Calendar event.
-      if (recordId && form.agreement_type === "installment") {
+      // Also refresh agreement-end events for non-installment types with an end date.
+      if (recordId) {
         try { await syncInstallmentAgreement({ data: { agreementId: recordId } }); } catch (e) { console.warn("[gcal] installment sync failed", e); }
       }
       qc.invalidateQueries({ queryKey: ["agreements"] });
