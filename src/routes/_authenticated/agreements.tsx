@@ -69,8 +69,8 @@ function CopyableValue({ value }: { value: string | null | undefined }) {
     }
   }
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="break-all">{value}</span>
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{value}</span>
       <button
         type="button"
         onClick={() => { void onCopy(); }}
