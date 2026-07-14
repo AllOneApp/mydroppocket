@@ -52,6 +52,7 @@ type Row = {
   start_date: string | null; end_date: string | null; monthly_payment: number | null; total_amount: number | null;
   currency: string | null; notes: string | null;
   iban: string | null; bank: string | null; reference_number: string | null;
+  payee_name: string | null;
   file_path: string | null; file_name: string | null;
 };
 
@@ -266,6 +267,7 @@ function AgreementDetail({
         { label: t("agreements.monthly"), value: row.monthly_payment != null ? formatCurrency(Number(row.monthly_payment), currency) : "—" },
         { label: t("agreements.total"), value: row.total_amount != null ? formatCurrency(Number(row.total_amount), currency) : "—" },
         { label: t("agreements.bank"), value: row.bank || "—" },
+        { label: t("agreements.payeeName", { defaultValue: "Saaja nimi" }), value: <CopyableValue value={row.payee_name} /> },
         { label: t("agreements.iban"), value: <CopyableValue value={row.iban} /> },
         { label: t("agreements.referenceNumber"), value: <CopyableValue value={row.reference_number} /> },
         { label: t("agreements.notes"), value: row.notes || "—", full: true },
@@ -310,6 +312,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
     iban: row?.iban ?? "",
     bank: row?.bank ?? "",
     reference_number: row?.reference_number ?? "",
+    payee_name: row?.payee_name ?? "",
   }));
 
   // Load existing attachments when editing.
@@ -363,7 +366,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
-        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes, d.iban, d.bank, d.reference_number]
+        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes, d.iban, d.bank, d.reference_number, d.payee_name]
           .some((v) => v !== null && v !== undefined && v !== "");
         if (!filled) {
           toast.error(t("agreements.analysisNoData"));
@@ -387,6 +390,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           iban: (d.iban as string) || f.iban,
           bank: (d.bank as string) || f.bank,
           reference_number: (d.reference_number as string) || f.reference_number,
+          payee_name: (d.payee_name as string) || f.payee_name,
         }));
         toast.success(t("common.autoFilled"));
       } else {
@@ -422,6 +426,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         iban: form.iban ? form.iban.replace(/\s+/g, "").toUpperCase() : null,
         bank: form.bank || null,
         reference_number: form.reference_number ? form.reference_number.replace(/\s+/g, "") : null,
+        payee_name: form.payee_name || null,
         ...(legacyRemoved ? { file_path: null, file_name: null, file_mime: null } : {}),
       };
 
@@ -579,6 +584,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             <div><Label>{t("agreements.referenceNumber")}</Label><Input inputMode="numeric" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} /></div>
           </div>
           <div><Label>{t("agreements.iban")}</Label><Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="EE00 0000 0000 0000 0000" /></div>
+          <div><Label>{t("agreements.payeeName", { defaultValue: "Saaja nimi" })}</Label><Input value={form.payee_name} onChange={(e) => setForm({ ...form, payee_name: e.target.value })} placeholder="AS Inbank Finance" /></div>
           <div><Label>{t("agreements.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>

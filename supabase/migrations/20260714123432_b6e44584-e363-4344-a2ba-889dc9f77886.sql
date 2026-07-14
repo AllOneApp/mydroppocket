@@ -1,0 +1,1 @@
+ALTER TABLE public.agreements ADD COLUMN IF NOT EXISTS payee_name text;
