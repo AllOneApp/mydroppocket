@@ -324,7 +324,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
-        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes]
+        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes, d.iban, d.bank, d.reference_number]
           .some((v) => v !== null && v !== undefined && v !== "");
         if (!filled) {
           toast.error(t("agreements.analysisNoData"));
