@@ -21,6 +21,8 @@ Treat every attached image and PDF, in the exact order supplied, as pages or app
 
 First identify whether it is an installment/consumer-credit agreement, service agreement, purchase contract, warranty extension, or another contract. Installment agreements may use terms such as credit amount, financed amount, repayment schedule, monthly instalment, total repayable amount, and contract number. Service agreements may use customer number, service period, monthly fee, provider, and termination date.
 
+CRITICAL PAYMENT FIELDS — always search every page (including payment/instructions/appendix pages and any small print, tables, or footers) for the bank account (IBAN), the bank name, and the payment reference number. These fields are frequently near labels such as "Arvelduskonto", "Pangakonto", "Konto", "IBAN", "Saaja konto", "Makse saaja", "Panga rekvisiidid", "Bank", "Bank account", "Beneficiary account", "Viitenumber", "Viide", "Makseviide", "Reference", "Reference number", "Payment reference". Return them verbatim from the document; never invent them.
+
 Extract these fields independently. A missing field must be null and must never prevent other fields from being returned:
 - title: the document title or a concise descriptive title
 - agreement_type: exactly installment, warranty_extension, purchase_contract, service, or contract
@@ -185,7 +187,7 @@ const KNOWN_BANKS = [
 function normalizeIban(value: unknown) {
   const text = asText(value);
   if (!text) return null;
-  const compact = text.replace(/\s+/g, "").toUpperCase();
+  const compact = text.replace(/[\s\-.]/g, "").toUpperCase();
   if (/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(compact)) return compact;
   return null;
 }
@@ -203,7 +205,7 @@ function normalizeBank(value: unknown) {
 function normalizeReference(value: unknown) {
   const text = asText(value);
   if (!text) return null;
-  const digits = text.replace(/\s+/g, "");
+  const digits = text.replace(/[\s\-.]/g, "");
   if (/^\d{2,20}$/.test(digits)) return digits;
   return null;
 }

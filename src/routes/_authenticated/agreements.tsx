@@ -324,7 +324,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
-        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes]
+        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes, d.iban, d.bank, d.reference_number]
           .some((v) => v !== null && v !== undefined && v !== "");
         if (!filled) {
           toast.error(t("agreements.analysisNoData"));
@@ -489,6 +489,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             }}
           />
           {pendingFiles.length > 0 && (
+            <>
             <Button
               type="button"
               variant="secondary"
@@ -498,6 +499,10 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             >
               {scanning ? t("file.scanning") : t("file.autoFill")}
             </Button>
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
+              {t("file.aiWarning")}
+            </p>
+            </>
           )}
           <div><Label>{t("agreements.titleField")} *</Label><Input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
           <div><Label>{t("agreements.type")}</Label>
