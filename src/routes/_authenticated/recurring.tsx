@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileDrop } from "@/components/FileDrop";
 import { VoiceInput } from "@/components/VoiceInput";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
 import { syncFileToGoogleDrive, syncBackupCategory, currentBackupLang } from "@/lib/google-drive.functions";
@@ -50,6 +51,7 @@ function RecurringPage() {
   const [editing, setEditing] = useState<Recurring | null>(null);
   const [payAsk, setPayAsk] = useState<{ instance: Instance; recurring: Recurring } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Recurring | null>(null);
 
   const { data: recurring } = useQuery({
     queryKey: ["recurring_payments"],
@@ -147,24 +149,32 @@ function RecurringPage() {
     }
   }
 
-  async function del(r: Recurring) {
-    if (!confirm(t("recurring.confirmDelete"))) return;
-    if (r.contract_file_path) await deleteFile(r.contract_file_path);
-    // remove instance files
-    const insts = (instances ?? []).filter((i) => i.recurring_payment_id === r.id);
-    for (const i of insts) {
-      if (i.receipt_file_path) await deleteFile(i.receipt_file_path);
-      if (i.invoice_file_path) await deleteFile(i.invoice_file_path);
-    }
-    await supabase.from("recurring_payments").delete().eq("id", r.id);
+  async function performDelete(r: Recurring) {
+    const prev = qc.getQueryData<Recurring[]>(["recurring_payments"]);
+    qc.setQueryData<Recurring[]>(["recurring_payments"], (current = []) => current.filter((e) => e.id !== r.id));
     try {
-      await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } });
-      await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang() } });
-    } catch (e) { console.warn("[gdrive] backup sync failed", e); }
-    qc.invalidateQueries({ queryKey: ["recurring_payments"] });
-    qc.invalidateQueries({ queryKey: ["recurring_instances"] });
-    qc.invalidateQueries({ queryKey: ["dashboard"] });
-    toast.success(t("common.deleted"));
+      const { error } = await supabase.from("recurring_payments").delete().eq("id", r.id);
+      if (error) throw error;
+      if (r.contract_file_path) { try { await deleteFile(r.contract_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+      const insts = (instances ?? []).filter((i) => i.recurring_payment_id === r.id);
+      for (const i of insts) {
+        if (i.receipt_file_path) { try { await deleteFile(i.receipt_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+        if (i.invoice_file_path) { try { await deleteFile(i.invoice_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+      }
+      try {
+        await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } });
+        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang() } });
+      } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["recurring_payments"], refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["recurring_instances"], refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
+      ]);
+      toast.success(t("common.deleted"));
+    } catch (e) {
+      if (prev) qc.setQueryData(["recurring_payments"], prev);
+      toast.error(e instanceof Error ? e.message : t("common.deleteFailed"));
+    }
   }
 
   return (
@@ -290,7 +300,7 @@ function RecurringPage() {
                       <CheckCircle2 className="mr-1.5 h-4 w-4" />{t("recurring.markPaid")}
                     </Button>
                   ) : null}
-                  <Button size="sm" variant="ghost" onClick={() => del(r)} className="ml-auto text-destructive hover:text-destructive">
+                  <Button size="sm" variant="ghost" onClick={() => setPendingDelete(r)} className="ml-auto text-destructive hover:text-destructive">
                     <Trash2 className="mr-1.5 h-4 w-4" />{t("common.delete")}
                   </Button>
                 </div>
