@@ -158,6 +158,11 @@ export interface CalendarConnection {
   calendarId: string;
   reminderMinutes: number[];
   syncInstallments: boolean;
+  syncRecurring: boolean;
+  syncWarranties: boolean;
+  syncAgreements: boolean;
+  warrantyReminderDays: number[];
+  agreementReminderDays: number[];
 }
 
 export async function getValidCalendarAccessTokenForUser(
@@ -170,7 +175,7 @@ export async function getValidCalendarAccessTokenForUser(
   };
   const { data, error } = await db
     .from("google_calendar_connections")
-    .select("access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, calendar_id, calendar_name, reminder_minutes, sync_installments")
+    .select("access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, calendar_id, calendar_name, reminder_minutes, sync_installments, sync_recurring, sync_warranties, sync_agreements, warranty_reminder_days, agreement_reminder_days")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
@@ -209,6 +214,11 @@ export async function getValidCalendarAccessTokenForUser(
     calendarId,
     reminderMinutes: (data.reminder_minutes as number[]) ?? [1440],
     syncInstallments: (data.sync_installments as boolean) ?? true,
+    syncRecurring: (data.sync_recurring as boolean) ?? true,
+    syncWarranties: (data.sync_warranties as boolean) ?? true,
+    syncAgreements: (data.sync_agreements as boolean) ?? true,
+    warrantyReminderDays: (data.warranty_reminder_days as number[]) ?? [30, 7, 0],
+    agreementReminderDays: (data.agreement_reminder_days as number[]) ?? [30, 7, 0],
   };
 }
 
