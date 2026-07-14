@@ -107,7 +107,7 @@ async function copyPaymentDetails(d: Derived, copiedMsg: string, failedMsg: stri
   }
 }
 
-export function InstallmentsCard() {
+export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = {}) {
   const { t } = useTranslation();
 
   const { data: rows } = useQuery({
@@ -131,7 +131,9 @@ export function InstallmentsCard() {
     .filter((d): d is Derived => d !== null)
     .sort((a, b) => a.nextDue.localeCompare(b.nextDue));
 
-  if (derived.length === 0) return null;
+  if (derived.length === 0) {
+    if (!fullPage) return null;
+  }
 
   const monthStart = new Date();
   monthStart.setDate(1);
@@ -199,7 +201,7 @@ export function InstallmentsCard() {
         </div>
 
         <ul className="mt-5 divide-y divide-border">
-          {derived.slice(0, 5).map((d) => {
+          {(fullPage ? derived : derived.slice(0, 5)).map((d) => {
             const tone = toneFor(d.daysUntil);
             return (
               <li key={d.row.id} className="flex items-center justify-between gap-3 py-3">
