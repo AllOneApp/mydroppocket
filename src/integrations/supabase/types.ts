@@ -80,6 +80,7 @@ export type Database = {
           monthly_payment: number | null
           notes: string | null
           ocr_raw: Json | null
+          payee_name: string | null
           payments_made: number
           reference_number: string | null
           start_date: string | null
@@ -106,6 +107,7 @@ export type Database = {
           monthly_payment?: number | null
           notes?: string | null
           ocr_raw?: Json | null
+          payee_name?: string | null
           payments_made?: number
           reference_number?: string | null
           start_date?: string | null
@@ -132,6 +134,7 @@ export type Database = {
           monthly_payment?: number | null
           notes?: string | null
           ocr_raw?: Json | null
+          payee_name?: string | null
           payments_made?: number
           reference_number?: string | null
           start_date?: string | null
