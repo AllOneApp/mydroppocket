@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MultiFileDrop, type ExistingAttachment } from "@/components/MultiFileDrop";
-import { RecordActions } from "@/components/RecordActions";
+import { RecordDetailView, RecordActionRow, type DetailAttachment, type DetailField } from "@/components/RecordDetailView";
 import { VoiceInput } from "@/components/VoiceInput";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
@@ -59,6 +59,24 @@ function AgreementsPage() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
+  const [detail, setDetail] = useState<Row | null>(null);
+  const [detailAtts, setDetailAtts] = useState<DetailAttachment[]>([]);
+
+  async function openDetail(r: Row) {
+    const { data } = await supabase
+      .from("agreement_attachments")
+      .select("id, file_path, file_name, file_mime, sort_order")
+      .eq("agreement_id", r.id)
+      .order("sort_order", { ascending: true });
+    const list: DetailAttachment[] = ((data ?? []) as Array<{ id: string; file_path: string; file_name: string; file_mime: string | null }>).map(
+      (a) => ({ id: a.id, name: a.file_name, filePath: a.file_path, mime: a.file_mime }),
+    );
+    if (r.file_path && !list.some((a) => a.filePath === r.file_path)) {
+      list.unshift({ id: "__legacy__", name: r.file_name ?? "Fail", filePath: r.file_path, mime: null });
+    }
+    setDetailAtts(list);
+    setDetail(r);
+  }
 
   const { data } = useQuery({
     queryKey: ["agreements"],
@@ -117,7 +135,7 @@ function AgreementsPage() {
           {data?.map((r) => (
             <div key={r.id} className="card-soft p-5">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
-                <button onClick={() => { setEditing(r); setOpen(true); }} className="min-w-0 text-left">
+                <button onClick={() => { void openDetail(r); }} className="min-w-0 text-left">
                   <h3 className="truncate font-semibold hover:text-primary">{r.title}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {r.company ?? "—"} · {t(`agreements.types.${r.agreement_type}` as const, { defaultValue: r.agreement_type })}
@@ -130,14 +148,67 @@ function AgreementsPage() {
                   </p>
                 </button>
               </div>
-              <div className="mt-3"><RecordActions filePath={r.file_path} fileName={r.file_name} onDelete={() => del(r)} /></div>
+              <div className="mt-3">
+                <RecordActionRow
+                  onView={() => { void openDetail(r); }}
+                  onEdit={() => { setEditing(r); setOpen(true); }}
+                  onDelete={() => del(r)}
+                />
+              </div>
             </div>
           ))}
         </div>
       )}
 
       <AgreementDialog open={open} onOpenChange={setOpen} row={editing} />
+      <AgreementDetail
+        row={detail}
+        attachments={detailAtts}
+        onOpenChange={(o) => { if (!o) setDetail(null); }}
+        onEdit={() => { if (detail) { setEditing(detail); setDetail(null); setOpen(true); } }}
+        onDelete={() => { if (detail) { const r = detail; setDetail(null); void del(r); } }}
+      />
     </AppShell>
+  );
+}
+
+function AgreementDetail({
+  row,
+  attachments,
+  onOpenChange,
+  onEdit,
+  onDelete,
+}: {
+  row: Row | null;
+  attachments: DetailAttachment[];
+  onOpenChange: (open: boolean) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  const currency = row?.currency ?? "EUR";
+  const fields: DetailField[] = row
+    ? [
+        { label: t("agreements.type"), value: t(`agreements.types.${row.agreement_type}` as const, { defaultValue: row.agreement_type }) },
+        { label: t("agreements.company"), value: row.company || "—" },
+        { label: t("agreements.number"), value: row.agreement_number || "—" },
+        { label: t("agreements.startDate"), value: formatDate(row.start_date) },
+        { label: t("agreements.endDate"), value: formatDate(row.end_date) },
+        { label: t("agreements.monthly"), value: row.monthly_payment != null ? formatCurrency(Number(row.monthly_payment), currency) : "—" },
+        { label: t("agreements.total"), value: row.total_amount != null ? formatCurrency(Number(row.total_amount), currency) : "—" },
+        { label: t("agreements.notes"), value: row.notes || "—", full: true },
+      ]
+    : [];
+  return (
+    <RecordDetailView
+      open={!!row}
+      onOpenChange={onOpenChange}
+      title={row?.title ?? ""}
+      fields={fields}
+      attachments={attachments}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    />
   );
 }
 

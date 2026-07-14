@@ -29,7 +29,11 @@
     "scanFailed": "Scan failed",
     "autoFilled": "Data was successfully filled from the document.",
     "noDataFound": "Could not extract data from the document.",
-    "back": "Back"
+    "back": "Back",
+    "open": "Open",
+    "openInNewTab": "Open in new tab",
+    "attachedDocuments": "Attached documents",
+    "noAttachments": "No attachments yet."
   },
   "nav": {
     "dashboard": "Dashboard",
