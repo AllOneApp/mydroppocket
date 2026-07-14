@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   BarChart3, TrendingUp, TrendingDown, Wallet, ShieldCheck, FileText,
   Repeat, CreditCard, FileImage, FileIcon, Sparkles, AlertCircle, Calendar,
-  ArrowUpRight, ArrowDownRight,
+  ArrowUpRight, ArrowDownRight, Eye, CheckCircle2, PartyPopper,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -21,6 +21,7 @@ import { formatDate, formatCategory } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/overview")({
   head: () => ({ meta: [{ title: "Ülevaade — MyDropPocket" }] }),
