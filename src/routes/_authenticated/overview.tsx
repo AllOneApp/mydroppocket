@@ -766,3 +766,19 @@ function MiniStatCard({
 function Empty() {
   return <div className="grid h-[240px] place-items-center text-sm text-muted-foreground">Andmed puuduvad</div>;
 }
+
+function recurringEmoji(category: string | null, name: string): string {
+  const c = (category ?? "").toLowerCase();
+  const n = name.toLowerCase();
+  if (/phone|telef/.test(c) || /telef|phone/.test(n)) return "📱";
+  if (/electric|elekt/.test(c) || /elekt/.test(n)) return "💡";
+  if (/internet|net/.test(c) || /internet|wifi/.test(n)) return "🌐";
+  if (/utilit|kommun|water|vesi|waste|prügi/.test(c)) return "🏠";
+  if (/insur|kindl/.test(c) || /kindl/.test(n)) return "🚗";
+  if (/stream|netflix|spot|tv/.test(c) || /netflix|spot|tv/.test(n)) return "🎬";
+  if (/cloud|storage/.test(c)) return "☁️";
+  if (/ai|gpt|claude|lovable/.test(c) || /ai|gpt/.test(n)) return "🤖";
+  if (/software|subs|app/.test(c)) return "💾";
+  if (/mortg|hüpo|leasing|loan/.test(c)) return "🏦";
+  return "🔁";
+}
