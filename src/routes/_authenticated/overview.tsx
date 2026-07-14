@@ -465,6 +465,58 @@ function OverviewPage() {
         </div>
       </div>
 
+      {/* 🤖 Päeva assistent */}
+      <div className="card-soft mb-4 border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-xl" aria-hidden>🤖</span>
+          <p className="text-sm font-semibold">
+            {t("overview.dailyAssistant", { defaultValue: "Päeva assistent" })}
+          </p>
+        </div>
+        <p className="mb-2 text-sm font-medium">
+          {t("overview.greeting", { defaultValue: "👋 Tere!" })}
+        </p>
+        <ul className="space-y-1.5 text-sm">
+          {assistantLines.map((line, i) => (
+            <li key={i} className="flex items-start gap-2">
+              <span
+                className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                  line.tone === "red" ? "bg-red-500" :
+                  line.tone === "yellow" ? "bg-yellow-500" :
+                  line.tone === "green" ? "bg-green-500" : "bg-muted-foreground/50"
+                }`}
+              />
+              <span>{line.text}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-xs text-muted-foreground">
+          {overdueEvents.length + todayEvents.length === 0
+            ? t("overview.assistantHavANiceDay", { defaultValue: "Soovime sulle ilusat päeva! 😊" })
+            : t("overview.assistantFocus", { defaultValue: "Head fookust päevaks! 💪" })}
+        </p>
+      </div>
+
+      {/* 📅 Tänased tegevused */}
+      <Section
+        title={`${t("overview.todaysActions", { defaultValue: "📅 Tänased tegevused" })} (${todaysActionsUnique.length})`}
+      >
+        <div className="card-soft p-4">
+          {todaysActionsUnique.length === 0 ? (
+            <div className="flex items-center gap-3 py-3 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              {t("overview.noActionsToday", { defaultValue: "✅ Täna puuduvad olulised tegevused." })}
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {todaysActionsUnique.slice(0, 15).map((e) => (
+                <EventRow key={e.id} e={e} today={today} tomorrowIso={tomorrowIso} next7Iso={next7Iso} t={t} />
+              ))}
+            </ul>
+          )}
+        </div>
+      </Section>
+
       {/* Filters */}
       <div className="card-soft mb-6 p-4">
         <div className="flex flex-wrap items-end gap-3">
