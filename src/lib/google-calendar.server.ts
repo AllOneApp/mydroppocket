@@ -164,14 +164,11 @@ export async function getValidCalendarAccessTokenForUser(
   userId: string,
 ): Promise<CalendarConnection | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const client = supabaseAdmin as unknown as {
-    from: (t: string) => {
-      select: (c: string) => {
-        eq: (c: string, v: string) => { maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: unknown }> };
-      };
-    };
+  // Cast: new tables from this migration may not yet appear in the generated types file.
+  const db = supabaseAdmin as unknown as {
+    from: (t: string) => any;
   };
-  const { data, error } = await client
+  const { data, error } = await db
     .from("google_calendar_connections")
     .select("access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, calendar_id, calendar_name, reminder_minutes, sync_installments")
     .eq("user_id", userId)
@@ -187,12 +184,7 @@ export async function getValidCalendarAccessTokenForUser(
     const refreshed = await refreshAccessToken(refreshToken);
     accessToken = refreshed.access_token;
     const newExpiresAt = new Date(now + refreshed.expires_in * 1000).toISOString();
-    const upd = supabaseAdmin as unknown as {
-      from: (t: string) => {
-        update: (v: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<unknown> };
-      };
-    };
-    await upd
+    await db
       .from("google_calendar_connections")
       .update({
         access_token_ciphertext: encryptToken(accessToken),
@@ -206,12 +198,7 @@ export async function getValidCalendarAccessTokenForUser(
   const calendarName = (data.calendar_name as string | null) ?? MY_DROPPOCKET_CALENDAR_NAME;
   if (!calendarId) {
     calendarId = await ensureMyDropPocketCalendar(accessToken, calendarName);
-    const upd = supabaseAdmin as unknown as {
-      from: (t: string) => {
-        update: (v: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<unknown> };
-      };
-    };
-    await upd
+    await db
       .from("google_calendar_connections")
       .update({ calendar_id: calendarId, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
@@ -442,21 +429,7 @@ export async function syncInstallmentForUser(opts: {
   if (!conn.syncInstallments) return { status: "skipped" };
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const dbAny = supabaseAdmin as unknown as {
-    from: (t: string) => {
-      select: (c: string) => {
-        eq: (c: string, v: string) => {
-          eq?: (c: string, v: string) => {
-            eq: (c: string, v: string) => { maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: unknown }> };
-          };
-          maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: unknown }>;
-        };
-      };
-      insert: (v: Record<string, unknown>) => Promise<{ error: unknown }>;
-      update: (v: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: unknown }> };
-      delete: () => { eq: (c: string, v: string) => Promise<{ error: unknown }> };
-    };
-  };
+  const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
 
   const { data: agRow, error: agErr } = await dbAny
     .from("agreements")
@@ -477,7 +450,7 @@ export async function syncInstallmentForUser(opts: {
     .from("calendar_events")
     .select("id, google_event_id, calendar_id, event_date, status")
     .eq("user_id", opts.userId)
-    .eq!("source_type", "installment")
+    .eq("source_type", "installment")
     .eq("source_id", opts.agreementId)
     .maybeSingle();
   const tracked = trackedData as null | {
@@ -579,15 +552,7 @@ export async function syncAllInstallmentsForUser(userId: string): Promise<{
   if (!conn) return { created: 0, updated: 0, removed: 0, skipped: 0 };
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const dbAny = supabaseAdmin as unknown as {
-    from: (t: string) => {
-      select: (c: string) => {
-        eq: (c: string, v: string) => {
-          eq: (c: string, v: string) => Promise<{ data: { id: string }[] | null; error: unknown }>;
-        };
-      };
-    };
-  };
+  const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
   const { data, error } = await dbAny
     .from("agreements")
     .select("id")
