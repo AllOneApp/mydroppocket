@@ -217,8 +217,50 @@ function AgreementDetail({
 }) {
   const { t } = useTranslation();
   const currency = row?.currency ?? "EUR";
+  const isInstallment = row?.agreement_type === "installment";
+  const monthly = Number(row?.monthly_payment ?? 0);
+  let totalPayments: number | null = null;
+  if (isInstallment && row?.start_date && monthly > 0) {
+    if (row.total_amount) {
+      totalPayments = Math.max(1, Math.round(Number(row.total_amount) / monthly));
+    } else if (row.end_date) {
+      const a = new Date(row.start_date + "T00:00:00");
+      const b = new Date(row.end_date + "T00:00:00");
+      let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+      if (b.getDate() < a.getDate()) m -= 1;
+      totalPayments = Math.max(1, m + 1);
+    }
+  }
+  let paidCount = 0;
+  let isPaidOff = false;
+  if (isInstallment && row?.start_date && monthly > 0 && totalPayments) {
+    const today = new Date();
+    const a = new Date(row.start_date + "T00:00:00");
+    let m = (today.getFullYear() - a.getFullYear()) * 12 + (today.getMonth() - a.getMonth());
+    if (today.getDate() < a.getDate()) m -= 1;
+    paidCount = Math.min(Math.max(0, m), totalPayments);
+    isPaidOff = paidCount >= totalPayments;
+  }
+
+  const statusField: DetailField | null = isInstallment
+    ? {
+        label: t("agreements.status", { defaultValue: "Staatus" }),
+        value: isPaidOff ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-0.5 text-sm font-semibold text-green-600">
+            ✅ {t("agreements.statusClosed", { defaultValue: "Leping lõpetatud" })}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-0.5 text-sm font-semibold text-blue-600">
+            {t("agreements.statusActive", { defaultValue: "Aktiivne" })}
+            {totalPayments ? ` · ${paidCount}/${totalPayments}` : ""}
+          </span>
+        ),
+      }
+    : null;
+
   const fields: DetailField[] = row
     ? [
+        ...(statusField ? [statusField] : []),
         { label: t("agreements.type"), value: t(`agreements.types.${row.agreement_type}` as const, { defaultValue: row.agreement_type }) },
         { label: t("agreements.company"), value: row.company || "—" },
         { label: t("agreements.number"), value: row.agreement_number || "—" },
