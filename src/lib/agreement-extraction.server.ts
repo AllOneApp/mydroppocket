@@ -168,6 +168,46 @@ function asAgreementType(value: unknown, searchableText: string) {
   return text ? "contract" : null;
 }
 
+const KNOWN_BANKS = [
+  "Swedbank",
+  "SEB",
+  "LHV",
+  "Coop Pank",
+  "Luminor",
+  "Inbank",
+  "Bigbank",
+  "Holm Bank",
+  "TF Bank",
+  "Citadele",
+  "Nordea",
+];
+
+function normalizeIban(value: unknown) {
+  const text = asText(value);
+  if (!text) return null;
+  const compact = text.replace(/\s+/g, "").toUpperCase();
+  if (/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(compact)) return compact;
+  return null;
+}
+
+function normalizeBank(value: unknown) {
+  const text = asText(value);
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  for (const bank of KNOWN_BANKS) {
+    if (lower.includes(bank.toLowerCase())) return bank;
+  }
+  return text;
+}
+
+function normalizeReference(value: unknown) {
+  const text = asText(value);
+  if (!text) return null;
+  const digits = text.replace(/\s+/g, "");
+  if (/^\d{2,20}$/.test(digits)) return digits;
+  return null;
+}
+
 export function parseAgreementResponse(rawResponse: string) {
   const parserErrors: string[] = [];
   const fenced = [...rawResponse.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map((match) => match[1]);
