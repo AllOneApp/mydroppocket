@@ -40,6 +40,8 @@ type Row = {
   bank: string | null;
   reference_number: string | null;
   payments_made: number | null;
+  agreement_number: string | null;
+  payee_name: string | null;
 };
 
 type Derived = {
@@ -139,7 +141,7 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
     queryFn: async () => {
       const { data, error } = await supabase
         .from("agreements")
-        .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made")
+        .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name")
         .eq("agreement_type", "installment");
       if (error) throw error;
       return (data ?? []) as Row[];
