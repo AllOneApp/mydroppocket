@@ -59,7 +59,15 @@ function CalendarSyncPage() {
   });
 
   const updateMut = useMutation({
-    mutationFn: (patch: { syncInstallments?: boolean; reminderMinutes?: number[] }) =>
+    mutationFn: (patch: {
+      syncInstallments?: boolean;
+      syncRecurring?: boolean;
+      syncWarranties?: boolean;
+      syncAgreements?: boolean;
+      reminderMinutes?: number[];
+      warrantyReminderDays?: number[];
+      agreementReminderDays?: number[];
+    }) =>
       updateCalendarSettings({ data: patch }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["google-calendar-status"] });
