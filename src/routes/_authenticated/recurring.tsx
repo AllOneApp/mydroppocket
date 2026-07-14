@@ -364,6 +364,11 @@ function RecurringPage() {
 
       <RecurringDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} />
       <AttachReceiptDialog data={payAsk} onClose={() => setPayAsk(null)} />
+      <ConfirmDeleteDialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
+        onConfirm={() => { const r = pendingDelete; setPendingDelete(null); if (r) void performDelete(r); }}
+      />
     </AppShell>
   );
 }
