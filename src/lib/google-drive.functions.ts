@@ -292,6 +292,9 @@ function projectRows(category: BackupCategory, rows: Row[], lang: BackupLang): R
         [et ? "Kuumakse" : "Monthly payment"]: fmtAmount(r.monthly_payment),
         [et ? "Kogusumma" : "Total amount"]: fmtAmount(r.total_amount),
         [et ? "Valuuta" : "Currency"]: r.currency ?? "",
+        [et ? "Pank" : "Bank"]: r.bank ?? "",
+        [et ? "Pangakonto (IBAN)" : "Bank account (IBAN)"]: r.iban ?? "",
+        [et ? "Viitenumber" : "Reference number"]: r.reference_number ?? "",
         [et ? "Märkused" : "Notes"]: r.notes ?? "",
         [et ? "Manus" : "Attachment"]: r.file_name ?? "",
       }));

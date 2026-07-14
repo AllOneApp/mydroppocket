@@ -1,0 +1,4 @@
+ALTER TABLE public.agreements
+  ADD COLUMN IF NOT EXISTS iban TEXT,
+  ADD COLUMN IF NOT EXISTS bank TEXT,
+  ADD COLUMN IF NOT EXISTS reference_number TEXT;

@@ -9,6 +9,9 @@ export type AgreementExtraction = {
   total_amount: number | null;
   currency: string | null;
   notes: string | null;
+  iban: string | null;
+  bank: string | null;
+  reference_number: string | null;
 };
 
 const AGREEMENT_TYPES = ["installment", "warranty_extension", "purchase_contract", "service", "contract"] as const;
@@ -28,6 +31,9 @@ Extract these fields independently. A missing field must be null and must never 
 - monthly_payment: recurring monthly instalment/fee as a number
 - total_amount: total financed, total payable, or contract total as a number; prefer the total payable by the customer when clearly stated
 - currency: ISO currency code, for example EUR
+- iban: payment bank account (IBAN) that the customer must pay to. Return in canonical form without spaces (for example EE021010220123456789). Null when not stated.
+- bank: the bank whose account is used for payments. Use a short display name when clear (Swedbank, SEB, LHV, Coop Pank, Luminor, Inbank, Bigbank, Holm Bank, TF Bank). Null when not stated.
+- reference_number: payment reference number (viitenumber / reference / makseviide) the customer must include with each payment. Digits only, no spaces. Null when not stated.
 - notes: concise useful details not represented above, or null
 - ocr_text: page-labelled source excerpts that support the extracted values, including labels and nearby values
 
@@ -162,6 +168,46 @@ function asAgreementType(value: unknown, searchableText: string) {
   return text ? "contract" : null;
 }
 
+const KNOWN_BANKS = [
+  "Swedbank",
+  "SEB",
+  "LHV",
+  "Coop Pank",
+  "Luminor",
+  "Inbank",
+  "Bigbank",
+  "Holm Bank",
+  "TF Bank",
+  "Citadele",
+  "Nordea",
+];
+
+function normalizeIban(value: unknown) {
+  const text = asText(value);
+  if (!text) return null;
+  const compact = text.replace(/\s+/g, "").toUpperCase();
+  if (/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(compact)) return compact;
+  return null;
+}
+
+function normalizeBank(value: unknown) {
+  const text = asText(value);
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  for (const bank of KNOWN_BANKS) {
+    if (lower.includes(bank.toLowerCase())) return bank;
+  }
+  return text;
+}
+
+function normalizeReference(value: unknown) {
+  const text = asText(value);
+  if (!text) return null;
+  const digits = text.replace(/\s+/g, "");
+  if (/^\d{2,20}$/.test(digits)) return digits;
+  return null;
+}
+
 export function parseAgreementResponse(rawResponse: string) {
   const parserErrors: string[] = [];
   const fenced = [...rawResponse.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map((match) => match[1]);
@@ -187,6 +233,9 @@ export function parseAgreementResponse(rawResponse: string) {
     total_amount: asNumber(valueFor(source, ["total_amount", "total_payable", "contract_total", "credit_amount", "kogusumma", "kokku"])),
     currency: asText(valueFor(source, ["currency", "valuuta"]))?.toUpperCase() ?? null,
     notes: asText(valueFor(source, ["notes", "remarks", "summary", "märkmed", "markmed"])),
+    iban: normalizeIban(valueFor(source, ["iban", "bank_account", "account_number", "account", "pangakonto", "arvelduskonto", "konto"])),
+    bank: normalizeBank(valueFor(source, ["bank", "pank", "bank_name"])),
+    reference_number: normalizeReference(valueFor(source, ["reference_number", "reference", "payment_reference", "viitenumber", "viide", "makseviide"])),
   };
   const invalidFields: string[] = [];
   for (const [field, value] of Object.entries(source)) {

@@ -2,7 +2,7 @@ import { formatDate } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 
@@ -51,8 +51,38 @@ type Row = {
   id: string; title: string; agreement_type: string; company: string | null; agreement_number: string | null;
   start_date: string | null; end_date: string | null; monthly_payment: number | null; total_amount: number | null;
   currency: string | null; notes: string | null;
+  iban: string | null; bank: string | null; reference_number: string | null;
   file_path: string | null; file_name: string | null;
 };
+
+const BANK_OPTIONS = ["Swedbank", "SEB", "LHV", "Coop Pank", "Luminor", "Inbank", "Bigbank", "Holm Bank", "TF Bank"];
+
+function CopyableValue({ value }: { value: string | null | undefined }) {
+  const { t } = useTranslation();
+  if (!value) return <>—</>;
+  async function onCopy() {
+    try {
+      await navigator.clipboard.writeText(value as string);
+      toast.success(t("agreements.copied", { defaultValue: "Copied" }));
+    } catch {
+      toast.error(t("common.failed"));
+    }
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="break-all">{value}</span>
+      <button
+        type="button"
+        onClick={() => { void onCopy(); }}
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-accent"
+        aria-label={t("agreements.copy", { defaultValue: "Copy" })}
+        title={t("agreements.copy", { defaultValue: "Copy" })}
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </button>
+    </span>
+  );
+}
 
 function AgreementsPage() {
   const qc = useQueryClient();
@@ -196,6 +226,9 @@ function AgreementDetail({
         { label: t("agreements.endDate"), value: formatDate(row.end_date) },
         { label: t("agreements.monthly"), value: row.monthly_payment != null ? formatCurrency(Number(row.monthly_payment), currency) : "—" },
         { label: t("agreements.total"), value: row.total_amount != null ? formatCurrency(Number(row.total_amount), currency) : "—" },
+        { label: t("agreements.bank"), value: row.bank || "—" },
+        { label: t("agreements.iban"), value: <CopyableValue value={row.iban} /> },
+        { label: t("agreements.referenceNumber"), value: <CopyableValue value={row.reference_number} /> },
         { label: t("agreements.notes"), value: row.notes || "—", full: true },
       ]
     : [];
@@ -235,6 +268,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
     total_amount: row?.total_amount?.toString() ?? "",
     currency: row?.currency ?? "EUR",
     notes: row?.notes ?? "",
+    iban: row?.iban ?? "",
+    bank: row?.bank ?? "",
+    reference_number: row?.reference_number ?? "",
   }));
 
   // Load existing attachments when editing.
@@ -309,6 +345,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           total_amount: d.total_amount != null ? String(d.total_amount) : f.total_amount,
           currency: (d.currency as string) || f.currency,
           notes: (d.notes as string) || f.notes,
+          iban: (d.iban as string) || f.iban,
+          bank: (d.bank as string) || f.bank,
+          reference_number: (d.reference_number as string) || f.reference_number,
         }));
         toast.success(t("common.autoFilled"));
       } else {
@@ -341,6 +380,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         total_amount: form.total_amount ? Number(form.total_amount) : null,
         currency: form.currency,
         notes: form.notes || null,
+        iban: form.iban ? form.iban.replace(/\s+/g, "").toUpperCase() : null,
+        bank: form.bank || null,
+        reference_number: form.reference_number ? form.reference_number.replace(/\s+/g, "") : null,
         ...(legacyRemoved ? { file_path: null, file_name: null, file_mime: null } : {}),
       };
 
@@ -476,6 +518,23 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             <div><Label>{t("agreements.monthly")}</Label><Input type="number" step="0.01" value={form.monthly_payment} onChange={(e) => setForm({ ...form, monthly_payment: e.target.value })} /></div>
             <div><Label>{t("agreements.total")}</Label><Input type="number" step="0.01" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} /></div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>{t("agreements.bank")}</Label>
+              <Select value={form.bank || "__none__"} onValueChange={(v) => setForm({ ...form, bank: v === "__none__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">—</SelectItem>
+                  {BANK_OPTIONS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  {form.bank && !BANK_OPTIONS.includes(form.bank) && (
+                    <SelectItem value={form.bank}>{form.bank}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>{t("agreements.referenceNumber")}</Label><Input inputMode="numeric" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} /></div>
+          </div>
+          <div><Label>{t("agreements.iban")}</Label><Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="EE00 0000 0000 0000 0000" /></div>
           <div><Label>{t("agreements.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
