@@ -226,6 +226,9 @@ function AgreementDetail({
         { label: t("agreements.endDate"), value: formatDate(row.end_date) },
         { label: t("agreements.monthly"), value: row.monthly_payment != null ? formatCurrency(Number(row.monthly_payment), currency) : "—" },
         { label: t("agreements.total"), value: row.total_amount != null ? formatCurrency(Number(row.total_amount), currency) : "—" },
+        { label: t("agreements.bank"), value: row.bank || "—" },
+        { label: t("agreements.iban"), value: <CopyableValue value={row.iban} /> },
+        { label: t("agreements.referenceNumber"), value: <CopyableValue value={row.reference_number} /> },
         { label: t("agreements.notes"), value: row.notes || "—", full: true },
       ]
     : [];
