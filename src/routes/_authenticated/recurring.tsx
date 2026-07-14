@@ -449,6 +449,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         }
       }
       try { await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      if (recordId) {
+        try { await syncRecurringPayment({ data: { recurringId: recordId } }); } catch (e) { console.warn("[gcal] recurring sync failed", e); }
+      }
       qc.invalidateQueries({ queryKey: ["recurring_payments"] });
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
