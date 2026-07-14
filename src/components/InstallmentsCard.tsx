@@ -196,7 +196,7 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t("installments.nextDue", { defaultValue: "Järgmine makse" })}
             </p>
-            <p className="mt-1 text-base font-bold">{formatDate(next.nextDue)}</p>
+            <p className="mt-1 text-base font-bold">{next ? formatDate(next.nextDue) : "—"}</p>
           </div>
         </div>
 
