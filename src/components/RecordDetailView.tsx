@@ -64,17 +64,17 @@ export function RecordDetailView({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="pr-8 text-xl leading-tight">{title}</DialogTitle>
-            {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+            <DialogTitle className="break-words pr-8 text-xl leading-tight">{title}</DialogTitle>
+            {subtitle && <p className="break-words text-sm text-muted-foreground">{subtitle}</p>}
           </DialogHeader>
 
           <div className="mt-4 space-y-6">
             {/* Info grid */}
             <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
               {fields.map((f, i) => (
-                <div key={i} className={f.full ? "sm:col-span-2" : ""}>
+                <div key={i} className={`min-w-0 ${f.full ? "sm:col-span-2" : ""}`}>
                   <div className="text-xs uppercase tracking-wide text-muted-foreground">{f.label}</div>
-                  <div className="mt-0.5 break-words text-sm font-medium">{f.value ?? "—"}</div>
+                  <div className="mt-0.5 text-sm font-medium [overflow-wrap:anywhere]">{f.value ?? "—"}</div>
                 </div>
               ))}
             </div>
