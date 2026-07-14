@@ -193,6 +193,9 @@ export function parseAgreementResponse(rawResponse: string) {
     total_amount: asNumber(valueFor(source, ["total_amount", "total_payable", "contract_total", "credit_amount", "kogusumma", "kokku"])),
     currency: asText(valueFor(source, ["currency", "valuuta"]))?.toUpperCase() ?? null,
     notes: asText(valueFor(source, ["notes", "remarks", "summary", "märkmed", "markmed"])),
+    iban: normalizeIban(valueFor(source, ["iban", "bank_account", "account_number", "account", "pangakonto", "arvelduskonto", "konto"])),
+    bank: normalizeBank(valueFor(source, ["bank", "pank", "bank_name"])),
+    reference_number: normalizeReference(valueFor(source, ["reference_number", "reference", "payment_reference", "viitenumber", "viide", "makseviide"])),
   };
   const invalidFields: string[] = [];
   for (const [field, value] of Object.entries(source)) {
