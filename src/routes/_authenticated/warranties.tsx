@@ -75,7 +75,7 @@ function WarrantiesPage() {
       <Section title={t("warranties.active")} count={groups.active.length} tone="green" items={groups.active} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={del} />
       <Section title={t("warranties.expired")} count={groups.expired.length} tone="red" items={groups.expired} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={del} />
       {data?.length === 0 && <EmptyCard icon={ShieldCheck} title={t("warranties.empty.title")} desc={t("warranties.empty.desc")} onAdd={() => setOpen(true)} />}
-      <WarrantyDialog open={open} onOpenChange={setOpen} row={editing} />
+      <WarrantyDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} />
     </AppShell>
   );
 }
