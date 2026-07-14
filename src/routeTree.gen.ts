@@ -25,6 +25,7 @@ import { Route as AuthenticatedAgreementsRouteImport } from './routes/_authentic
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedSettingsCloudBackupRouteImport } from './routes/_authenticated/settings.cloud-backup'
 import { Route as ApiPublicGoogleDriveCallbackRouteImport } from './routes/api/public/google-drive/callback'
+import { Route as ApiPublicGoogleCalendarCallbackRouteImport } from './routes/api/public/google-calendar/callback'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -109,6 +110,12 @@ const ApiPublicGoogleDriveCallbackRoute =
     path: '/api/public/google-drive/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicGoogleCalendarCallbackRoute =
+  ApiPublicGoogleCalendarCallbackRouteImport.update({
+    id: '/api/public/google-calendar/callback',
+    path: '/api/public/google-calendar/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -125,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/warranties': typeof AuthenticatedWarrantiesRoute
   '/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/google-calendar/callback': typeof ApiPublicGoogleCalendarCallbackRoute
   '/api/public/google-drive/callback': typeof ApiPublicGoogleDriveCallbackRoute
 }
 export interface FileRoutesByTo {
@@ -141,6 +149,7 @@ export interface FileRoutesByTo {
   '/warranties': typeof AuthenticatedWarrantiesRoute
   '/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/google-calendar/callback': typeof ApiPublicGoogleCalendarCallbackRoute
   '/api/public/google-drive/callback': typeof ApiPublicGoogleDriveCallbackRoute
 }
 export interface FileRoutesById {
@@ -160,6 +169,7 @@ export interface FileRoutesById {
   '/_authenticated/warranties': typeof AuthenticatedWarrantiesRoute
   '/_authenticated/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/google-calendar/callback': typeof ApiPublicGoogleCalendarCallbackRoute
   '/api/public/google-drive/callback': typeof ApiPublicGoogleDriveCallbackRoute
 }
 export interface FileRouteTypes {
@@ -179,6 +189,7 @@ export interface FileRouteTypes {
     | '/warranties'
     | '/settings/cloud-backup'
     | '/settings/'
+    | '/api/public/google-calendar/callback'
     | '/api/public/google-drive/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -195,6 +206,7 @@ export interface FileRouteTypes {
     | '/warranties'
     | '/settings/cloud-backup'
     | '/settings'
+    | '/api/public/google-calendar/callback'
     | '/api/public/google-drive/callback'
   id:
     | '__root__'
@@ -213,6 +225,7 @@ export interface FileRouteTypes {
     | '/_authenticated/warranties'
     | '/_authenticated/settings/cloud-backup'
     | '/_authenticated/settings/'
+    | '/api/public/google-calendar/callback'
     | '/api/public/google-drive/callback'
   fileRoutesById: FileRoutesById
 }
@@ -221,6 +234,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  ApiPublicGoogleCalendarCallbackRoute: typeof ApiPublicGoogleCalendarCallbackRoute
   ApiPublicGoogleDriveCallbackRoute: typeof ApiPublicGoogleDriveCallbackRoute
 }
 
@@ -338,6 +352,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGoogleDriveCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/google-calendar/callback': {
+      id: '/api/public/google-calendar/callback'
+      path: '/api/public/google-calendar/callback'
+      fullPath: '/api/public/google-calendar/callback'
+      preLoaderRoute: typeof ApiPublicGoogleCalendarCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -388,6 +409,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  ApiPublicGoogleCalendarCallbackRoute: ApiPublicGoogleCalendarCallbackRoute,
   ApiPublicGoogleDriveCallbackRoute: ApiPublicGoogleDriveCallbackRoute,
 }
 export const routeTree = rootRouteImport
