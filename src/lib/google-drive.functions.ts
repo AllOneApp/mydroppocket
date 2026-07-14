@@ -296,6 +296,7 @@ function projectRows(category: BackupCategory, rows: Row[], lang: BackupLang): R
         [et ? "Saaja nimi" : "Payee name"]: r.payee_name ?? "",
         [et ? "Pangakonto (IBAN)" : "Bank account (IBAN)"]: r.iban ?? "",
         [et ? "Viitenumber" : "Reference number"]: r.reference_number ?? "",
+        [et ? "Igakuine maksetähtaeg" : "Monthly due day"]: r.payment_day_of_month ?? "",
         [et ? "Märkused" : "Notes"]: r.notes ?? "",
         [et ? "Manus" : "Attachment"]: r.file_name ?? "",
       }));
