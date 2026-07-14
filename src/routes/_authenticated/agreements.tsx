@@ -526,6 +526,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
                 <SelectContent>
                   <SelectItem value="__none__">—</SelectItem>
                   {BANK_OPTIONS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  {form.bank && !BANK_OPTIONS.includes(form.bank) && (
+                    <SelectItem value={form.bank}>{form.bank}</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
