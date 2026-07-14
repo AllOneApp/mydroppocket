@@ -595,6 +595,23 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           </div>
           <div><Label>{t("agreements.iban")}</Label><Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="EE00 0000 0000 0000 0000" /></div>
           <div><Label>{t("agreements.payeeName", { defaultValue: "Saaja nimi" })}</Label><Input value={form.payee_name} onChange={(e) => setForm({ ...form, payee_name: e.target.value })} placeholder="AS Inbank Finance" /></div>
+          <div>
+            <Label>📅 {t("agreements.paymentDay", { defaultValue: "Igakuine maksetähtaeg" })}</Label>
+            <Select
+              value={form.payment_day_of_month || "__none__"}
+              onValueChange={(v) => setForm({ ...form, payment_day_of_month: v === "__none__" ? "" : v })}
+            >
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">—</SelectItem>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                  <SelectItem key={day} value={String(day)}>
+                    {t("agreements.paymentDayValue", { defaultValue: "kuu {{day}}. päev", day })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div><Label>{t("agreements.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
