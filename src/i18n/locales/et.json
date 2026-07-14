@@ -29,7 +29,11 @@
     "scanFailed": "Skaneerimine ebaõnnestus",
     "autoFilled": "Andmed täideti edukalt dokumendist.",
     "noDataFound": "Dokumendist ei õnnestunud vajalikke andmeid leida.",
-    "back": "Tagasi"
+    "back": "Tagasi",
+    "open": "Ava",
+    "openInNewTab": "Ava uues aknas",
+    "attachedDocuments": "Lisatud dokumendid",
+    "noAttachments": "Lisatud faile pole."
   },
   "nav": {
     "dashboard": "Töölaud",
