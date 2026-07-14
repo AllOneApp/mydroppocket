@@ -191,6 +191,8 @@
     "iban": "Bank account (IBAN)",
     "bank": "Bank",
     "referenceNumber": "Reference number",
+    "paymentDay": "Monthly due day",
+    "paymentDayValue": "{{day}} of each month",
     "copy": "Copy",
     "copied": "Copied",
     "bankOther": "Other",
