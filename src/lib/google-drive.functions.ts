@@ -293,6 +293,7 @@ function projectRows(category: BackupCategory, rows: Row[], lang: BackupLang): R
         [et ? "Kogusumma" : "Total amount"]: fmtAmount(r.total_amount),
         [et ? "Valuuta" : "Currency"]: r.currency ?? "",
         [et ? "Pank" : "Bank"]: r.bank ?? "",
+        [et ? "Saaja nimi" : "Payee name"]: r.payee_name ?? "",
         [et ? "Pangakonto (IBAN)" : "Bank account (IBAN)"]: r.iban ?? "",
         [et ? "Viitenumber" : "Reference number"]: r.reference_number ?? "",
         [et ? "Märkused" : "Notes"]: r.notes ?? "",
