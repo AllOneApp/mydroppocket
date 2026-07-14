@@ -20,7 +20,7 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
 import { syncAgreementAttachments, syncBackupCategory, deleteGoogleDriveFile, deleteAgreementDriveFolder, currentBackupLang } from "@/lib/google-drive.functions";
-import { syncInstallmentAgreement } from "@/lib/google-calendar.functions";
+import { syncInstallmentAgreement, removeCalendarSource } from "@/lib/google-calendar.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
 
@@ -137,6 +137,8 @@ function AgreementsPage() {
         try { await deleteFile(a.file_path); } catch (e) { console.warn("[storage] delete failed", e); }
       }
       if (r.file_path) { try { await deleteFile(r.file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+      try { await removeCalendarSource({ data: { sourceType: "installment", sourceId: r.id } }); } catch (e) { console.warn("[gcal] installment remove failed", e); }
+      try { await removeCalendarSource({ data: { sourceType: "agreement_end", sourceId: r.id } }); } catch (e) { console.warn("[gcal] agreement remove failed", e); }
       const gdriveFolderId = (r as unknown as { gdrive_folder_id?: string | null }).gdrive_folder_id;
       if (gdriveFolderId) {
         try { await deleteAgreementDriveFolder({ data: { folderId: gdriveFolderId } }); } catch (e) { console.warn("[gdrive] folder delete failed", e); }
