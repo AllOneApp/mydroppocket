@@ -518,6 +518,20 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             <div><Label>{t("agreements.monthly")}</Label><Input type="number" step="0.01" value={form.monthly_payment} onChange={(e) => setForm({ ...form, monthly_payment: e.target.value })} /></div>
             <div><Label>{t("agreements.total")}</Label><Input type="number" step="0.01" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} /></div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>{t("agreements.bank")}</Label>
+              <Select value={form.bank || "__none__"} onValueChange={(v) => setForm({ ...form, bank: v === "__none__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">—</SelectItem>
+                  {BANK_OPTIONS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>{t("agreements.referenceNumber")}</Label><Input inputMode="numeric" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} /></div>
+          </div>
+          <div><Label>{t("agreements.iban")}</Label><Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="EE00 0000 0000 0000 0000" /></div>
           <div><Label>{t("agreements.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
