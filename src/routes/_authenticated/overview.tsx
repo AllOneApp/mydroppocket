@@ -254,28 +254,127 @@ function OverviewPage() {
   const rpNextParent = rpNext ? recurring.find((r: { id: string }) => r.id === (rpNext as { recurring_payment_id: string }).recurring_payment_id) : null;
 
   // Upcoming timeline (next 30 days)
-  type TL = { date: string; label: string; amount?: number; kind: "recurring" | "installment" | "warranty"; icon: typeof Repeat };
-  const timeline: TL[] = [];
+  // Unified event stream (payments, warranties, agreement ends) — used by
+  // "Päeva assistent", "Tänased tegevused" and "Tulevased kohustused" blocks.
+  type EventKind = "installment" | "recurring" | "warranty" | "agreement_end";
+  type Event = {
+    id: string;
+    date: string; // YYYY-MM-DD
+    kind: EventKind;
+    title: string;
+    emoji: string;
+    typeLabel: string;
+    amount?: number;
+    currency?: string;
+    href: string;
+    action: "pay" | "view";
+  };
+
   const in30 = new Date(); in30.setDate(in30.getDate() + 30);
   const in30Iso = in30.toISOString().slice(0, 10);
+  const next7 = new Date(); next7.setDate(next7.getDate() + 7);
+  const next7Iso = next7.toISOString().slice(0, 10);
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowIso = tomorrow.toISOString().slice(0, 10);
 
+  const events: Event[] = [];
+
+  // Installments — include overdue too (already-due, unpaid)
   installmentDerived.forEach((d) => {
-    if (d.nextDue >= today && d.nextDue <= in30Iso) {
-      timeline.push({ date: d.nextDue, label: d.row.title, amount: d.monthly, kind: "installment", icon: CreditCard });
+    if (d.nextDue <= in30Iso) {
+      events.push({
+        id: `inst-${d.row.id}`,
+        date: d.nextDue,
+        kind: "installment",
+        title: d.row.title,
+        emoji: "💳",
+        typeLabel: t("overview.typeInstallment", { defaultValue: "Järelmaks" }),
+        amount: d.monthly,
+        currency: d.row.currency ?? "EUR",
+        href: "/installments",
+        action: "pay",
+      });
     }
   });
-  rpInstances.forEach((i: { due_date: string; status: string; amount: number; recurring_payment_id: string }) => {
-    if (i.status === "pending" && i.due_date >= today && i.due_date <= in30Iso) {
-      const parent = recurring.find((r: { id: string }) => r.id === i.recurring_payment_id) as { service_name?: string } | undefined;
-      timeline.push({ date: i.due_date, label: parent?.service_name ?? "—", amount: Number(i.amount), kind: "recurring", icon: Repeat });
+
+  // Recurring payment instances — pending, in window (incl. overdue)
+  rpInstances.forEach((i: { id: string; due_date: string; status: string; amount: number; recurring_payment_id: string; currency?: string | null }) => {
+    if (i.status === "pending" && i.due_date <= in30Iso) {
+      const parent = recurring.find((r: { id: string }) => r.id === i.recurring_payment_id) as { service_name?: string; category?: string | null } | undefined;
+      events.push({
+        id: `rp-${i.id}`,
+        date: i.due_date,
+        kind: "recurring",
+        title: parent?.service_name ?? "—",
+        emoji: recurringEmoji(parent?.category ?? null, parent?.service_name ?? ""),
+        typeLabel: t("overview.typeRecurring", { defaultValue: "Püsimakse" }),
+        amount: Number(i.amount),
+        currency: (i.currency ?? "EUR") as string,
+        href: "/recurring",
+        action: "pay",
+      });
     }
   });
-  warranties.forEach((w: { warranty_expiry: string | null; product_name: string }) => {
-    if (w.warranty_expiry && w.warranty_expiry >= today && w.warranty_expiry <= in30Iso) {
-      timeline.push({ date: w.warranty_expiry, label: w.product_name, kind: "warranty", icon: ShieldCheck });
+
+  // Warranty expiries — next 30 days
+  warranties.forEach((w: { id: string; warranty_expiry: string | null; product_name: string }) => {
+    if (w.warranty_expiry && w.warranty_expiry <= in30Iso && w.warranty_expiry >= today) {
+      events.push({
+        id: `war-${w.id}`,
+        date: w.warranty_expiry,
+        kind: "warranty",
+        title: t("overview.warrantyExpires", { defaultValue: "{{name}} garantii aegub", name: w.product_name }),
+        emoji: "🛡️",
+        typeLabel: t("overview.typeWarranty", { defaultValue: "Garantii" }),
+        href: "/warranties",
+        action: "view",
+      });
     }
   });
-  timeline.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Agreement end-dates (non-installment) — next 30 days
+  agreements.forEach((a: { id: string; title: string; end_date: string | null; agreement_type?: string | null }) => {
+    if (a.agreement_type === "installment") return;
+    if (a.end_date && a.end_date <= in30Iso && a.end_date >= today) {
+      events.push({
+        id: `agr-${a.id}`,
+        date: a.end_date,
+        kind: "agreement_end",
+        title: t("overview.agreementEnds", { defaultValue: "{{name}} leping lõpeb", name: a.title }),
+        emoji: "📄",
+        typeLabel: t("overview.typeAgreement", { defaultValue: "Leping" }),
+        href: "/agreements",
+        action: "view",
+      });
+    }
+  });
+
+  // Sort by date, then priority (overdue payments first among same date)
+  events.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    const pri: Record<EventKind, number> = { installment: 0, recurring: 1, warranty: 2, agreement_end: 3 };
+    return pri[a.kind] - pri[b.kind];
+  });
+
+  const isPayment = (e: Event) => e.kind === "installment" || e.kind === "recurring";
+  const overdueEvents = events.filter((e) => isPayment(e) && e.date < today);
+  const todayEvents = events.filter((e) => e.date === today);
+  const tomorrowEvents = events.filter((e) => e.date === tomorrowIso);
+  const in7Payments = events.filter((e) => isPayment(e) && e.date > tomorrowIso && e.date <= next7Iso);
+  const warrantySoon = events.filter((e) => e.kind === "warranty" && e.date > today);
+  const agreementSoon = events.filter((e) => e.kind === "agreement_end" && e.date > today);
+
+  const todaysActions: Event[] = [
+    ...todayEvents,
+    ...overdueEvents,
+    ...tomorrowEvents,
+    ...in7Payments,
+    ...warrantySoon.filter((e) => !tomorrowEvents.includes(e)),
+    ...agreementSoon.filter((e) => !tomorrowEvents.includes(e)),
+  ];
+  // De-dup preserving order
+  const seen = new Set<string>();
+  const todaysActionsUnique = todaysActions.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
 
   // AI summary (rule-based)
   const summaryPoints: string[] = [];
@@ -291,9 +390,7 @@ function OverviewPage() {
   if (highestSpendCat) {
     summaryPoints.push(`Kõige rohkem kulutasid kategooriale "${formatCategory("expenses", highestSpendCat[0])}" — ${formatCurrency(highestSpendCat[1])}.`);
   }
-  const next7 = new Date(); next7.setDate(next7.getDate() + 7);
-  const next7Iso = next7.toISOString().slice(0, 10);
-  const upcoming7 = timeline.filter((x) => x.date <= next7Iso && (x.kind === "recurring" || x.kind === "installment"));
+  const upcoming7 = events.filter((x) => isPayment(x) && x.date <= next7Iso && x.date >= today);
   if (upcoming7.length > 0) {
     const sum = upcoming7.reduce((s, x) => s + (x.amount ?? 0), 0);
     summaryPoints.push(`Järgmise 7 päeva jooksul tuleb tasuda ${upcoming7.length} makset kogusummas ${formatCurrency(sum)}.`);
@@ -310,6 +407,47 @@ function OverviewPage() {
     summaryPoints.push(`${soon.length} garantii${soon.length > 1 ? "d" : ""} aegub varsti (lähim ${days} päeva pärast).`);
   }
   if (summaryPoints.length === 0) summaryPoints.push("Kõik on korras — olulisi muudatusi ega tähtaegasid pole.");
+
+  // Päeva assistent — human-friendly bullet list
+  const assistantLines: { tone: "red" | "yellow" | "green" | "neutral"; text: string }[] = [];
+  if (overdueEvents.length > 0) {
+    assistantLines.push({
+      tone: "red",
+      text: t("overview.assistantOverdue", {
+        defaultValue: "Sul on {{count}} hilinenud makset.",
+        count: overdueEvents.length,
+      }),
+    });
+  }
+  if (todayEvents.length === 0) {
+    assistantLines.push({ tone: "green", text: t("overview.assistantNoToday", { defaultValue: "Täna ei ole ühtegi makset ega aegumist." }) });
+  } else {
+    todayEvents.slice(0, 3).forEach((e) => {
+      const amt = e.amount !== undefined ? ` — ${formatCurrency(e.amount, e.currency ?? "EUR")}` : "";
+      assistantLines.push({ tone: "red", text: `${e.emoji} ${e.title}${amt} (${t("overview.today", { defaultValue: "täna" })})` });
+    });
+  }
+  if (tomorrowEvents.length > 0) {
+    const e = tomorrowEvents[0];
+    const amt = e.amount !== undefined ? ` summas ${formatCurrency(e.amount, e.currency ?? "EUR")}` : "";
+    assistantLines.push({
+      tone: "yellow",
+      text: t("overview.assistantTomorrow", { defaultValue: "Homme: {{title}}{{amt}}.", title: e.title, amt }),
+    });
+  }
+  const totalIn30 = events.filter((e) => e.date >= today && e.date <= in30Iso).length + overdueEvents.length;
+  if (totalIn30 > 0) {
+    assistantLines.push({
+      tone: "neutral",
+      text: t("overview.assistant30", { defaultValue: "Järgmise 30 päeva jooksul on kokku {{count}} kohustust.", count: totalIn30 }),
+    });
+  }
+  if (warrantySoon.length === 0 && agreementSoon.length === 0) {
+    assistantLines.push({ tone: "green", text: t("overview.assistantNoExpiring", { defaultValue: "Lähiajal garantiisid ega lepinguid ei aegu." }) });
+  }
+  if (assistantLines.length === 0 || (overdueEvents.length === 0 && todayEvents.length === 0 && tomorrowEvents.length === 0 && warrantySoon.length === 0 && agreementSoon.length === 0)) {
+    assistantLines.unshift({ tone: "green", text: t("overview.assistantAllGood", { defaultValue: "🎉 Kõik kohustused on hetkel korras." }) });
+  }
 
   const PRESETS: Preset[] = ["today", "thisWeek", "thisMonth", "thisYear", "lastMonth", "lastYear", "custom"];
 
