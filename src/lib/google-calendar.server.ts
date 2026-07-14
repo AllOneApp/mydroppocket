@@ -158,6 +158,11 @@ export interface CalendarConnection {
   calendarId: string;
   reminderMinutes: number[];
   syncInstallments: boolean;
+  syncRecurring: boolean;
+  syncWarranties: boolean;
+  syncAgreements: boolean;
+  warrantyReminderDays: number[];
+  agreementReminderDays: number[];
 }
 
 export async function getValidCalendarAccessTokenForUser(
@@ -170,7 +175,7 @@ export async function getValidCalendarAccessTokenForUser(
   };
   const { data, error } = await db
     .from("google_calendar_connections")
-    .select("access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, calendar_id, calendar_name, reminder_minutes, sync_installments")
+    .select("access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, calendar_id, calendar_name, reminder_minutes, sync_installments, sync_recurring, sync_warranties, sync_agreements, warranty_reminder_days, agreement_reminder_days")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
@@ -209,6 +214,11 @@ export async function getValidCalendarAccessTokenForUser(
     calendarId,
     reminderMinutes: (data.reminder_minutes as number[]) ?? [1440],
     syncInstallments: (data.sync_installments as boolean) ?? true,
+    syncRecurring: (data.sync_recurring as boolean) ?? true,
+    syncWarranties: (data.sync_warranties as boolean) ?? true,
+    syncAgreements: (data.sync_agreements as boolean) ?? true,
+    warrantyReminderDays: (data.warranty_reminder_days as number[]) ?? [30, 7, 0],
+    agreementReminderDays: (data.agreement_reminder_days as number[]) ?? [30, 7, 0],
   };
 }
 
@@ -667,4 +677,492 @@ export async function syncAllInstallmentsForUser(userId: string): Promise<{
     }
   }
   return { created, updated, removed, skipped };
+}
+
+// ==================================================================
+// Generic per-source sync helpers (recurring / warranty / agreement_end)
+//
+// Each "source" (a recurring_payment, warranty, agreement) can map to N
+// desired events, keyed by `sequence`. We persist a tracking row per
+// (source_type, source_id, sequence) so we can idempotently upsert or
+// remove them. This is the modular seam that lets us later add Apple
+// Calendar / Outlook: swap out `createEvent`/`patchEvent`/`deleteEvent`
+// for another provider while keeping the same schedule generators.
+// ==================================================================
+
+export type CalendarSourceType = "installment" | "recurring" | "warranty" | "agreement_end";
+
+interface DesiredEvent {
+  sequence: number;
+  date: string;
+  event: EventInput;
+}
+
+interface SyncStats {
+  created: number;
+  updated: number;
+  removed: number;
+}
+
+function addDaysIso(iso: string, delta: number): string {
+  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + delta);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
+async function upsertSourceEvents(opts: {
+  userId: string;
+  sourceType: CalendarSourceType;
+  sourceId: string;
+  desired: DesiredEvent[];
+  conn: CalendarConnection;
+}): Promise<SyncStats> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
+  const { data: trackedRows } = await dbAny
+    .from("calendar_events")
+    .select("id, sequence, google_event_id, calendar_id, event_date, status")
+    .eq("user_id", opts.userId)
+    .eq("source_type", opts.sourceType)
+    .eq("source_id", opts.sourceId);
+  const tracked = (trackedRows ?? []) as Array<{
+    id: string;
+    sequence: number;
+    google_event_id: string;
+    calendar_id: string;
+    event_date: string;
+    status: string;
+  }>;
+  const bySeq = new Map<number, (typeof tracked)[number]>();
+  for (const t of tracked) bySeq.set(t.sequence, t);
+
+  const stats: SyncStats = { created: 0, updated: 0, removed: 0 };
+  const desiredSeqs = new Set(opts.desired.map((d) => d.sequence));
+
+  // Remove tracked events not in desired set
+  for (const t of tracked) {
+    if (!desiredSeqs.has(t.sequence)) {
+      try {
+        await deleteEvent({
+          accessToken: opts.conn.accessToken,
+          calendarId: t.calendar_id,
+          eventId: t.google_event_id,
+        });
+      } catch (e) {
+        console.warn("[gcal] delete failed", e);
+      }
+      await dbAny.from("calendar_events").delete().eq("id", t.id);
+      stats.removed++;
+    }
+  }
+
+  // Upsert desired events
+  for (const d of opts.desired) {
+    const existing = bySeq.get(d.sequence);
+    if (!existing) {
+      const c = await createEvent({
+        accessToken: opts.conn.accessToken,
+        calendarId: opts.conn.calendarId,
+        event: d.event,
+      });
+      await dbAny.from("calendar_events").insert({
+        user_id: opts.userId,
+        source_type: opts.sourceType,
+        source_id: opts.sourceId,
+        sequence: d.sequence,
+        google_event_id: c.id,
+        calendar_id: opts.conn.calendarId,
+        event_date: d.date,
+        status: "active",
+      });
+      stats.created++;
+      continue;
+    }
+    if (existing.event_date === d.date && existing.calendar_id === opts.conn.calendarId) {
+      // Still patch (title/description/reminders may have changed) but avoid counting no-ops as created.
+      try {
+        await patchEvent({
+          accessToken: opts.conn.accessToken,
+          calendarId: existing.calendar_id,
+          eventId: existing.google_event_id,
+          event: d.event,
+        });
+      } catch (e) {
+        console.warn("[gcal] patch failed", e);
+      }
+      continue;
+    }
+    try {
+      await patchEvent({
+        accessToken: opts.conn.accessToken,
+        calendarId: existing.calendar_id,
+        eventId: existing.google_event_id,
+        event: d.event,
+      });
+      await dbAny
+        .from("calendar_events")
+        .update({
+          event_date: d.date,
+          calendar_id: opts.conn.calendarId,
+          status: "active",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+      stats.updated++;
+    } catch (e) {
+      console.warn("[gcal] patch failed, recreating", e);
+      const c = await createEvent({
+        accessToken: opts.conn.accessToken,
+        calendarId: opts.conn.calendarId,
+        event: d.event,
+      });
+      await dbAny
+        .from("calendar_events")
+        .update({
+          google_event_id: c.id,
+          calendar_id: opts.conn.calendarId,
+          event_date: d.date,
+          status: "active",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+      stats.created++;
+    }
+  }
+
+  return stats;
+}
+
+/** Remove all tracked events for one source (used on record delete). */
+export async function removeSourceEventsForUser(opts: {
+  userId: string;
+  sourceType: CalendarSourceType;
+  sourceId: string;
+}): Promise<{ removed: number; status: "removed" | "not-connected" | "skipped" }> {
+  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
+  if (!conn) return { removed: 0, status: "not-connected" };
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
+  const { data: trackedRows } = await dbAny
+    .from("calendar_events")
+    .select("id, google_event_id, calendar_id")
+    .eq("user_id", opts.userId)
+    .eq("source_type", opts.sourceType)
+    .eq("source_id", opts.sourceId);
+  const tracked = (trackedRows ?? []) as Array<{ id: string; google_event_id: string; calendar_id: string }>;
+  let removed = 0;
+  for (const t of tracked) {
+    try {
+      await deleteEvent({ accessToken: conn.accessToken, calendarId: t.calendar_id, eventId: t.google_event_id });
+    } catch (e) {
+      console.warn("[gcal] delete failed", e);
+    }
+    await dbAny.from("calendar_events").delete().eq("id", t.id);
+    removed++;
+  }
+  return { removed, status: removed > 0 ? "removed" : "skipped" };
+}
+
+// ------------------ recurring payments ------------------
+
+type RecurringRow = {
+  id: string;
+  user_id: string;
+  service_name: string;
+  provider: string | null;
+  category: string | null;
+  amount: number;
+  currency: string | null;
+  frequency: string;
+  end_date: string | null;
+  next_due_date: string;
+};
+
+function buildRecurringEvent(row: RecurringRow, date: string, reminderMinutes: number[]): EventInput {
+  const currency = row.currency ?? "EUR";
+  const lines: string[] = [];
+  if (row.provider) lines.push(`Teenusepakkuja: ${row.provider}`);
+  lines.push(`Summa: ${formatAmount(Number(row.amount), currency)}`);
+  lines.push(`Sagedus: ${row.frequency}`);
+  return {
+    title: `📅 ${row.service_name}`,
+    description: lines.join("\n"),
+    date,
+    reminderMinutes,
+  };
+}
+
+export async function syncRecurringForUser(opts: {
+  userId: string;
+  recurringId: string;
+}): Promise<{ status: string; created?: number; updated?: number; removed?: number }> {
+  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
+  if (!conn) return { status: "not-connected" };
+  if (!conn.syncRecurring) {
+    // If user turned it off, cleanup any stale events.
+    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "recurring", sourceId: opts.recurringId });
+    return { status: "skipped", removed: r.removed };
+  }
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
+  const { data, error } = await dbAny
+    .from("recurring_payments")
+    .select("id, user_id, service_name, provider, category, amount, currency, frequency, end_date, next_due_date")
+    .eq("id", opts.recurringId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || (data.user_id as string) !== opts.userId) return { status: "skipped" };
+  const row = data as unknown as RecurringRow;
+  if (!row.next_due_date) {
+    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "recurring", sourceId: row.id });
+    return { status: "removed", removed: r.removed };
+  }
+  if (row.end_date && row.next_due_date > row.end_date) {
+    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "recurring", sourceId: row.id });
+    return { status: "removed", removed: r.removed };
+  }
+  const desired: DesiredEvent[] = [
+    { sequence: 0, date: row.next_due_date, event: buildRecurringEvent(row, row.next_due_date, conn.reminderMinutes) },
+  ];
+  const stats = await upsertSourceEvents({
+    userId: opts.userId,
+    sourceType: "recurring",
+    sourceId: row.id,
+    desired,
+    conn,
+  });
+  return { status: "ok", ...stats };
+}
+
+export async function syncAllRecurringForUser(userId: string): Promise<SyncStats & { skipped: number }> {
+  const conn = await getValidCalendarAccessTokenForUser(userId);
+  if (!conn || !conn.syncRecurring) return { created: 0, updated: 0, removed: 0, skipped: 0 };
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
+  const { data } = await dbAny.from("recurring_payments").select("id").eq("user_id", userId);
+  const rows = (data ?? []) as { id: string }[];
+  const acc = { created: 0, updated: 0, removed: 0, skipped: 0 };
+  for (const r of rows) {
+    try {
+      const s = await syncRecurringForUser({ userId, recurringId: r.id });
+      acc.created += s.created ?? 0;
+      acc.updated += s.updated ?? 0;
+      acc.removed += s.removed ?? 0;
+      if (!s.created && !s.updated && !s.removed) acc.skipped++;
+    } catch (e) {
+      console.warn("[gcal] recurring sync failed", r.id, e);
+      acc.skipped++;
+    }
+  }
+  return acc;
+}
+
+// ------------------ warranties ------------------
+
+type WarrantyRow = {
+  id: string;
+  user_id: string;
+  product_name: string;
+  store: string | null;
+  warranty_expiry: string | null;
+};
+
+function buildWarrantyEvent(row: WarrantyRow, date: string, daysBefore: number, expiry: string, reminderMinutes: number[]): EventInput {
+  const lines: string[] = [];
+  if (row.store) lines.push(`Kauplus: ${row.store}`);
+  lines.push(`Garantii aegub: ${expiry}`);
+  const suffix = daysBefore === 0 ? "täna" : `${daysBefore} päeva pärast`;
+  return {
+    title: `🛡️ ${row.product_name} garantii aegub ${suffix}`,
+    description: lines.join("\n"),
+    date,
+    reminderMinutes,
+  };
+}
+
+export async function syncWarrantyForUser(opts: {
+  userId: string;
+  warrantyId: string;
+}): Promise<{ status: string; created?: number; updated?: number; removed?: number }> {
+  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
+  if (!conn) return { status: "not-connected" };
+  if (!conn.syncWarranties) {
+    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "warranty", sourceId: opts.warrantyId });
+    return { status: "skipped", removed: r.removed };
+  }
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
+  const { data, error } = await dbAny
+    .from("warranties")
+    .select("id, user_id, product_name, store, warranty_expiry")
+    .eq("id", opts.warrantyId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || (data.user_id as string) !== opts.userId) return { status: "skipped" };
+  const row = data as unknown as WarrantyRow;
+  if (!row.warranty_expiry) {
+    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "warranty", sourceId: row.id });
+    return { status: "removed", removed: r.removed };
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const desired: DesiredEvent[] = [];
+  // seq index === position in warrantyReminderDays; skip past dates and dates after expiry
+  conn.warrantyReminderDays.forEach((days, seq) => {
+    const date = addDaysIso(row.warranty_expiry!, -Math.abs(days));
+    if (date < today) return;
+    desired.push({
+      sequence: seq,
+      date,
+      event: buildWarrantyEvent(row, date, Math.abs(days), row.warranty_expiry!, conn.reminderMinutes),
+    });
+  });
+  const stats = await upsertSourceEvents({
+    userId: opts.userId,
+    sourceType: "warranty",
+    sourceId: row.id,
+    desired,
+    conn,
+  });
+  return { status: "ok", ...stats };
+}
+
+export async function syncAllWarrantiesForUser(userId: string): Promise<SyncStats & { skipped: number }> {
+  const conn = await getValidCalendarAccessTokenForUser(userId);
+  if (!conn || !conn.syncWarranties) return { created: 0, updated: 0, removed: 0, skipped: 0 };
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
+  const { data } = await dbAny.from("warranties").select("id").eq("user_id", userId);
+  const rows = (data ?? []) as { id: string }[];
+  const acc = { created: 0, updated: 0, removed: 0, skipped: 0 };
+  for (const r of rows) {
+    try {
+      const s = await syncWarrantyForUser({ userId, warrantyId: r.id });
+      acc.created += s.created ?? 0;
+      acc.updated += s.updated ?? 0;
+      acc.removed += s.removed ?? 0;
+      if (!s.created && !s.updated && !s.removed) acc.skipped++;
+    } catch (e) {
+      console.warn("[gcal] warranty sync failed", r.id, e);
+      acc.skipped++;
+    }
+  }
+  return acc;
+}
+
+// ------------------ agreement end dates (non-installment) ------------------
+
+type AgreementEndRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  agreement_type: string;
+  end_date: string | null;
+};
+
+function buildAgreementEndEvent(row: AgreementEndRow, date: string, daysBefore: number, end: string, reminderMinutes: number[]): EventInput {
+  const suffix = daysBefore === 0 ? "täna" : `${daysBefore} päeva pärast`;
+  return {
+    title: `📄 ${row.title} leping lõpeb ${suffix}`,
+    description: `Lepingu lõpp: ${end}`,
+    date,
+    reminderMinutes,
+  };
+}
+
+export async function syncAgreementEndForUser(opts: {
+  userId: string;
+  agreementId: string;
+}): Promise<{ status: string; created?: number; updated?: number; removed?: number }> {
+  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
+  if (!conn) return { status: "not-connected" };
+  if (!conn.syncAgreements) {
+    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "agreement_end", sourceId: opts.agreementId });
+    return { status: "skipped", removed: r.removed };
+  }
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
+  const { data, error } = await dbAny
+    .from("agreements")
+    .select("id, user_id, title, agreement_type, end_date")
+    .eq("id", opts.agreementId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || (data.user_id as string) !== opts.userId) return { status: "skipped" };
+  const row = data as unknown as AgreementEndRow;
+  // Only non-installment agreements with an end date get "leping lõpeb" events.
+  if (row.agreement_type === "installment" || !row.end_date) {
+    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "agreement_end", sourceId: row.id });
+    return { status: "removed", removed: r.removed };
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const desired: DesiredEvent[] = [];
+  conn.agreementReminderDays.forEach((days, seq) => {
+    const date = addDaysIso(row.end_date!, -Math.abs(days));
+    if (date < today) return;
+    desired.push({
+      sequence: seq,
+      date,
+      event: buildAgreementEndEvent(row, date, Math.abs(days), row.end_date!, conn.reminderMinutes),
+    });
+  });
+  const stats = await upsertSourceEvents({
+    userId: opts.userId,
+    sourceType: "agreement_end",
+    sourceId: row.id,
+    desired,
+    conn,
+  });
+  return { status: "ok", ...stats };
+}
+
+export async function syncAllAgreementEndsForUser(userId: string): Promise<SyncStats & { skipped: number }> {
+  const conn = await getValidCalendarAccessTokenForUser(userId);
+  if (!conn || !conn.syncAgreements) return { created: 0, updated: 0, removed: 0, skipped: 0 };
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
+  const { data } = await dbAny
+    .from("agreements")
+    .select("id, agreement_type, end_date")
+    .eq("user_id", userId);
+  const rows = (data ?? []) as { id: string; agreement_type: string; end_date: string | null }[];
+  const acc = { created: 0, updated: 0, removed: 0, skipped: 0 };
+  for (const r of rows) {
+    if (r.agreement_type === "installment") continue;
+    try {
+      const s = await syncAgreementEndForUser({ userId, agreementId: r.id });
+      acc.created += s.created ?? 0;
+      acc.updated += s.updated ?? 0;
+      acc.removed += s.removed ?? 0;
+      if (!s.created && !s.updated && !s.removed) acc.skipped++;
+    } catch (e) {
+      console.warn("[gcal] agreement-end sync failed", r.id, e);
+      acc.skipped++;
+    }
+  }
+  return acc;
+}
+
+// ------------------ combined full sync ------------------
+
+export async function syncEverythingForUser(userId: string): Promise<{
+  created: number;
+  updated: number;
+  removed: number;
+  skipped: number;
+}> {
+  const conn = await getValidCalendarAccessTokenForUser(userId);
+  if (!conn) return { created: 0, updated: 0, removed: 0, skipped: 0 };
+  const [a, b, c, d] = await Promise.all([
+    syncAllInstallmentsForUser(userId),
+    syncAllRecurringForUser(userId),
+    syncAllWarrantiesForUser(userId),
+    syncAllAgreementEndsForUser(userId),
+  ]);
+  return {
+    created: a.created + b.created + c.created + d.created,
+    updated: a.updated + b.updated + c.updated + d.updated,
+    removed: a.removed + b.removed + c.removed + d.removed,
+    skipped: a.skipped + b.skipped + c.skipped + d.skipped,
+  };
 }
