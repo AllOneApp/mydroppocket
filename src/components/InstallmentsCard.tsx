@@ -125,7 +125,7 @@ function toneDotClass(tone: "green" | "yellow" | "red"): string {
 async function copyText(value: string, copiedMsg: string, failedMsg: string) {
   try {
     await navigator.clipboard.writeText(value);
-    toast.success(copiedMsg);
+    toast.success(copiedMsg, { duration: 1500 });
   } catch {
     toast.error(failedMsg);
   }
