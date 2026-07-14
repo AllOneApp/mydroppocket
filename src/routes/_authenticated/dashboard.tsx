@@ -14,6 +14,7 @@ import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
 import { deleteFile } from "@/lib/records";
 import { useTranslation } from "react-i18next";
 import { ExpenseDialog } from "./expenses";
+import { InstallmentsCard } from "@/components/InstallmentsCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
