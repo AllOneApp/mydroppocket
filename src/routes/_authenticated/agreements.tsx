@@ -489,6 +489,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             }}
           />
           {pendingFiles.length > 0 && (
+            <>
             <Button
               type="button"
               variant="secondary"
@@ -498,6 +499,10 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             >
               {scanning ? t("file.scanning") : t("file.autoFill")}
             </Button>
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
+              {t("file.aiWarning")}
+            </p>
+            </>
           )}
           <div><Label>{t("agreements.titleField")} *</Label><Input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
           <div><Label>{t("agreements.type")}</Label>
