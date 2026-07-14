@@ -268,6 +268,7 @@ function AgreementDetail({
         { label: t("agreements.endDate"), value: formatDate(row.end_date) },
         { label: t("agreements.monthly"), value: row.monthly_payment != null ? formatCurrency(Number(row.monthly_payment), currency) : "—" },
         { label: t("agreements.total"), value: row.total_amount != null ? formatCurrency(Number(row.total_amount), currency) : "—" },
+        { label: t("agreements.paymentDay", { defaultValue: "Igakuine maksetähtaeg" }), value: row.payment_day_of_month != null ? t("agreements.paymentDayValue", { defaultValue: "kuu {{day}}. päev", day: row.payment_day_of_month }) : "—" },
         { label: t("agreements.bank"), value: row.bank || "—" },
         { label: t("agreements.payeeName", { defaultValue: "Saaja nimi" }), value: <CopyableValue value={row.payee_name} /> },
         { label: t("agreements.iban"), value: <CopyableValue value={row.iban} /> },
