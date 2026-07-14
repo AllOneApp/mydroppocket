@@ -9,6 +9,9 @@ export type AgreementExtraction = {
   total_amount: number | null;
   currency: string | null;
   notes: string | null;
+  iban: string | null;
+  bank: string | null;
+  reference_number: string | null;
 };
 
 const AGREEMENT_TYPES = ["installment", "warranty_extension", "purchase_contract", "service", "contract"] as const;
@@ -28,6 +31,9 @@ Extract these fields independently. A missing field must be null and must never 
 - monthly_payment: recurring monthly instalment/fee as a number
 - total_amount: total financed, total payable, or contract total as a number; prefer the total payable by the customer when clearly stated
 - currency: ISO currency code, for example EUR
+- iban: payment bank account (IBAN) that the customer must pay to. Return in canonical form without spaces (for example EE021010220123456789). Null when not stated.
+- bank: the bank whose account is used for payments. Use a short display name when clear (Swedbank, SEB, LHV, Coop Pank, Luminor, Inbank, Bigbank, Holm Bank, TF Bank). Null when not stated.
+- reference_number: payment reference number (viitenumber / reference / makseviide) the customer must include with each payment. Digits only, no spaces. Null when not stated.
 - notes: concise useful details not represented above, or null
 - ocr_text: page-labelled source excerpts that support the extracted values, including labels and nearby values
 
