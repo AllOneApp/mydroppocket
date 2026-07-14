@@ -345,6 +345,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           total_amount: d.total_amount != null ? String(d.total_amount) : f.total_amount,
           currency: (d.currency as string) || f.currency,
           notes: (d.notes as string) || f.notes,
+          iban: (d.iban as string) || f.iban,
+          bank: (d.bank as string) || f.bank,
+          reference_number: (d.reference_number as string) || f.reference_number,
         }));
         toast.success(t("common.autoFilled"));
       } else {
