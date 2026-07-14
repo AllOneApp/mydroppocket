@@ -43,7 +43,8 @@
     "installments": "Järelmaksud",
     "agreements": "Lepingud",
     "search": "Otsing",
-    "settings": "Seaded"
+    "settings": "Seaded",
+    "overview": "Ülevaade"
   },
   "landing": {
     "badge": "AI-toega tšekkide skaneerimine",
