@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileDrop } from "@/components/FileDrop";
 import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { DateRangeFilter, computeRange, localDateString, type DateRange } from "@/components/DateRangeFilter";
 import { supabase } from "@/integrations/supabase/client";
 import { expensesQueryKey, expensesQueryOptions, type ExpenseEntryType, type ExpenseRow } from "@/lib/expenses";
@@ -41,6 +42,7 @@ function ExpensesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [prefill, setPrefill] = useState<Partial<Row> | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
   const [range, setRange] = useState<DateRange>(() => {
     const r = computeRange("thisMonth");
     return { preset: "thisMonth", from: r.from, to: r.to };
@@ -53,23 +55,24 @@ function ExpensesPage() {
   const expense = filtered.filter((r) => r.type === "expense").reduce((s, r) => s + Number(r.amount), 0);
   const balance = income - expense;
 
-  async function del(r: Row) {
-    if (!confirm(t("expenses.confirmDelete"))) return;
+  async function performDelete(r: Row) {
+    const prev = qc.getQueryData<Row[]>(expensesQueryKey);
+    qc.setQueryData<Row[]>(expensesQueryKey, (current = []) => current.filter((entry) => entry.id !== r.id));
     try {
       const { error } = await supabase.from("expenses").delete().eq("id", r.id);
       if (error) throw error;
-      if (r.file_path) await deleteFile(r.file_path);
+      if (r.file_path) { try { await deleteFile(r.file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
       const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
       if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
       try { await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
-      qc.setQueryData<Row[]>(expensesQueryKey, (current = []) => current.filter((entry) => entry.id !== r.id));
       await Promise.all([
         qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
       ]);
       toast.success(t("common.deleted"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("common.failed"));
+      if (prev) qc.setQueryData(expensesQueryKey, prev);
+      toast.error(error instanceof Error ? error.message : t("common.deleteFailed"));
     }
   }
 
@@ -132,7 +135,7 @@ function ExpensesPage() {
                   </button>
                   <p className={`shrink-0 text-lg font-semibold ${isIncome ? "text-green-600" : "text-red-600"}`}>{isIncome ? "+" : "−"}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
                 </div>
-                <div className="mt-3"><RecordActions filePath={r.file_path} fileName={r.file_name} onDelete={() => del(r)} /></div>
+                <div className="mt-3"><RecordActions filePath={r.file_path} fileName={r.file_name} onDelete={() => setPendingDelete(r)} /></div>
               </div>
             );
           })}
@@ -140,6 +143,11 @@ function ExpensesPage() {
       )}
 
       <ExpenseDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} prefill={prefill} />
+      <ConfirmDeleteDialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
+        onConfirm={() => { const r = pendingDelete; setPendingDelete(null); if (r) void performDelete(r); }}
+      />
     </AppShell>
   );
 }

@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MultiFileDrop, type ExistingAttachment } from "@/components/MultiFileDrop";
 import { RecordDetailView, RecordActionRow, type DetailAttachment, type DetailField } from "@/components/RecordDetailView";
 import { VoiceInput } from "@/components/VoiceInput";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
 import { syncAgreementAttachments, syncBackupCategory, deleteGoogleDriveFile, deleteAgreementDriveFolder, currentBackupLang } from "@/lib/google-drive.functions";
@@ -94,6 +95,7 @@ function AgreementsPage() {
   const [editing, setEditing] = useState<Row | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
   const [detailAtts, setDetailAtts] = useState<DetailAttachment[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
 
   async function openDetail(r: Row) {
     const { data } = await supabase
@@ -120,31 +122,38 @@ function AgreementsPage() {
     },
   });
 
-  async function del(r: Row) {
-    if (!confirm(t("agreements.confirmDelete"))) return;
-    // Remove any attachments' storage files.
-    const { data: atts } = await supabase
-      .from("agreement_attachments")
-      .select("file_path")
-      .eq("agreement_id", r.id);
-    for (const a of (atts ?? []) as Array<{ file_path: string }>) {
-      try { await deleteFile(a.file_path); } catch (e) { console.warn("[storage] delete failed", e); }
+  async function performDelete(r: Row) {
+    const prev = qc.getQueryData<Row[]>(["agreements"]);
+    qc.setQueryData<Row[]>(["agreements"], (current = []) => current.filter((e) => e.id !== r.id));
+    try {
+      const { error } = await supabase.from("agreements").delete().eq("id", r.id);
+      if (error) throw error;
+      // storage attachments cleanup (best-effort)
+      const { data: atts } = await supabase
+        .from("agreement_attachments")
+        .select("file_path")
+        .eq("agreement_id", r.id);
+      for (const a of (atts ?? []) as Array<{ file_path: string }>) {
+        try { await deleteFile(a.file_path); } catch (e) { console.warn("[storage] delete failed", e); }
+      }
+      if (r.file_path) { try { await deleteFile(r.file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+      const gdriveFolderId = (r as unknown as { gdrive_folder_id?: string | null }).gdrive_folder_id;
+      if (gdriveFolderId) {
+        try { await deleteAgreementDriveFolder({ data: { folderId: gdriveFolderId } }); } catch (e) { console.warn("[gdrive] folder delete failed", e); }
+      } else {
+        const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
+        if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
+      }
+      try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["agreements"], refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
+      ]);
+      toast.success(t("common.deleted"));
+    } catch (e) {
+      if (prev) qc.setQueryData(["agreements"], prev);
+      toast.error(e instanceof Error ? e.message : t("common.deleteFailed"));
     }
-    if (r.file_path) { try { await deleteFile(r.file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
-
-    // Drive: prefer removing the whole per-agreement folder if we have it.
-    const gdriveFolderId = (r as unknown as { gdrive_folder_id?: string | null }).gdrive_folder_id;
-    if (gdriveFolderId) {
-      try { await deleteAgreementDriveFolder({ data: { folderId: gdriveFolderId } }); } catch (e) { console.warn("[gdrive] folder delete failed", e); }
-    } else {
-      const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
-      if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
-    }
-
-    await supabase.from("agreements").delete().eq("id", r.id);
-    try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
-    qc.invalidateQueries({ queryKey: ["agreements"] });
-    toast.success(t("common.deleted"));
   }
 
   return (
@@ -185,7 +194,7 @@ function AgreementsPage() {
                 <RecordActionRow
                   onView={() => { void openDetail(r); }}
                   onEdit={() => { setEditing(r); setOpen(true); }}
-                  onDelete={() => del(r)}
+                  onDelete={() => setPendingDelete(r)}
                 />
               </div>
             </div>
@@ -199,7 +208,12 @@ function AgreementsPage() {
         attachments={detailAtts}
         onOpenChange={(o) => { if (!o) setDetail(null); }}
         onEdit={() => { if (detail) { setEditing(detail); setDetail(null); setOpen(true); } }}
-        onDelete={() => { if (detail) { const r = detail; setDetail(null); void del(r); } }}
+        onDelete={() => { if (detail) { const r = detail; setDetail(null); setPendingDelete(r); } }}
+      />
+      <ConfirmDeleteDialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
+        onConfirm={() => { const r = pendingDelete; setPendingDelete(null); if (r) void performDelete(r); }}
       />
     </AppShell>
   );
