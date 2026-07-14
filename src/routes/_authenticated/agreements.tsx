@@ -160,7 +160,7 @@ function AgreementsPage() {
         </div>
       )}
 
-      <AgreementDialog open={open} onOpenChange={setOpen} row={editing} />
+      <AgreementDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} />
       <AgreementDetail
         row={detail}
         attachments={detailAtts}

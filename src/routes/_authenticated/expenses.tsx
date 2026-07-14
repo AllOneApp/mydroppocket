@@ -139,7 +139,7 @@ function ExpensesPage() {
         </div>
       )}
 
-      <ExpenseDialog open={open} onOpenChange={setOpen} row={editing} prefill={prefill} />
+      <ExpenseDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} prefill={prefill} />
     </AppShell>
   );
 }
