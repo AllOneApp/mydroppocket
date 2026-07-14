@@ -191,6 +191,8 @@
     "iban": "Pangakonto (IBAN)",
     "bank": "Pank",
     "referenceNumber": "Viitenumber",
+    "paymentDay": "Igakuine maksetähtaeg",
+    "paymentDayValue": "kuu {{day}}. päev",
     "copy": "Kopeeri",
     "copied": "Kopeeritud",
     "bankOther": "Muu",

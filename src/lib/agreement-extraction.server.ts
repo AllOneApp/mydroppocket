@@ -13,6 +13,7 @@ export type AgreementExtraction = {
   bank: string | null;
   reference_number: string | null;
   payee_name: string | null;
+  payment_day_of_month: number | null;
 };
 
 const AGREEMENT_TYPES = ["installment", "warranty_extension", "purchase_contract", "service", "contract"] as const;
@@ -23,6 +24,8 @@ Treat every attached image and PDF, in the exact order supplied, as pages or app
 First identify whether it is an installment/consumer-credit agreement, service agreement, purchase contract, warranty extension, or another contract. Installment agreements may use terms such as credit amount, financed amount, repayment schedule, monthly instalment, total repayable amount, and contract number. Service agreements may use customer number, service period, monthly fee, provider, and termination date.
 
 CRITICAL PAYMENT FIELDS — always search every page (including payment/instructions/appendix pages and any small print, tables, or footers) for the bank account (IBAN), the bank name, the payment reference number, and the payee / account owner name. These fields are frequently near labels such as "Arvelduskonto", "Pangakonto", "Konto", "IBAN", "Saaja konto", "Saaja", "Saaja nimi", "Konto omanik", "Makse saaja", "Panga rekvisiidid", "Bank", "Bank account", "Beneficiary", "Beneficiary name", "Account holder", "Viitenumber", "Viide", "Makseviide", "Reference", "Reference number", "Payment reference". Return them verbatim from the document; never invent them.
+
+MONTHLY PAYMENT DAY — search every page for the day of the month on which the recurring instalment is due. It appears near phrases such as "Maksepäev on iga kuu 20. kuupäeval", "Tasumine toimub iga kuu 5. kuupäevaks", "Igakuine maksetähtaeg on kuu 15. päev", "Maksetähtaeg", "Maksepäev", "iga kuu X. kuupäeval", "monthly due date", "payment due on the Xth of each month", "due date: Xth". Return the day as an integer 1–31 in payment_day_of_month; null when not stated. Do not confuse this with the agreement start date.
 
 Extract these fields independently. A missing field must be null and must never prevent other fields from being returned:
 - title: the document title or a concise descriptive title
@@ -38,6 +41,7 @@ Extract these fields independently. A missing field must be null and must never 
 - bank: the bank whose account is used for payments. Use a short display name when clear (Swedbank, SEB, LHV, Coop Pank, Luminor, Inbank, Bigbank, Holm Bank, TF Bank). Null when not stated.
 - reference_number: payment reference number (viitenumber / reference / makseviide) the customer must include with each payment. Digits only, no spaces. Null when not stated.
 - payee_name: the payment beneficiary / account owner name that the customer pays to (for example "AS Inbank Finance", "AS Inbank", "AS SEB Pank", "LHV Finance AS", "Holm Bank AS", "Bigbank AS", "TF Bank AB", "Coop Finants AS"). Return the legal name verbatim from the document. Null when not stated.
+- payment_day_of_month: integer between 1 and 31 for the recurring monthly payment due day; null when not stated
 - notes: concise useful details not represented above, or null
 - ocr_text: page-labelled source excerpts that support the extracted values, including labels and nearby values
 
@@ -241,6 +245,13 @@ export function parseAgreementResponse(rawResponse: string) {
     bank: normalizeBank(valueFor(source, ["bank", "pank", "bank_name"])),
     reference_number: normalizeReference(valueFor(source, ["reference_number", "reference", "payment_reference", "viitenumber", "viide", "makseviide"])),
     payee_name: asText(valueFor(source, ["payee_name", "payee", "beneficiary", "beneficiary_name", "account_holder", "account_owner", "saaja", "saaja_nimi", "makse_saaja", "konto_omanik"])),
+    payment_day_of_month: (() => {
+      const raw = valueFor(source, ["payment_day_of_month", "payment_day", "due_day", "due_day_of_month", "monthly_due_day", "maksepaev", "maksepäev", "maksetahtpaev", "maksetähtpäev", "maksetahtaeg", "maksetähtaeg", "makse_kuupaev", "makse_kuupäev"]);
+      const n = asNumber(raw);
+      if (n == null) return null;
+      const day = Math.round(n);
+      return day >= 1 && day <= 31 ? day : null;
+    })(),
   };
   const invalidFields: string[] = [];
   for (const [field, value] of Object.entries(source)) {

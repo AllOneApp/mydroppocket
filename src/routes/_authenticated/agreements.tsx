@@ -54,6 +54,7 @@ type Row = {
   currency: string | null; notes: string | null;
   iban: string | null; bank: string | null; reference_number: string | null;
   payee_name: string | null;
+  payment_day_of_month: number | null;
   file_path: string | null; file_name: string | null;
 };
 
@@ -267,6 +268,7 @@ function AgreementDetail({
         { label: t("agreements.endDate"), value: formatDate(row.end_date) },
         { label: t("agreements.monthly"), value: row.monthly_payment != null ? formatCurrency(Number(row.monthly_payment), currency) : "—" },
         { label: t("agreements.total"), value: row.total_amount != null ? formatCurrency(Number(row.total_amount), currency) : "—" },
+        { label: t("agreements.paymentDay", { defaultValue: "Igakuine maksetähtaeg" }), value: row.payment_day_of_month != null ? t("agreements.paymentDayValue", { defaultValue: "kuu {{day}}. päev", day: row.payment_day_of_month }) : "—" },
         { label: t("agreements.bank"), value: row.bank || "—" },
         { label: t("agreements.payeeName", { defaultValue: "Saaja nimi" }), value: <CopyableValue value={row.payee_name} /> },
         { label: t("agreements.iban"), value: <CopyableValue value={row.iban} /> },
@@ -314,6 +316,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
     bank: row?.bank ?? "",
     reference_number: row?.reference_number ?? "",
     payee_name: row?.payee_name ?? "",
+    payment_day_of_month: row?.payment_day_of_month != null ? String(row.payment_day_of_month) : "",
   }));
 
   // Load existing attachments when editing.
@@ -367,7 +370,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
-        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes, d.iban, d.bank, d.reference_number, d.payee_name]
+        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes, d.iban, d.bank, d.reference_number, d.payee_name, d.payment_day_of_month]
           .some((v) => v !== null && v !== undefined && v !== "");
         if (!filled) {
           toast.error(t("agreements.analysisNoData"));
@@ -392,6 +395,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           bank: (d.bank as string) || f.bank,
           reference_number: (d.reference_number as string) || f.reference_number,
           payee_name: (d.payee_name as string) || f.payee_name,
+          payment_day_of_month: d.payment_day_of_month != null ? String(d.payment_day_of_month) : f.payment_day_of_month,
         }));
         toast.success(t("common.autoFilled"));
       } else {
@@ -428,6 +432,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         bank: form.bank || null,
         reference_number: form.reference_number ? form.reference_number.replace(/\s+/g, "") : null,
         payee_name: form.payee_name || null,
+        payment_day_of_month: form.payment_day_of_month ? Number(form.payment_day_of_month) : null,
         ...(legacyRemoved ? { file_path: null, file_name: null, file_mime: null } : {}),
       };
 
@@ -590,6 +595,23 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           </div>
           <div><Label>{t("agreements.iban")}</Label><Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="EE00 0000 0000 0000 0000" /></div>
           <div><Label>{t("agreements.payeeName", { defaultValue: "Saaja nimi" })}</Label><Input value={form.payee_name} onChange={(e) => setForm({ ...form, payee_name: e.target.value })} placeholder="AS Inbank Finance" /></div>
+          <div>
+            <Label>📅 {t("agreements.paymentDay", { defaultValue: "Igakuine maksetähtaeg" })}</Label>
+            <Select
+              value={form.payment_day_of_month || "__none__"}
+              onValueChange={(v) => setForm({ ...form, payment_day_of_month: v === "__none__" ? "" : v })}
+            >
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">—</SelectItem>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                  <SelectItem key={day} value={String(day)}>
+                    {t("agreements.paymentDayValue", { defaultValue: "kuu {{day}}. päev", day })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div><Label>{t("agreements.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
