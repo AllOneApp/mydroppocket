@@ -19,6 +19,7 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
 import { syncFileToGoogleDrive, syncBackupCategory, currentBackupLang } from "@/lib/google-drive.functions";
+import { syncRecurringPayment, removeCalendarSource } from "@/lib/google-calendar.functions";
 import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
 
 export const Route = createFileRoute("/_authenticated/recurring")({
@@ -144,6 +145,7 @@ function RecurringPage() {
         await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang() } });
         await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncRecurringPayment({ data: { recurringId: rec.id } }); } catch (e) { console.warn("[gcal] recurring sync failed", e); }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("common.failed"));
     }
@@ -161,6 +163,7 @@ function RecurringPage() {
         if (i.receipt_file_path) { try { await deleteFile(i.receipt_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
         if (i.invoice_file_path) { try { await deleteFile(i.invoice_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
       }
+      try { await removeCalendarSource({ data: { sourceType: "recurring", sourceId: r.id } }); } catch (e) { console.warn("[gcal] recurring remove failed", e); }
       try {
         await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } });
         await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang() } });
