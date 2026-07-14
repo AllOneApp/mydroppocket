@@ -1,0 +1,1 @@
+ALTER TABLE public.agreements ADD COLUMN IF NOT EXISTS payments_made integer NOT NULL DEFAULT 0;
