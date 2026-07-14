@@ -187,7 +187,7 @@ const KNOWN_BANKS = [
 function normalizeIban(value: unknown) {
   const text = asText(value);
   if (!text) return null;
-  const compact = text.replace(/\s+/g, "").toUpperCase();
+  const compact = text.replace(/[\s\-.]/g, "").toUpperCase();
   if (/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(compact)) return compact;
   return null;
 }
@@ -205,7 +205,7 @@ function normalizeBank(value: unknown) {
 function normalizeReference(value: unknown) {
   const text = asText(value);
   if (!text) return null;
-  const digits = text.replace(/\s+/g, "");
+  const digits = text.replace(/[\s\-.]/g, "");
   if (/^\d{2,20}$/.test(digits)) return digits;
   return null;
 }
