@@ -357,6 +357,12 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
         {payDialog && (
           <div className="space-y-3">
             <PayField
+              label={t("installments.payeeName", { defaultValue: "Saaja nimi" })}
+              value={payDialog.row.payee_name ?? ""}
+              copiedMsg={copiedMsg}
+              failedMsg={failedMsg}
+            />
+            <PayField
               label={t("agreements.bank", { defaultValue: "Pank" })}
               value={payDialog.row.bank ?? ""}
               copiedMsg={copiedMsg}
@@ -385,7 +391,16 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
             />
             <PayField
               label={t("installments.description", { defaultValue: "Selgitus" })}
-              value={payDialog.row.title}
+              value={
+                payDialog.row.agreement_number
+                  ? t("installments.descriptionWithNumber", {
+                      defaultValue: "Järelmaksu makse – Lepingu nr: {{n}}",
+                      n: payDialog.row.agreement_number,
+                    })
+                  : t("installments.descriptionFallback", {
+                      defaultValue: "Järelmaksu makse",
+                    })
+              }
               copiedMsg={copiedMsg}
               failedMsg={failedMsg}
             />
