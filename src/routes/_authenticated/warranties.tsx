@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { FileDrop } from "@/components/FileDrop";
 import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile, warrantyStatus } from "@/lib/records";
 import { syncFileToGoogleDrive, syncBackupCategory, deleteGoogleDriveFile, currentBackupLang } from "@/lib/google-drive.functions";
@@ -37,6 +38,7 @@ function WarrantiesPage() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
 
   const { data } = useQuery({
     queryKey: ["warranties"],
@@ -57,25 +59,40 @@ function WarrantiesPage() {
     else groups.active.push(r);
   });
 
-  async function del(r: Row) {
-    if (!confirm(t("warranties.confirmDelete"))) return;
-    if (r.file_path) await deleteFile(r.file_path);
-    await supabase.from("warranties").delete().eq("id", r.id);
-    const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
-    if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
-    try { await syncBackupCategory({ data: { category: "warranties", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
-    qc.invalidateQueries({ queryKey: ["warranties"] });
-    toast.success(t("common.deleted"));
+  async function performDelete(r: Row) {
+    const prev = qc.getQueryData<Row[]>(["warranties"]);
+    qc.setQueryData<Row[]>(["warranties"], (current = []) => current.filter((e) => e.id !== r.id));
+    try {
+      const { error } = await supabase.from("warranties").delete().eq("id", r.id);
+      if (error) throw error;
+      if (r.file_path) { try { await deleteFile(r.file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+      const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
+      if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
+      try { await syncBackupCategory({ data: { category: "warranties", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["warranties"], refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
+      ]);
+      toast.success(t("common.deleted"));
+    } catch (e) {
+      if (prev) qc.setQueryData(["warranties"], prev);
+      toast.error(e instanceof Error ? e.message : t("common.deleteFailed"));
+    }
   }
 
   return (
     <AppShell>
       <PageHeader title={t("warranties.title")} desc={t("warranties.desc")} onAdd={() => { setEditing(null); setOpen(true); }} />
-      <Section title={t("warranties.expiringSoon")} count={groups.expiring.length} tone="orange" items={groups.expiring} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={del} />
-      <Section title={t("warranties.active")} count={groups.active.length} tone="green" items={groups.active} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={del} />
-      <Section title={t("warranties.expired")} count={groups.expired.length} tone="red" items={groups.expired} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={del} />
+      <Section title={t("warranties.expiringSoon")} count={groups.expiring.length} tone="orange" items={groups.expiring} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={setPendingDelete} />
+      <Section title={t("warranties.active")} count={groups.active.length} tone="green" items={groups.active} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={setPendingDelete} />
+      <Section title={t("warranties.expired")} count={groups.expired.length} tone="red" items={groups.expired} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={setPendingDelete} />
       {data?.length === 0 && <EmptyCard icon={ShieldCheck} title={t("warranties.empty.title")} desc={t("warranties.empty.desc")} onAdd={() => setOpen(true)} />}
       <WarrantyDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} />
+      <ConfirmDeleteDialog
+        open={!!pendingDelete}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
+        onConfirm={() => { const r = pendingDelete; setPendingDelete(null); if (r) void performDelete(r); }}
+      />
     </AppShell>
   );
 }
