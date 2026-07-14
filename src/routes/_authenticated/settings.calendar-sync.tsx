@@ -44,6 +44,9 @@ function CalendarSyncPage() {
   const email = data?.connected ? data.email : undefined;
   const syncInstallments = data?.connected ? data.syncInstallments : true;
   const reminderMinutes: number[] = data?.connected ? data.reminderMinutes : [1440];
+  const syncRecurring = data?.connected ? (data as unknown as { syncRecurring?: boolean }).syncRecurring ?? true : true;
+  const syncWarranties = data?.connected ? (data as unknown as { syncWarranties?: boolean }).syncWarranties ?? true : true;
+  const syncAgreements = data?.connected ? (data as unknown as { syncAgreements?: boolean }).syncAgreements ?? true : true;
 
   const disconnectMut = useMutation({
     mutationFn: () => disconnectGoogleCalendar(),
@@ -226,32 +229,50 @@ function CalendarSyncPage() {
                 onCheckedChange={(v) => updateMut.mutate({ syncInstallments: v })}
               />
             </div>
-            <div className="flex items-center justify-between gap-4 opacity-50">
+            <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="font-medium">📅 {t("calendarSync.opt.recurring", { defaultValue: "Püsimaksed" })}</p>
                 <p className="text-sm text-muted-foreground">
-                  {t("calendarSync.opt.comingSoon", { defaultValue: "Lisatakse järgmises etapis." })}
+                  {t("calendarSync.opt.recurringDesc", {
+                    defaultValue: "Iga püsimakse järgmine tähtaeg (telefon, elekter, internet jne).",
+                  })}
                 </p>
               </div>
-              <Switch checked={false} disabled />
+              <Switch
+                checked={syncRecurring}
+                disabled={!connected || updateMut.isPending}
+                onCheckedChange={(v) => updateMut.mutate({ syncRecurring: v })}
+              />
             </div>
-            <div className="flex items-center justify-between gap-4 opacity-50">
+            <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="font-medium">🛡️ {t("calendarSync.opt.warranties", { defaultValue: "Garantii aegumised" })}</p>
                 <p className="text-sm text-muted-foreground">
-                  {t("calendarSync.opt.comingSoon", { defaultValue: "Lisatakse järgmises etapis." })}
+                  {t("calendarSync.opt.warrantiesDesc", {
+                    defaultValue: "Meeldetuletused 30 päeva, 7 päeva ja lõpetamise päeval.",
+                  })}
                 </p>
               </div>
-              <Switch checked={false} disabled />
+              <Switch
+                checked={syncWarranties}
+                disabled={!connected || updateMut.isPending}
+                onCheckedChange={(v) => updateMut.mutate({ syncWarranties: v })}
+              />
             </div>
-            <div className="flex items-center justify-between gap-4 opacity-50">
+            <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="font-medium">📄 {t("calendarSync.opt.agreements", { defaultValue: "Lepingute lõppemine" })}</p>
                 <p className="text-sm text-muted-foreground">
-                  {t("calendarSync.opt.comingSoon", { defaultValue: "Lisatakse järgmises etapis." })}
+                  {t("calendarSync.opt.agreementsDesc", {
+                    defaultValue: "Meeldetuletused 30 päeva, 7 päeva ja lõppemise päeval.",
+                  })}
                 </p>
               </div>
-              <Switch checked={false} disabled />
+              <Switch
+                checked={syncAgreements}
+                disabled={!connected || updateMut.isPending}
+                onCheckedChange={(v) => updateMut.mutate({ syncAgreements: v })}
+              />
             </div>
           </div>
         </section>
