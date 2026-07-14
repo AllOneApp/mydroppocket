@@ -24,6 +24,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAgreementsRouteImport } from './routes/_authenticated/agreements'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedSettingsCloudBackupRouteImport } from './routes/_authenticated/settings.cloud-backup'
+import { Route as AuthenticatedSettingsCalendarSyncRouteImport } from './routes/_authenticated/settings.calendar-sync'
 import { Route as ApiPublicGoogleDriveCallbackRouteImport } from './routes/api/public/google-drive/callback'
 import { Route as ApiPublicGoogleCalendarCallbackRouteImport } from './routes/api/public/google-calendar/callback'
 
@@ -104,6 +105,12 @@ const AuthenticatedSettingsCloudBackupRoute =
     path: '/cloud-backup',
     getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
+const AuthenticatedSettingsCalendarSyncRoute =
+  AuthenticatedSettingsCalendarSyncRouteImport.update({
+    id: '/calendar-sync',
+    path: '/calendar-sync',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 const ApiPublicGoogleDriveCallbackRoute =
   ApiPublicGoogleDriveCallbackRouteImport.update({
     id: '/api/public/google-drive/callback',
@@ -130,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/warranties': typeof AuthenticatedWarrantiesRoute
+  '/settings/calendar-sync': typeof AuthenticatedSettingsCalendarSyncRoute
   '/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/google-calendar/callback': typeof ApiPublicGoogleCalendarCallbackRoute
@@ -147,6 +155,7 @@ export interface FileRoutesByTo {
   '/recurring': typeof AuthenticatedRecurringRoute
   '/search': typeof AuthenticatedSearchRoute
   '/warranties': typeof AuthenticatedWarrantiesRoute
+  '/settings/calendar-sync': typeof AuthenticatedSettingsCalendarSyncRoute
   '/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/api/public/google-calendar/callback': typeof ApiPublicGoogleCalendarCallbackRoute
@@ -167,6 +176,7 @@ export interface FileRoutesById {
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/_authenticated/warranties': typeof AuthenticatedWarrantiesRoute
+  '/_authenticated/settings/calendar-sync': typeof AuthenticatedSettingsCalendarSyncRoute
   '/_authenticated/settings/cloud-backup': typeof AuthenticatedSettingsCloudBackupRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/google-calendar/callback': typeof ApiPublicGoogleCalendarCallbackRoute
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/warranties'
+    | '/settings/calendar-sync'
     | '/settings/cloud-backup'
     | '/settings/'
     | '/api/public/google-calendar/callback'
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '/recurring'
     | '/search'
     | '/warranties'
+    | '/settings/calendar-sync'
     | '/settings/cloud-backup'
     | '/settings'
     | '/api/public/google-calendar/callback'
@@ -223,6 +235,7 @@ export interface FileRouteTypes {
     | '/_authenticated/search'
     | '/_authenticated/settings'
     | '/_authenticated/warranties'
+    | '/_authenticated/settings/calendar-sync'
     | '/_authenticated/settings/cloud-backup'
     | '/_authenticated/settings/'
     | '/api/public/google-calendar/callback'
@@ -345,6 +358,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsCloudBackupRouteImport
       parentRoute: typeof AuthenticatedSettingsRoute
     }
+    '/_authenticated/settings/calendar-sync': {
+      id: '/_authenticated/settings/calendar-sync'
+      path: '/calendar-sync'
+      fullPath: '/settings/calendar-sync'
+      preLoaderRoute: typeof AuthenticatedSettingsCalendarSyncRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
     '/api/public/google-drive/callback': {
       id: '/api/public/google-drive/callback'
       path: '/api/public/google-drive/callback'
@@ -363,11 +383,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedSettingsRouteChildren {
+  AuthenticatedSettingsCalendarSyncRoute: typeof AuthenticatedSettingsCalendarSyncRoute
   AuthenticatedSettingsCloudBackupRoute: typeof AuthenticatedSettingsCloudBackupRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
+  AuthenticatedSettingsCalendarSyncRoute:
+    AuthenticatedSettingsCalendarSyncRoute,
   AuthenticatedSettingsCloudBackupRoute: AuthenticatedSettingsCloudBackupRoute,
   AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }

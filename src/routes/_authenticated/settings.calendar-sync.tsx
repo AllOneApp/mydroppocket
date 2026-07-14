@@ -39,10 +39,11 @@ function CalendarSyncPage() {
     queryFn: () => getGoogleCalendarStatus(),
   });
 
-  const connected = status.data?.connected === true;
-  const email = connected ? status.data.email : undefined;
-  const syncInstallments = connected ? status.data.syncInstallments : true;
-  const reminderMinutes = connected ? status.data.reminderMinutes : [1440];
+  const data = status.data;
+  const connected = data?.connected === true;
+  const email = data?.connected ? data.email : undefined;
+  const syncInstallments = data?.connected ? data.syncInstallments : true;
+  const reminderMinutes: number[] = data?.connected ? data.reminderMinutes : [1440];
 
   const disconnectMut = useMutation({
     mutationFn: () => disconnectGoogleCalendar(),
