@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "@tanstack/react-router";
+import { useActiveProfile } from "@/hooks/useActiveProfile";
 
 export const Route = createFileRoute("/_authenticated/overview")({
   head: () => ({ meta: [{ title: "Ülevaade — MyDropPocket" }] }),
@@ -34,44 +35,49 @@ const CHART_COLORS = ["#22c55e", "#ef4444", "#3b82f6", "#f59e0b", "#a855f7", "#e
 
 function OverviewPage() {
   const { t } = useTranslation();
+  const { activeProfileId } = useActiveProfile();
   const [preset, setPreset] = useState<Preset>("thisMonth");
   const [customFrom, setCustomFrom] = useState(computeRange("thisMonth").from);
   const [customTo, setCustomTo] = useState(computeRange("thisMonth").to);
   const range = preset === "custom" ? { from: customFrom, to: customTo } : computeRange(preset);
 
-  const { data: expenses = [] } = useQuery(expensesQueryOptions());
+  const { data: expenses = [] } = useQuery(expensesQueryOptions(activeProfileId));
 
   const { data: warranties = [] } = useQuery({
-    queryKey: ["overview-warranties"],
+    queryKey: ["overview-warranties", activeProfileId],
+    enabled: !!activeProfileId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("warranties").select("*");
+      const { data, error } = await supabase.from("warranties").select("*").eq("profile_id", activeProfileId!);
       if (error) throw error;
       return data ?? [];
     },
   });
 
   const { data: agreements = [] } = useQuery({
-    queryKey: ["overview-agreements"],
+    queryKey: ["overview-agreements", activeProfileId],
+    enabled: !!activeProfileId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("agreements").select("*");
+      const { data, error } = await supabase.from("agreements").select("*").eq("profile_id", activeProfileId!);
       if (error) throw error;
       return data ?? [];
     },
   });
 
   const { data: recurring = [] } = useQuery({
-    queryKey: ["overview-recurring"],
+    queryKey: ["overview-recurring", activeProfileId],
+    enabled: !!activeProfileId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("recurring_payments").select("*");
+      const { data, error } = await supabase.from("recurring_payments").select("*").eq("profile_id", activeProfileId!);
       if (error) throw error;
       return data ?? [];
     },
   });
 
   const { data: rpInstances = [] } = useQuery({
-    queryKey: ["overview-rp-instances"],
+    queryKey: ["overview-rp-instances", activeProfileId],
+    enabled: !!activeProfileId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("recurring_payment_instances").select("*");
+      const { data, error } = await supabase.from("recurring_payment_instances").select("*").eq("profile_id", activeProfileId!);
       if (error) throw error;
       return data ?? [];
     },
