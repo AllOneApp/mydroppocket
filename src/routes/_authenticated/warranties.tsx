@@ -22,6 +22,7 @@ import { syncWarranty, removeCalendarSource } from "@/lib/google-calendar.functi
 import { extractDocument } from "@/lib/ocr.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
+import { useActiveProfile } from "@/hooks/useActiveProfile";
 
 export const Route = createFileRoute("/_authenticated/warranties")({
   head: () => ({ meta: [{ title: "Warranties — DropPocket" }] }),
@@ -37,14 +38,20 @@ type Row = {
 function WarrantiesPage() {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const { activeProfileId } = useActiveProfile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
 
   const { data } = useQuery({
-    queryKey: ["warranties"],
+    queryKey: ["warranties", activeProfileId],
+    enabled: !!activeProfileId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("warranties").select("*").order("warranty_expiry", { ascending: true });
+      const { data, error } = await supabase
+        .from("warranties")
+        .select("*")
+        .eq("profile_id", activeProfileId!)
+        .order("warranty_expiry", { ascending: true });
       if (error) throw error;
       return (data ?? []) as Row[];
     },
