@@ -314,6 +314,7 @@ function AgreementDetail({
 
 function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null }) {
   const qc = useQueryClient();
+  const { activeProfileId } = useActiveProfile();
   const { t, i18n } = useTranslation();
   const extract = useServerFn(extractDocument);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -441,6 +442,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 
       const basePayload = {
         user_id: uid,
+        profile_id: activeProfileId,
         title: form.title,
         agreement_type: form.agreement_type,
         company: form.company || null,
