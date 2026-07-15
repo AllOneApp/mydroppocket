@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, ShieldCheck, Wallet, FileText, Search, Settings, LogOut, ArrowLeft, Repeat, CreditCard, BarChart3 } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Wallet, FileText, Search, Settings, LogOut, ArrowLeft, Repeat, CreditCard, BarChart3, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "./Logo";
@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Header } from "./Header";
+import { ProfileSwitcher } from "./ProfileSwitcher";
 
 const nav = [
   { to: "/dashboard", icon: LayoutDashboard, key: "dashboard" },
@@ -17,6 +18,7 @@ const nav = [
   { to: "/recurring", icon: Repeat, key: "recurring" },
   { to: "/installments", icon: CreditCard, key: "installments" },
   { to: "/agreements", icon: FileText, key: "agreements" },
+  { to: "/profiles", icon: Users, key: "profiles" },
   { to: "/search", icon: Search, key: "search" },
   { to: "/settings", icon: Settings, key: "settings" },
 ] as const;
@@ -38,7 +40,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const Sidebar = (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-4">
-      <div className="mb-8 px-2 pt-2"><Logo /></div>
+      <div className="mb-4 px-2 pt-2"><Logo /></div>
+      <div className="mb-6 px-1">
+        <ProfileSwitcher variant="sidebar" />
+      </div>
       <nav className="flex-1 space-y-1">
         {nav.map(({ to, icon: Icon, key }) => {
           const active = location.pathname === to;

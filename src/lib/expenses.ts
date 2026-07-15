@@ -20,26 +20,29 @@ export type ExpenseRow = {
 
 export const expensesQueryKey = ["expenses"] as const;
 
-export async function fetchExpenses(): Promise<ExpenseRow[]> {
+export async function fetchExpenses(profileId?: string | null): Promise<ExpenseRow[]> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Kasutaja sessiooni ei leitud.");
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("expenses")
     .select("*")
     .eq("user_id", userData.user.id)
     .order("expense_date", { ascending: false })
     .order("created_at", { ascending: false });
+  if (profileId) query = query.eq("profile_id", profileId);
+  const { data, error } = await query;
 
   if (error) throw error;
   return (data ?? []) as ExpenseRow[];
 }
 
-export function expensesQueryOptions() {
+export function expensesQueryOptions(profileId?: string | null) {
   return queryOptions({
-    queryKey: expensesQueryKey,
-    queryFn: fetchExpenses,
+    queryKey: [...expensesQueryKey, profileId ?? "all"] as const,
+    queryFn: () => fetchExpenses(profileId),
+    enabled: !!profileId,
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,

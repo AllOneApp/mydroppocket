@@ -19,6 +19,7 @@ import { pickLang, setLang, type Lang } from "@/i18n";
 import { registerPwa } from "@/pwa/register";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { expensesQueryKey } from "@/lib/expenses";
+import { ActiveProfileProvider } from "@/hooks/useActiveProfile";
 
 function NotFoundComponent() {
   const { t } = useTranslation();
@@ -222,10 +223,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      <Toaster position="top-right" richColors closeButton />
-      <InstallPrompt />
+      <ActiveProfileProvider>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        <Toaster position="top-right" richColors closeButton />
+        <InstallPrompt />
+      </ActiveProfileProvider>
     </QueryClientProvider>
   );
 }
