@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/records";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useActiveProfile } from "@/hooks/useActiveProfile";
 
 export const Route = createFileRoute("/_authenticated/search")({
   head: () => ({ meta: [{ title: "Search — DropPocket" }] }),
@@ -18,21 +19,22 @@ export const Route = createFileRoute("/_authenticated/search")({
 
 function SearchPage() {
   const { t } = useTranslation();
+  const { activeProfileId } = useActiveProfile();
   const [q, setQ] = useState("");
   const [filters, setFilters] = useState<{ module?: string | null; type?: string | null; store?: string | null; category?: string | null; date_from?: string | null; date_to?: string | null } | null>(null);
   const term = q.trim();
 
   const { data, isFetching } = useQuery({
-    queryKey: ["search", term, filters],
-    enabled: term.length > 0 || !!filters,
+    queryKey: ["search", term, filters, activeProfileId],
+    enabled: (term.length > 0 || !!filters) && !!activeProfileId,
     queryFn: async () => {
       const kw = (filters?.store || filters?.category || term).trim();
       const like = `%${kw}%`;
       const asNum = Number(term);
       const numFilter = !Number.isNaN(asNum) && term ? `,amount.eq.${asNum}` : "";
-      const wq = supabase.from("warranties").select("*").limit(20);
-      const eq = supabase.from("expenses").select("*").limit(20);
-      const aq = supabase.from("agreements").select("*").limit(20);
+      const wq = supabase.from("warranties").select("*").eq("profile_id", activeProfileId!).limit(20);
+      const eq = supabase.from("expenses").select("*").eq("profile_id", activeProfileId!).limit(20);
+      const aq = supabase.from("agreements").select("*").eq("profile_id", activeProfileId!).limit(20);
       if (kw) {
         wq.or(`product_name.ilike.${like},store.ilike.${like},notes.ilike.${like}${numFilter}`);
         eq.or(`description.ilike.${like},category.ilike.${like},store.ilike.${like},notes.ilike.${like}${numFilter}`);
