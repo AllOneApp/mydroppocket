@@ -404,6 +404,7 @@ function SumCard({ tone, label, value }: { tone: "green" | "orange" | "red"; lab
 function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Recurring | null }) {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const { activeProfileId } = useActiveProfile();
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => makeForm(row));
@@ -423,6 +424,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       if (file) fileInfo = await uploadFile(uid, "recurring", file);
       const payload = {
         user_id: uid,
+        profile_id: activeProfileId,
         service_name: form.service_name,
         provider: form.provider || null,
         category: form.category || null,
