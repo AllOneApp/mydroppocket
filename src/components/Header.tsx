@@ -4,6 +4,7 @@ import { Logo } from "./Logo";
 import { Button } from "./ui/button";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useTranslation } from "react-i18next";
+import { ProfileSwitcher } from "./ProfileSwitcher";
 
 type Variant = "public" | "auth" | "app-mobile";
 
@@ -42,8 +43,11 @@ export function Header({ variant, onMenu }: HeaderProps) {
         <Link to="/dashboard" aria-label="DropPocket" className="flex items-center justify-center">
           <Logo />
         </Link>
-        <div className="flex items-center justify-end">
-          <LanguageSwitcher className="mt-8" />
+        <div className="flex items-center justify-end gap-2">
+          <div className="mt-6 max-w-[140px]">
+            <ProfileSwitcher variant="header" />
+          </div>
+          <LanguageSwitcher className="mt-6" />
         </div>
       </header>
     );

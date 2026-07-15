@@ -23,6 +23,7 @@ import { syncAgreementAttachments, syncBackupCategory, deleteGoogleDriveFile, de
 import { syncInstallmentAgreement, removeCalendarSource } from "@/lib/google-calendar.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
+import { useActiveProfile } from "@/hooks/useActiveProfile";
 
 const MAX_AGREEMENT_ATTACHMENTS = 20;
 
@@ -91,6 +92,7 @@ function CopyableValue({ value }: { value: string | null | undefined }) {
 function AgreementsPage() {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const { activeProfileId } = useActiveProfile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
@@ -114,9 +116,14 @@ function AgreementsPage() {
   }
 
   const { data } = useQuery({
-    queryKey: ["agreements"],
+    queryKey: ["agreements", activeProfileId],
+    enabled: !!activeProfileId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("agreements").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("agreements")
+        .select("*")
+        .eq("profile_id", activeProfileId!)
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Row[];
     },
@@ -307,6 +314,7 @@ function AgreementDetail({
 
 function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null }) {
   const qc = useQueryClient();
+  const { activeProfileId } = useActiveProfile();
   const { t, i18n } = useTranslation();
   const extract = useServerFn(extractDocument);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -434,6 +442,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 
       const basePayload = {
         user_id: uid,
+        profile_id: activeProfileId,
         title: form.title,
         agreement_type: form.agreement_type,
         company: form.company || null,

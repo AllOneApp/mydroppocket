@@ -21,6 +21,7 @@ import { deleteFile, formatCurrency, signedUrl, uploadFile } from "@/lib/records
 import { syncFileToGoogleDrive, syncBackupCategory, currentBackupLang } from "@/lib/google-drive.functions";
 import { syncRecurringPayment, removeCalendarSource } from "@/lib/google-calendar.functions";
 import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
+import { useActiveProfile } from "@/hooks/useActiveProfile";
 
 export const Route = createFileRoute("/_authenticated/recurring")({
   head: () => ({ meta: [{ title: "Püsimaksed — MyDropPocket" }] }),
@@ -48,6 +49,7 @@ type Instance = {
 function RecurringPage() {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const { activeProfileId } = useActiveProfile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Recurring | null>(null);
   const [payAsk, setPayAsk] = useState<{ instance: Instance; recurring: Recurring } | null>(null);
@@ -55,18 +57,28 @@ function RecurringPage() {
   const [pendingDelete, setPendingDelete] = useState<Recurring | null>(null);
 
   const { data: recurring } = useQuery({
-    queryKey: ["recurring_payments"],
+    queryKey: ["recurring_payments", activeProfileId],
+    enabled: !!activeProfileId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("recurring_payments").select("*").order("next_due_date", { ascending: true });
+      const { data, error } = await supabase
+        .from("recurring_payments")
+        .select("*")
+        .eq("profile_id", activeProfileId!)
+        .order("next_due_date", { ascending: true });
       if (error) throw error;
       return (data ?? []) as Recurring[];
     },
   });
 
   const { data: instances } = useQuery({
-    queryKey: ["recurring_instances"],
+    queryKey: ["recurring_instances", activeProfileId],
+    enabled: !!activeProfileId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("recurring_payment_instances").select("*").order("due_date", { ascending: true });
+      const { data, error } = await supabase
+        .from("recurring_payment_instances")
+        .select("*")
+        .eq("profile_id", activeProfileId!)
+        .order("due_date", { ascending: true });
       if (error) throw error;
       return (data ?? []) as Instance[];
     },
@@ -84,6 +96,7 @@ function RecurringPage() {
     (async () => {
       const rows = missing.map(({ recurring: r }) => ({
         user_id: r.user_id,
+        profile_id: activeProfileId,
         recurring_payment_id: r.id,
         due_date: r.next_due_date,
         amount: r.amount,
@@ -130,7 +143,9 @@ function RecurringPage() {
       const nextDue = addFrequency(inst.due_date, rec.frequency);
       if (!rec.end_date || nextDue <= rec.end_date) {
         await supabase.from("recurring_payment_instances").insert({
-          user_id: rec.user_id, recurring_payment_id: rec.id,
+          user_id: rec.user_id,
+          profile_id: activeProfileId,
+          recurring_payment_id: rec.id,
           due_date: nextDue, amount: rec.amount, currency: rec.currency ?? "EUR",
           status: "pending",
         });
@@ -389,6 +404,7 @@ function SumCard({ tone, label, value }: { tone: "green" | "orange" | "red"; lab
 function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Recurring | null }) {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const { activeProfileId } = useActiveProfile();
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => makeForm(row));
@@ -408,6 +424,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       if (file) fileInfo = await uploadFile(uid, "recurring", file);
       const payload = {
         user_id: uid,
+        profile_id: activeProfileId,
         service_name: form.service_name,
         provider: form.provider || null,
         category: form.category || null,

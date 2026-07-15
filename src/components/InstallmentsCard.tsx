@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/records";
 import { formatDate } from "@/lib/format";
 import { syncInstallmentAgreement } from "@/lib/google-calendar.functions";
+import { useActiveProfile } from "@/hooks/useActiveProfile";
 import {
   Dialog,
   DialogContent,
@@ -134,15 +135,18 @@ async function copyText(value: string, copiedMsg: string, failedMsg: string) {
 export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = {}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { activeProfileId } = useActiveProfile();
   const [payDialog, setPayDialog] = useState<Derived | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: rows } = useQuery({
-    queryKey: ["dashboard-installments"],
+    queryKey: ["dashboard-installments", activeProfileId],
+    enabled: !!activeProfileId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("agreements")
         .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name")
+        .eq("profile_id", activeProfileId!)
         .eq("agreement_type", "installment");
       if (error) throw error;
       return (data ?? []) as Row[];

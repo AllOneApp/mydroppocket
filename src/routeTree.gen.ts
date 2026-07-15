@@ -17,6 +17,7 @@ import { Route as AuthenticatedWarrantiesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedRecurringRouteImport } from './routes/_authenticated/recurring'
+import { Route as AuthenticatedProfilesRouteImport } from './routes/_authenticated/profiles'
 import { Route as AuthenticatedOverviewRouteImport } from './routes/_authenticated/overview'
 import { Route as AuthenticatedInstallmentsRouteImport } from './routes/_authenticated/installments'
 import { Route as AuthenticatedExpensesRouteImport } from './routes/_authenticated/expenses'
@@ -65,6 +66,11 @@ const AuthenticatedSearchRoute = AuthenticatedSearchRouteImport.update({
 const AuthenticatedRecurringRoute = AuthenticatedRecurringRouteImport.update({
   id: '/recurring',
   path: '/recurring',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedProfilesRoute = AuthenticatedProfilesRouteImport.update({
+  id: '/profiles',
+  path: '/profiles',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedOverviewRoute = AuthenticatedOverviewRouteImport.update({
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/expenses': typeof AuthenticatedExpensesRoute
   '/installments': typeof AuthenticatedInstallmentsRoute
   '/overview': typeof AuthenticatedOverviewRoute
+  '/profiles': typeof AuthenticatedProfilesRoute
   '/recurring': typeof AuthenticatedRecurringRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRouteWithChildren
@@ -152,6 +159,7 @@ export interface FileRoutesByTo {
   '/expenses': typeof AuthenticatedExpensesRoute
   '/installments': typeof AuthenticatedInstallmentsRoute
   '/overview': typeof AuthenticatedOverviewRoute
+  '/profiles': typeof AuthenticatedProfilesRoute
   '/recurring': typeof AuthenticatedRecurringRoute
   '/search': typeof AuthenticatedSearchRoute
   '/warranties': typeof AuthenticatedWarrantiesRoute
@@ -172,6 +180,7 @@ export interface FileRoutesById {
   '/_authenticated/expenses': typeof AuthenticatedExpensesRoute
   '/_authenticated/installments': typeof AuthenticatedInstallmentsRoute
   '/_authenticated/overview': typeof AuthenticatedOverviewRoute
+  '/_authenticated/profiles': typeof AuthenticatedProfilesRoute
   '/_authenticated/recurring': typeof AuthenticatedRecurringRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
@@ -193,6 +202,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/installments'
     | '/overview'
+    | '/profiles'
     | '/recurring'
     | '/search'
     | '/settings'
@@ -212,6 +222,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/installments'
     | '/overview'
+    | '/profiles'
     | '/recurring'
     | '/search'
     | '/warranties'
@@ -231,6 +242,7 @@ export interface FileRouteTypes {
     | '/_authenticated/expenses'
     | '/_authenticated/installments'
     | '/_authenticated/overview'
+    | '/_authenticated/profiles'
     | '/_authenticated/recurring'
     | '/_authenticated/search'
     | '/_authenticated/settings'
@@ -307,6 +319,13 @@ declare module '@tanstack/react-router' {
       path: '/recurring'
       fullPath: '/recurring'
       preLoaderRoute: typeof AuthenticatedRecurringRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/profiles': {
+      id: '/_authenticated/profiles'
+      path: '/profiles'
+      fullPath: '/profiles'
+      preLoaderRoute: typeof AuthenticatedProfilesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/overview': {
@@ -406,6 +425,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedExpensesRoute: typeof AuthenticatedExpensesRoute
   AuthenticatedInstallmentsRoute: typeof AuthenticatedInstallmentsRoute
   AuthenticatedOverviewRoute: typeof AuthenticatedOverviewRoute
+  AuthenticatedProfilesRoute: typeof AuthenticatedProfilesRoute
   AuthenticatedRecurringRoute: typeof AuthenticatedRecurringRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
@@ -418,6 +438,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedExpensesRoute: AuthenticatedExpensesRoute,
   AuthenticatedInstallmentsRoute: AuthenticatedInstallmentsRoute,
   AuthenticatedOverviewRoute: AuthenticatedOverviewRoute,
+  AuthenticatedProfilesRoute: AuthenticatedProfilesRoute,
   AuthenticatedRecurringRoute: AuthenticatedRecurringRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRouteWithChildren,
@@ -438,13 +459,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -83,6 +83,7 @@ export type Database = {
           payee_name: string | null
           payment_day_of_month: number | null
           payments_made: number
+          profile_id: string | null
           reference_number: string | null
           start_date: string | null
           title: string
@@ -111,6 +112,7 @@ export type Database = {
           payee_name?: string | null
           payment_day_of_month?: number | null
           payments_made?: number
+          profile_id?: string | null
           reference_number?: string | null
           start_date?: string | null
           title: string
@@ -139,6 +141,7 @@ export type Database = {
           payee_name?: string | null
           payment_day_of_month?: number | null
           payments_made?: number
+          profile_id?: string | null
           reference_number?: string | null
           start_date?: string | null
           title?: string
@@ -146,7 +149,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "agreements_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       calendar_events: {
         Row: {
@@ -205,6 +216,7 @@ export type Database = {
           id: string
           notes: string | null
           ocr_raw: Json | null
+          profile_id: string | null
           store: string | null
           type: string
           updated_at: string
@@ -224,6 +236,7 @@ export type Database = {
           id?: string
           notes?: string | null
           ocr_raw?: Json | null
+          profile_id?: string | null
           store?: string | null
           type?: string
           updated_at?: string
@@ -243,12 +256,21 @@ export type Database = {
           id?: string
           notes?: string | null
           ocr_raw?: Json | null
+          profile_id?: string | null
           store?: string | null
           type?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "expenses_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       google_calendar_connections: {
         Row: {
@@ -407,6 +429,7 @@ export type Database = {
           invoice_gdrive_file_id: string | null
           notes: string | null
           paid_at: string | null
+          profile_id: string | null
           receipt_file_mime: string | null
           receipt_file_name: string | null
           receipt_file_path: string | null
@@ -428,6 +451,7 @@ export type Database = {
           invoice_gdrive_file_id?: string | null
           notes?: string | null
           paid_at?: string | null
+          profile_id?: string | null
           receipt_file_mime?: string | null
           receipt_file_name?: string | null
           receipt_file_path?: string | null
@@ -449,6 +473,7 @@ export type Database = {
           invoice_gdrive_file_id?: string | null
           notes?: string | null
           paid_at?: string | null
+          profile_id?: string | null
           receipt_file_mime?: string | null
           receipt_file_name?: string | null
           receipt_file_path?: string | null
@@ -459,6 +484,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "recurring_payment_instances_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "recurring_payment_instances_recurring_payment_id_fkey"
             columns: ["recurring_payment_id"]
@@ -484,6 +516,7 @@ export type Database = {
           linked_purchase_id: string | null
           next_due_date: string
           notes: string | null
+          profile_id: string | null
           provider: string | null
           reminder_days_before: number
           service_name: string
@@ -506,6 +539,7 @@ export type Database = {
           linked_purchase_id?: string | null
           next_due_date?: string
           notes?: string | null
+          profile_id?: string | null
           provider?: string | null
           reminder_days_before?: number
           service_name: string
@@ -528,10 +562,55 @@ export type Database = {
           linked_purchase_id?: string | null
           next_due_date?: string
           notes?: string | null
+          profile_id?: string | null
           provider?: string | null
           reminder_days_before?: number
           service_name?: string
           start_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_payments_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_profiles: {
+        Row: {
+          avatar_url: string | null
+          color: string
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          type: Database["public"]["Enums"]["profile_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          color?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          type?: Database["public"]["Enums"]["profile_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          color?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          type?: Database["public"]["Enums"]["profile_type"]
           updated_at?: string
           user_id?: string
         }
@@ -550,6 +629,7 @@ export type Database = {
           notes: string | null
           ocr_raw: Json | null
           product_name: string
+          profile_id: string | null
           purchase_date: string | null
           store: string | null
           updated_at: string
@@ -568,6 +648,7 @@ export type Database = {
           notes?: string | null
           ocr_raw?: Json | null
           product_name: string
+          profile_id?: string | null
           purchase_date?: string | null
           store?: string | null
           updated_at?: string
@@ -586,13 +667,22 @@ export type Database = {
           notes?: string | null
           ocr_raw?: Json | null
           product_name?: string
+          profile_id?: string | null
           purchase_date?: string | null
           store?: string | null
           updated_at?: string
           user_id?: string
           warranty_expiry?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "warranties_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -602,7 +692,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      profile_type: "personal" | "family" | "company" | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -729,6 +819,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      profile_type: ["personal", "family", "company", "other"],
+    },
   },
 } as const

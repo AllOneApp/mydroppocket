@@ -24,6 +24,7 @@ import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/reco
 import { syncFileToGoogleDrive, syncBackupCategory, deleteGoogleDriveFile, currentBackupLang } from "@/lib/google-drive.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
+import { useActiveProfile } from "@/hooks/useActiveProfile";
 
 export const Route = createFileRoute("/_authenticated/expenses")({
   head: () => ({ meta: [{ title: "Income & expenses — MyDropPocket" }] }),
@@ -39,6 +40,7 @@ type Row = ExpenseRow;
 function ExpensesPage() {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const { activeProfileId } = useActiveProfile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [prefill, setPrefill] = useState<Partial<Row> | null>(null);
@@ -48,7 +50,7 @@ function ExpensesPage() {
     return { preset: "thisMonth", from: r.from, to: r.to };
   });
 
-  const { data } = useQuery(expensesQueryOptions());
+  const { data } = useQuery(expensesQueryOptions(activeProfileId));
 
   const filtered = useMemo(() => (data ?? []).filter((r) => r.expense_date >= range.from && r.expense_date <= range.to), [data, range]);
   const income = filtered.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
@@ -153,6 +155,7 @@ function ExpensesPage() {
 }
 
 export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null; prefill: Partial<Row> | null; initialMode?: "voice" | "upload" | "manual" }) {
+  const { activeProfileId } = useActiveProfile();
   const qc = useQueryClient();
   const { t, i18n } = useTranslation();
   const extract = useServerFn(extractDocument);
@@ -226,6 +229,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
       const normalizedExpenseDate = normalizeDateString(form.expense_date) ?? localDateString();
       const payload = {
         user_id: uid,
+        profile_id: activeProfileId,
         type: form.type,
         amount: Number(form.amount),
         currency: form.currency,
