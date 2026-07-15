@@ -148,6 +148,7 @@ function Section({ title, count, tone, items, onEdit, onDelete }: {
 function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null }) {
   const qc = useQueryClient();
   const { t, i18n } = useTranslation();
+  const { activeProfileId } = useActiveProfile();
   const extract = useServerFn(extractDocument);
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -221,6 +222,7 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
       if (file) fileInfo = await uploadFile(uid, "warranty", file);
       const payload = {
         user_id: uid,
+        profile_id: activeProfileId,
         product_name: form.product_name,
         store: form.store || null,
         purchase_date: form.purchase_date || null,
