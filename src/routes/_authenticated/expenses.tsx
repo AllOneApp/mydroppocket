@@ -228,6 +228,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
       const normalizedExpenseDate = normalizeDateString(form.expense_date) ?? localDateString();
       const payload = {
         user_id: uid,
+        profile_id: activeProfileId,
         type: form.type,
         amount: Number(form.amount),
         currency: form.currency,
