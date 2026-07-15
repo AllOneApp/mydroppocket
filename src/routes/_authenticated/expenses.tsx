@@ -155,6 +155,7 @@ function ExpensesPage() {
 }
 
 export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null; prefill: Partial<Row> | null; initialMode?: "voice" | "upload" | "manual" }) {
+  const { activeProfileId } = useActiveProfile();
   const qc = useQueryClient();
   const { t, i18n } = useTranslation();
   const extract = useServerFn(extractDocument);
