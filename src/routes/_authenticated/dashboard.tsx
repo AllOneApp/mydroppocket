@@ -15,6 +15,7 @@ import { deleteFile } from "@/lib/records";
 import { useTranslation } from "react-i18next";
 import { ExpenseDialog } from "./expenses";
 import { InstallmentsCard } from "@/components/InstallmentsCard";
+import { useActiveProfile } from "@/hooks/useActiveProfile";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -36,6 +37,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function Dashboard() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const { activeProfileId } = useActiveProfile();
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickMode, setQuickMode] = useState<"voice" | "upload" | "manual">("manual");
   function openQuick(mode: "voice" | "upload" | "manual") {
@@ -65,17 +67,18 @@ function Dashboard() {
     }
   }
 
-  const { data: expenseRows = [] } = useQuery(expensesQueryOptions());
+  const { data: expenseRows = [] } = useQuery(expensesQueryOptions(activeProfileId));
   const { data } = useQuery({
-    queryKey: ["dashboard"],
+    queryKey: ["dashboard", activeProfileId],
+    enabled: !!activeProfileId,
     queryFn: async () => {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError) throw userError;
       if (!userData.user) throw new Error("Kasutaja sessiooni ei leitud.");
 
       const [w, a] = await Promise.all([
-        supabase.from("warranties").select("*").order("warranty_expiry", { ascending: true }).limit(5),
-        supabase.from("agreements").select("*").order("created_at", { ascending: false }).limit(5),
+        supabase.from("warranties").select("*").eq("profile_id", activeProfileId!).order("warranty_expiry", { ascending: true }).limit(5),
+        supabase.from("agreements").select("*").eq("profile_id", activeProfileId!).order("created_at", { ascending: false }).limit(5),
       ]);
       const expiring = (w.data ?? []).filter((r) => {
         const s = warrantyStatus(r.warranty_expiry).tone;
@@ -88,8 +91,8 @@ function Dashboard() {
       const mEnd = new Date(now2.getFullYear(), now2.getMonth() + 1, 0).toISOString().slice(0, 10);
       const todayStr2 = now2.toISOString().slice(0, 10);
       const [rp, rpi] = await Promise.all([
-        supabase.from("recurring_payments").select("id, service_name, next_due_date, amount, currency"),
-        supabase.from("recurring_payment_instances").select("id, due_date, amount, status, recurring_payment_id"),
+        supabase.from("recurring_payments").select("id, service_name, next_due_date, amount, currency").eq("profile_id", activeProfileId!),
+        supabase.from("recurring_payment_instances").select("id, due_date, amount, status, recurring_payment_id").eq("profile_id", activeProfileId!),
       ]);
       const insts = (rpi.data ?? []) as { id: string; due_date: string; amount: number; status: "pending" | "paid"; recurring_payment_id: string }[];
       const rps = (rp.data ?? []) as { id: string; service_name: string; next_due_date: string; amount: number; currency: string | null }[];
