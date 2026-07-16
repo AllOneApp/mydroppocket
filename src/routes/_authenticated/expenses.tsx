@@ -1,7 +1,7 @@
 import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Wallet, TrendingUp, TrendingDown, Upload, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -168,17 +168,20 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const scanRequestRef = useRef(0);
   const [form, setForm] = useState(() => makeForm(row, prefill));
   const [inputMode, setInputMode] = useState<"voice" | "upload" | "manual" | null>(null);
   const [autoVoice, setAutoVoice] = useState(false);
 
   useEffect(() => {
     if (open) {
+      scanRequestRef.current += 1;
       setForm(makeForm(row, prefill));
       setFile(null);
       setInputMode(initialMode ?? null);
       setAutoVoice(initialMode === "voice");
     }
+    return () => { scanRequestRef.current += 1; };
   }, [open, row, prefill, initialMode]);
 
   const showUpload = inputMode === "upload";
@@ -188,11 +191,13 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
 
   async function scan() {
     if (!file) return;
+    const requestId = ++scanRequestRef.current;
     setScanning(true);
     try {
       const base64 = await fileToBase64(file);
       const locale = (i18n.language?.toLowerCase().startsWith("et") ? "et" : "en") as "et" | "en";
       const res = await extract({ data: { kind: "expense", mime: file.type || "application/octet-stream", base64, locale } });
+      if (scanRequestRef.current !== requestId) return;
       if (res.ok) {
         const d = res.data;
         const purchasedItems = Array.isArray(d.purchased_items)
@@ -219,7 +224,9 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
         }
       } else toast.error(res.error);
     } catch (e) { toast.error(e instanceof Error ? e.message : t("common.scanFailed")); }
-    finally { setScanning(false); }
+    finally {
+      if (scanRequestRef.current === requestId) setScanning(false);
+    }
   }
 
   async function save(e: React.FormEvent) {
