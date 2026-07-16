@@ -15,6 +15,7 @@ import { FileDrop } from "@/components/FileDrop";
 import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile, warrantyStatus } from "@/lib/records";
 import { syncFileToGoogleDrive, syncBackupCategory, deleteGoogleDriveFile, currentBackupLang } from "@/lib/google-drive.functions";
@@ -23,6 +24,7 @@ import { extractDocument } from "@/lib/ocr.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
 import { useActiveProfile } from "@/hooks/useActiveProfile";
+import { expensesQueryKey } from "@/lib/expenses";
 
 export const Route = createFileRoute("/_authenticated/warranties")({
   head: () => ({ meta: [{ title: "Warranties — DropPocket" }] }),
@@ -159,6 +161,7 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const scanRequestRef = useRef(0);
+  const [alsoCreateExpense, setAlsoCreateExpense] = useState(true);
   const [form, setForm] = useState(() => ({
     product_name: row?.product_name ?? "",
     store: row?.store ?? "",
@@ -173,6 +176,7 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
     if (!open) return;
     scanRequestRef.current += 1;
     setFile(null);
+    setAlsoCreateExpense(true);
     setForm({
       product_name: row?.product_name ?? "",
       store: row?.store ?? "",
@@ -272,6 +276,30 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
         if (error) throw error;
         recordId = inserted?.id ?? null;
       }
+      // Also create an expense — same file, same profile — when adding new
+      let expenseCreated = false;
+      if (!row && alsoCreateExpense && form.amount && Number(form.amount) > 0) {
+        try {
+          const expPayload = {
+            user_id: uid,
+            profile_id: activeProfileId,
+            type: "expense" as const,
+            amount: Number(form.amount),
+            currency: form.currency || "EUR",
+            category: "Shopping",
+            expense_date: form.purchase_date || new Date().toISOString().slice(0, 10),
+            description: form.product_name ? `${form.product_name}${form.store ? ` (${form.store})` : ""}` : (form.store ? `${form.store} ost` : null),
+            store: form.store || null,
+            notes: null,
+            ...(fileInfo ? { file_path: fileInfo.path, file_name: fileInfo.name, file_mime: fileInfo.mime } : {}),
+          };
+          const { error: expErr } = await supabase.from("expenses").insert(expPayload);
+          if (expErr) throw expErr;
+          expenseCreated = true;
+        } catch (err) {
+          console.warn("[expense] auto-create from warranty failed", err);
+        }
+      }
       if (fileInfo && recordId) {
         try {
           await syncFileToGoogleDrive({
@@ -294,8 +322,16 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
         try { await syncWarranty({ data: { warrantyId: recordId } }); } catch (e) { console.warn("[gcal] warranty sync failed", e); }
       }
       qc.invalidateQueries({ queryKey: ["warranties"] });
+      qc.invalidateQueries({ queryKey: expensesQueryKey });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success(row ? t("common.updated") : t("warranties.added"));
+      if (!row && expenseCreated) {
+        toast.success(
+          `✅ Salvestamine õnnestus! Loodi automaatselt: 🛡️ 1 garantiikirje, 💶 1 kulukanne`,
+          { duration: 6000 },
+        );
+      } else {
+        toast.success(row ? t("common.updated") : t("warranties.added"));
+      }
       onOpenChange(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("common.failed"));
@@ -333,6 +369,21 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
             <div><Label>{t("warranties.warrantyExpiry")}</Label><Input type="date" value={form.warranty_expiry} onChange={(e) => setForm({ ...form, warranty_expiry: e.target.value })} /></div>
           </div>
           <div><Label>{t("warranties.notes")}</Label><Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          {!row && (
+            <label className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm cursor-pointer">
+              <Checkbox
+                checked={alsoCreateExpense}
+                onCheckedChange={(v) => setAlsoCreateExpense(!!v)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium">💶 Loo automaatselt ka kulukanne</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Kasutab sama tšekki — dokumenti ei dubleerita.
+                </span>
+              </span>
+            </label>
+          )}
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
       </DialogContent>
