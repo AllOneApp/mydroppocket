@@ -45,6 +45,7 @@ type Row = {
   agreement_number: string | null;
   payee_name: string | null;
   total_payments: number | null;
+  payment_day_of_month: number | null;
 };
 
 type Derived = {
@@ -64,6 +65,14 @@ function addMonths(iso: string, n: number): string {
   d.setMonth(d.getMonth() + n);
   const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   d.setDate(Math.min(day, lastDay));
+  return d.toISOString().slice(0, 10);
+}
+
+function snapToPaymentDay(iso: string, dom: number | null | undefined): string {
+  if (!dom || dom < 1 || dom > 31) return iso;
+  const d = new Date(iso + "T00:00:00");
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(dom, lastDay));
   return d.toISOString().slice(0, 10);
 }
 
@@ -93,7 +102,7 @@ function derive(row: Row, todayIso: string): Derived | null {
   const paid = Math.max(0, Number(row.payments_made ?? 0));
   if (totalPayments && paid >= totalPayments) return null; // fully paid
 
-  const nextDue = addMonths(row.start_date, paid);
+  const nextDue = snapToPaymentDay(addMonths(row.start_date, paid), row.payment_day_of_month);
   const remaining = totalPayments ? totalPayments - paid : null;
 
   const today = new Date(todayIso + "T00:00:00").getTime();
@@ -148,7 +157,7 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
     queryFn: async () => {
       const { data, error } = await supabase
         .from("agreements")
-        .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, total_payments")
+        .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, total_payments, payment_day_of_month")
         .eq("profile_id", activeProfileId!)
         .eq("agreement_type", "installment");
       if (error) throw error;
