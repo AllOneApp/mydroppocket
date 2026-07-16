@@ -144,7 +144,13 @@ function ExpensesPage() {
         </div>
       )}
 
-      <ExpenseDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} prefill={prefill} />
+      <ExpenseDialog
+        key={`${activeProfileId ?? "no-profile"}:${editing?.id ?? "new"}`}
+        open={open}
+        onOpenChange={setOpen}
+        row={editing}
+        prefill={prefill}
+      />
       <ConfirmDeleteDialog
         open={!!pendingDelete}
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}

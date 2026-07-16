@@ -96,7 +96,12 @@ function WarrantiesPage() {
       <Section title={t("warranties.active")} count={groups.active.length} tone="green" items={groups.active} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={setPendingDelete} />
       <Section title={t("warranties.expired")} count={groups.expired.length} tone="red" items={groups.expired} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={setPendingDelete} />
       {data?.length === 0 && <EmptyCard icon={ShieldCheck} title={t("warranties.empty.title")} desc={t("warranties.empty.desc")} onAdd={() => setOpen(true)} />}
-      <WarrantyDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} />
+      <WarrantyDialog
+        key={`${activeProfileId ?? "no-profile"}:${editing?.id ?? "new"}`}
+        open={open}
+        onOpenChange={setOpen}
+        row={editing}
+      />
       <ConfirmDeleteDialog
         open={!!pendingDelete}
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
