@@ -319,17 +319,17 @@ function WarrantyDialog({ open, onOpenChange, row, onSaved }: { open: boolean; o
         // Update the linked expense (same file_path + profile) if one exists.
         if (row.file_path) {
           try {
-            const expUpdate: {
-              amount: number | null; currency: string; store: string | null;
-              expense_date: string | null; description: string | null;
-              file_path?: string; file_name?: string; file_mime?: string;
-            } = {
-              amount: form.amount ? Number(form.amount) : null,
+            const expUpdate: Partial<{
+              amount: number; currency: string; store: string | null;
+              expense_date: string; description: string | null;
+              file_path: string; file_name: string; file_mime: string;
+            }> = {
               currency: form.currency || "EUR",
               store: form.store || null,
-              expense_date: form.purchase_date || null,
               description: form.product_name ? `${form.product_name}${form.store ? ` (${form.store})` : ""}` : (form.store || null),
             };
+            if (form.amount) expUpdate.amount = Number(form.amount);
+            if (form.purchase_date) expUpdate.expense_date = form.purchase_date;
             if (fileInfo) {
               expUpdate.file_path = fileInfo.path;
               expUpdate.file_name = fileInfo.name;
