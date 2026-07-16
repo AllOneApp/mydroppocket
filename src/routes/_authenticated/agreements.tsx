@@ -214,10 +214,8 @@ function AgreementsPage() {
       )}
 
       <AgreementDialog
-        // Key by editing target only. AI auto-fill / OCR must not be tied
-        // to the active profile — profile switching mid-scan would otherwise
-        // remount the dialog and cancel the in-flight extract() call.
-        key={editing?.id ?? "new"}
+        // Each profile gets an independent form and AI auto-fill session.
+        key={`${activeProfileId ?? "no-profile"}:${editing?.id ?? "new"}`}
         open={open}
         onOpenChange={setOpen}
         row={editing}
@@ -395,7 +393,13 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       payee_name: row?.payee_name ?? "",
       payment_day_of_month: row?.payment_day_of_month != null ? String(row.payment_day_of_month) : "",
     });
-    if (!row) { setExisting([]); return () => { loadRequestRef.current += 1; }; }
+    if (!row) {
+      setExisting([]);
+      return () => {
+        loadRequestRef.current += 1;
+        scanRequestRef.current += 1;
+      };
+    }
     (async () => {
       const { data } = await supabase
         .from("agreement_attachments")
@@ -411,7 +415,10 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       }
       if (loadRequestRef.current === requestId) setExisting(list);
     })();
-    return () => { loadRequestRef.current += 1; };
+    return () => {
+      loadRequestRef.current += 1;
+      scanRequestRef.current += 1;
+    };
   }, [open, row]);
 
   async function scan() {
