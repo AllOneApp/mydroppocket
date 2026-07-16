@@ -253,10 +253,12 @@ function AgreementDetail({
   const isInstallment = row?.agreement_type === "installment";
   const monthly = Number(row?.monthly_payment ?? 0);
   let totalPayments: number | null = null;
-  if (isInstallment && row?.start_date && monthly > 0) {
-    if (row.total_amount) {
+  if (isInstallment && row?.start_date) {
+    if (row.total_payments && row.total_payments > 0) {
+      totalPayments = Math.max(1, Math.round(Number(row.total_payments)));
+    } else if (monthly > 0 && row.total_amount) {
       totalPayments = Math.max(1, Math.round(Number(row.total_amount) / monthly));
-    } else if (row.end_date) {
+    } else if (monthly > 0 && row.end_date) {
       const a = new Date(row.start_date + "T00:00:00");
       const b = new Date(row.end_date + "T00:00:00");
       let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
@@ -267,7 +269,7 @@ function AgreementDetail({
   let paidCount = 0;
   let isPaidOff = false;
   if (isInstallment && row && totalPayments) {
-    const raw = Number((row as unknown as { payments_made?: number | null }).payments_made ?? 0);
+    const raw = Number(row.payments_made ?? 0);
     paidCount = Math.min(Math.max(0, raw), totalPayments);
     isPaidOff = paidCount >= totalPayments;
   }
@@ -298,6 +300,12 @@ function AgreementDetail({
         { label: t("agreements.endDate"), value: formatDate(row.end_date) },
         { label: t("agreements.monthly"), value: row.monthly_payment != null ? formatCurrency(Number(row.monthly_payment), currency) : "—" },
         { label: t("agreements.total"), value: row.total_amount != null ? formatCurrency(Number(row.total_amount), currency) : "—" },
+        ...(isInstallment
+          ? [
+              { label: t("agreements.totalPayments", { defaultValue: "Maksete koguarv (kuudes)" }), value: totalPayments != null ? String(totalPayments) : "—" },
+              { label: t("agreements.paymentsProgress", { defaultValue: "Edenemine" }), value: totalPayments ? `${paidCount}/${totalPayments} (${Math.round((paidCount / totalPayments) * 100)}%)` : "—" },
+            ]
+          : []),
         { label: t("agreements.paymentDay", { defaultValue: "Igakuine maksetähtaeg" }), value: row.payment_day_of_month != null ? t("agreements.paymentDayValue", { defaultValue: "kuu {{day}}. päev", day: row.payment_day_of_month }) : "—" },
         { label: t("agreements.bank"), value: row.bank || "—" },
         { label: t("agreements.payeeName", { defaultValue: "Saaja nimi" }), value: <CopyableValue value={row.payee_name} /> },
