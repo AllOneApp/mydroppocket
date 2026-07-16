@@ -214,7 +214,10 @@ function AgreementsPage() {
       )}
 
       <AgreementDialog
-        key={`${activeProfileId ?? "no-profile"}:${editing?.id ?? "new"}`}
+        // Key by editing target only. AI auto-fill / OCR must not be tied
+        // to the active profile — profile switching mid-scan would otherwise
+        // remount the dialog and cancel the in-flight extract() call.
+        key={editing?.id ?? "new"}
         open={open}
         onOpenChange={setOpen}
         row={editing}
@@ -340,6 +343,13 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
   const [legacyRemoved, setLegacyRemoved] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Two independent counters:
+  //  - loadRequestRef: cancels stale attachment-loading effects
+  //  - scanRequestRef: cancels stale AI auto-fill requests
+  // Sharing one ref caused useEffect cleanup (e.g. dialog re-open, prop
+  // identity change after profile switch) to silently invalidate a scan
+  // in flight, so the AI response was discarded.
+  const loadRequestRef = useRef(0);
   const scanRequestRef = useRef(0);
   const [form, setForm] = useState(() => ({
     title: row?.title ?? "",
@@ -363,7 +373,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
   // Load existing attachments when editing.
   useEffect(() => {
     if (!open) return;
-    const requestId = ++scanRequestRef.current;
+    const requestId = ++loadRequestRef.current;
     setPendingFiles([]);
     setRemovedExistingIds([]);
     setLegacyRemoved(false);
@@ -385,7 +395,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       payee_name: row?.payee_name ?? "",
       payment_day_of_month: row?.payment_day_of_month != null ? String(row.payment_day_of_month) : "",
     });
-    if (!row) { setExisting([]); return () => { scanRequestRef.current += 1; }; }
+    if (!row) { setExisting([]); return () => { loadRequestRef.current += 1; }; }
     (async () => {
       const { data } = await supabase
         .from("agreement_attachments")
@@ -399,9 +409,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       if (row.file_path && !list.some((a) => a.filePath === row.file_path)) {
         list.unshift({ id: "__legacy__", name: row.file_name ?? "Fail", filePath: row.file_path });
       }
-      if (scanRequestRef.current === requestId) setExisting(list);
+      if (loadRequestRef.current === requestId) setExisting(list);
     })();
-    return () => { scanRequestRef.current += 1; };
+    return () => { loadRequestRef.current += 1; };
   }, [open, row]);
 
   async function scan() {
@@ -418,6 +428,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
     console.info("[scan] agreement starting", {
       fileCount: pendingFiles.length,
       files: pendingFiles.map((file, index) => ({ index, name: file.name, type: file.type, size: file.size })),
+      activeProfileId,
     });
     const requestId = ++scanRequestRef.current;
     setScanning(true);
