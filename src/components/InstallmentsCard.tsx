@@ -45,6 +45,7 @@ type Row = {
   agreement_number: string | null;
   payee_name: string | null;
   total_payments: number | null;
+  payment_day_of_month: number | null;
 };
 
 type Derived = {
@@ -101,7 +102,7 @@ function derive(row: Row, todayIso: string): Derived | null {
   const paid = Math.max(0, Number(row.payments_made ?? 0));
   if (totalPayments && paid >= totalPayments) return null; // fully paid
 
-  const nextDue = addMonths(row.start_date, paid);
+  const nextDue = snapToPaymentDay(addMonths(row.start_date, paid), row.payment_day_of_month);
   const remaining = totalPayments ? totalPayments - paid : null;
 
   const today = new Date(todayIso + "T00:00:00").getTime();
