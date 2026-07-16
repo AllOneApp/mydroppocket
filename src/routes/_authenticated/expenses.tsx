@@ -18,10 +18,12 @@ import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { DateRangeFilter, computeRange, localDateString, type DateRange } from "@/components/DateRangeFilter";
+import { WarrantyCandidatesBlock, makeWarrantyItem, computeExpiry, type WarrantyItem } from "@/components/WarrantyCandidatesBlock";
 import { supabase } from "@/integrations/supabase/client";
 import { expensesQueryKey, expensesQueryOptions, type ExpenseEntryType, type ExpenseRow } from "@/lib/expenses";
 import { deleteFile, fileToBase64, formatCurrency, uploadFile } from "@/lib/records";
 import { syncFileToGoogleDrive, syncBackupCategory, deleteGoogleDriveFile, currentBackupLang } from "@/lib/google-drive.functions";
+import { syncWarranty } from "@/lib/google-calendar.functions";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useTranslation } from "react-i18next";
 import { useActiveProfile } from "@/hooks/useActiveProfile";
@@ -172,6 +174,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
   const [form, setForm] = useState(() => makeForm(row, prefill));
   const [inputMode, setInputMode] = useState<"voice" | "upload" | "manual" | null>(null);
   const [autoVoice, setAutoVoice] = useState(false);
+  const [warrantyItems, setWarrantyItems] = useState<WarrantyItem[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -180,6 +183,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
       setFile(null);
       setInputMode(initialMode ?? null);
       setAutoVoice(initialMode === "voice");
+      setWarrantyItems([]);
     }
     return () => { scanRequestRef.current += 1; };
   }, [open, row, prefill, initialMode]);
@@ -204,12 +208,17 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
           ? d.purchased_items.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
           : [];
         const store = typeof d.store === "string" ? d.store.trim() : "";
+        const candidatesRaw = Array.isArray((d as unknown as { warranty_candidates?: unknown[] }).warranty_candidates)
+          ? ((d as unknown as { warranty_candidates: Array<Record<string, unknown>> }).warranty_candidates ?? [])
+          : [];
         const filled = [d.amount, d.currency, store, d.expense_date, d.category, d.description, d.vat, ...purchasedItems]
           .some((v) => v !== null && v !== undefined && v !== "");
         if (!filled) {
           toast.error(t("common.noDataFound", { defaultValue: "Dokumendist ei õnnestunud vajalikke andmeid leida." }));
         } else {
           const normalizedDate = normalizeDateString(d.expense_date as string | null);
+          const purchaseDate = normalizedDate || form.expense_date;
+          const nextStore = store || form.store;
           setForm((f) => ({
             ...f,
             amount: d.amount != null ? String(d.amount) : f.amount,
@@ -220,6 +229,29 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
             description: (d.description as string) || (store ? `${store} ost` : f.description),
             notes: purchasedItems.length > 0 ? purchasedItems.join("\n") : f.notes,
           }));
+          // Seed warranty candidates from AI
+          const aiItems: WarrantyItem[] = candidatesRaw
+            .filter((c) => c && typeof c === "object")
+            .map((c) => {
+              const name = typeof c.name === "string" ? c.name.trim() : "";
+              const flagged = c.is_warranty_candidate !== false;
+              const monthsRaw = typeof c.suggested_warranty_months === "number" ? c.suggested_warranty_months : null;
+              const priceRaw = typeof c.estimated_price === "number" ? c.estimated_price : null;
+              const preset = monthsRaw != null && [6, 12, 24, 36, 60].includes(monthsRaw) ? monthsRaw : 24;
+              return makeWarrantyItem(
+                {
+                  product_name: name,
+                  store: nextStore,
+                  warranty_months: preset,
+                  amount: priceRaw != null ? String(priceRaw) : "",
+                  selected: flagged,
+                  source: "ai",
+                },
+                { store: nextStore, purchase_date: purchaseDate },
+              );
+            })
+            .filter((it) => it.product_name.length > 0);
+          setWarrantyItems(aiItems);
           toast.success(t("common.autoFilled"));
         }
       } else toast.error(res.error);
@@ -295,6 +327,54 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
           b.expense_date.localeCompare(a.expense_date),
         );
       });
+      // Create warranty records — one file, many usages.
+      const selectedWarranties = !row
+        ? warrantyItems.filter(
+            (w) =>
+              w.selected &&
+              w.product_name.trim().length > 0 &&
+              (w.warranty_expiry || (typeof w.warranty_months === "number") || (w.warranty_months === "custom" && Number(w.custom_months) > 0)),
+          )
+        : [];
+      let warrantiesCreated = 0;
+      const createdWarrantyIds: string[] = [];
+      for (const w of selectedWarranties) {
+        const months =
+          typeof w.warranty_months === "number"
+            ? w.warranty_months
+            : Number(w.custom_months);
+        const expiry = w.warranty_expiry || (Number.isFinite(months) && months > 0 ? computeExpiry(normalizedExpenseDate, months) : null);
+        const wPayload = {
+          user_id: uid,
+          profile_id: activeProfileId,
+          product_name: w.product_name.trim(),
+          store: w.store || savedRow.store || null,
+          purchase_date: w.purchase_date || normalizedExpenseDate,
+          warranty_expiry: expiry || null,
+          amount: w.amount ? Number(w.amount) : null,
+          currency: savedRow.currency || "EUR",
+          notes: null,
+          ...(fileInfo ? { file_path: fileInfo.path, file_name: fileInfo.name, file_mime: fileInfo.mime } : {}),
+        };
+        try {
+          const { data: inserted, error: wErr } = await supabase
+            .from("warranties")
+            .insert(wPayload)
+            .select("id")
+            .single();
+          if (wErr) throw wErr;
+          if (inserted?.id) {
+            warrantiesCreated += 1;
+            createdWarrantyIds.push(inserted.id);
+          }
+        } catch (err) {
+          console.warn("[warranty] auto-create failed", err);
+        }
+      }
+      // Best-effort calendar sync for created warranties
+      for (const wid of createdWarrantyIds) {
+        try { await syncWarranty({ data: { warrantyId: wid } }); } catch (err) { console.warn("[gcal] warranty sync failed", err); }
+      }
       if (fileInfo && savedRow?.id) {
         try {
           await syncFileToGoogleDrive({
@@ -315,9 +395,17 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
       try { await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["warranties"], refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
       ]);
-      toast.success(row ? t("common.updated") : t("expenses.added"));
+      if (!row && warrantiesCreated > 0) {
+        toast.success(
+          `✅ Salvestamine õnnestus! Loodi automaatselt: 💶 1 kulukanne, 🛡️ ${warrantiesCreated} garantiikirje${warrantiesCreated === 1 ? "" : "t"}`,
+          { duration: 6000 },
+        );
+      } else {
+        toast.success(row ? t("common.updated") : t("expenses.added"));
+      }
       onOpenChange(false);
     } catch (e) { toast.error(getErrorMessage(e, t("common.failed"))); }
     finally { setSaving(false); }
