@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { CreditCard, ArrowRight, Copy, Calendar, Wallet, Check, CheckCircle2 } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { CreditCard, ArrowRight, Copy, Calendar, Wallet, Check, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
@@ -148,8 +148,14 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { activeProfileId } = useActiveProfile();
+  const navigate = useNavigate();
   const [payDialog, setPayDialog] = useState<Derived | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [resultDialog, setResultDialog] = useState<
+    | { status: "success"; expenseId: string | null }
+    | { status: "error" }
+    | null
+  >(null);
 
   const { data: rows } = useQuery({
     queryKey: ["dashboard-installments", activeProfileId],
@@ -176,6 +182,39 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
         .update({ payments_made: next })
         .eq("id", d.row.id);
       if (error) throw error;
+      // Create matching expense entry in "Tulud ja kulud".
+      let expenseId: string | null = null;
+      let expenseError: unknown = null;
+      try {
+        const { data: userData, error: userErr } = await supabase.auth.getUser();
+        if (userErr || !userData.user) throw userErr ?? new Error("no user");
+        const description = d.row.agreement_number
+          ? t("installments.descriptionWithNumber", {
+              defaultValue: "Järelmaksu makse – Lepingu nr: {{n}}",
+              n: d.row.agreement_number,
+            })
+          : t("installments.descriptionFallback", { defaultValue: "Järelmaksu makse" });
+        const { data: inserted, error: insErr } = await supabase
+          .from("expenses")
+          .insert({
+            user_id: userData.user.id,
+            profile_id: activeProfileId ?? null,
+            type: "expense",
+            amount: d.amount,
+            currency: d.row.currency ?? "EUR",
+            category: "Other",
+            expense_date: new Date().toISOString().slice(0, 10),
+            description: `${d.row.title} — ${description}`,
+            store: d.row.payee_name ?? null,
+          })
+          .select("id")
+          .single();
+        if (insErr) throw insErr;
+        expenseId = inserted?.id ?? null;
+      } catch (e) {
+        expenseError = e;
+        console.warn("[installments] failed to create expense", e);
+      }
       // Best-effort: after marking paid, refresh the tracked Google Calendar event
       // (removes the just-paid one and creates the next). No-op if not connected.
       try {
@@ -183,14 +222,19 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
       } catch (e) {
         console.warn("[gcal] sync after markPaid failed", e);
       }
-      return next;
+      return { next, expenseId, expenseError };
     },
-    onSuccess: () => {
-      toast.success(t("installments.markedPaid", { defaultValue: "Makse märgitud tasutuks" }));
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["dashboard-installments"] });
       void queryClient.invalidateQueries({ queryKey: ["agreements"] });
+      void queryClient.invalidateQueries({ queryKey: ["expenses"] });
       setConfirmOpen(false);
       setPayDialog(null);
+      if (result.expenseError) {
+        setResultDialog({ status: "error" });
+      } else {
+        setResultDialog({ status: "success", expenseId: result.expenseId });
+      }
     },
     onError: () => {
       toast.error(t("common.failed", { defaultValue: "Ebaõnnestus" }));
