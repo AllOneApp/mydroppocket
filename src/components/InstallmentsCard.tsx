@@ -67,6 +67,14 @@ function addMonths(iso: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function snapToPaymentDay(iso: string, dom: number | null | undefined): string {
+  if (!dom || dom < 1 || dom > 31) return iso;
+  const d = new Date(iso + "T00:00:00");
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(dom, lastDay));
+  return d.toISOString().slice(0, 10);
+}
+
 function monthsBetween(from: string, to: string): number {
   const a = new Date(from + "T00:00:00");
   const b = new Date(to + "T00:00:00");
