@@ -195,7 +195,8 @@ function Section({ title, count, tone, items, onEdit, onDelete }: {
   );
 }
 
-function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null }) {
+type SaveSummary = { warranties: number; expenses: number };
+function WarrantyDialog({ open, onOpenChange, row, onSaved }: { open: boolean; onOpenChange: (b: boolean) => void; row: Row | null; onSaved?: (s: SaveSummary | null) => void }) {
   const qc = useQueryClient();
   const { t, i18n } = useTranslation();
   const { activeProfileId } = useActiveProfile();
@@ -310,10 +311,38 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
         ...(fileInfo ? { file_path: fileInfo.path, file_name: fileInfo.name, file_mime: fileInfo.mime } : {}),
       };
       let recordId: string | null = null;
+      let expensesUpdated = 0;
       if (row) {
         const { error } = await supabase.from("warranties").update(payload).eq("id", row.id);
         if (error) throw error;
         recordId = row.id;
+        // Update the linked expense (same file_path + profile) if one exists.
+        if (row.file_path) {
+          try {
+            const expUpdate: Record<string, unknown> = {
+              amount: form.amount ? Number(form.amount) : null,
+              currency: form.currency || "EUR",
+              store: form.store || null,
+              expense_date: form.purchase_date || null,
+              description: form.product_name ? `${form.product_name}${form.store ? ` (${form.store})` : ""}` : (form.store || null),
+            };
+            if (fileInfo) {
+              expUpdate.file_path = fileInfo.path;
+              expUpdate.file_name = fileInfo.name;
+              expUpdate.file_mime = fileInfo.mime;
+            }
+            const { data: upd, error: upErr } = await supabase
+              .from("expenses")
+              .update(expUpdate)
+              .eq("profile_id", activeProfileId)
+              .eq("file_path", row.file_path)
+              .select("id");
+            if (upErr) throw upErr;
+            expensesUpdated = upd?.length ?? 0;
+          } catch (err) {
+            console.warn("[expense] linked update from warranty edit failed", err);
+          }
+        }
       } else {
         const { data: inserted, error } = await supabase.from("warranties").insert(payload).select("id").single();
         if (error) throw error;
@@ -367,13 +396,12 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
       qc.invalidateQueries({ queryKey: ["warranties"] });
       qc.invalidateQueries({ queryKey: expensesQueryKey });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
-      if (!row && expenseCreated) {
-        toast.success(
-          `✅ Salvestamine õnnestus! Loodi automaatselt: 🛡️ 1 garantiikirje, 💶 1 kulukanne`,
-          { duration: 6000 },
-        );
+      if (!row) {
+        onSaved?.({ warranties: 1, expenses: expenseCreated ? 1 : 0 });
+      } else if (expensesUpdated > 0) {
+        toast.success("✅ Garantiikirje ja seotud kulukanne uuendati edukalt.");
       } else {
-        toast.success(row ? t("common.updated") : t("warranties.added"));
+        toast.success("✅ Garantiikirje uuendati edukalt.");
       }
       onOpenChange(false);
     } catch (e) {
@@ -384,7 +412,7 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden p-4 sm:w-full sm:max-w-lg sm:p-6">
-        <DialogHeader><DialogTitle>{row ? t("warranties.editTitle") : t("warranties.addTitle")}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{row ? `✏️ ${t("warranties.editTitle", { defaultValue: "Muuda garantiikirjet" })}` : t("warranties.addTitle")}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="w-full min-w-0 max-w-full space-y-4 overflow-hidden">
           <div className="flex justify-end">
             <VoiceInput
