@@ -505,7 +505,7 @@ export async function syncInstallmentForUser(opts: {
   const { data: agRow, error: agErr } = await dbAny
     .from("agreements")
     .select(
-      "id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, payment_day_of_month, user_id",
+      "id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, payment_day_of_month, total_payments, user_id",
     )
     .eq("id", opts.agreementId)
     .maybeSingle();
