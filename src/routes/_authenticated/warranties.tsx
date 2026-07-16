@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { useNavigate } from "@tanstack/react-router";
 import { FileDrop } from "@/components/FileDrop";
 import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
@@ -143,7 +144,7 @@ function Section({ title, count, tone, items, onEdit, onDelete }: {
                 </div>
                 <span className={`shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium ${color}`}>{s.label}</span>
               </div>
-              <div className="mt-4"><RecordActions filePath={r.file_path} fileName={r.file_name} onDelete={() => onDelete(r)} /></div>
+              <div className="mt-4"><RecordActions filePath={r.file_path} fileName={r.file_name} onEdit={() => onEdit(r)} onDelete={() => onDelete(r)} /></div>
             </div>
           );
         })}
