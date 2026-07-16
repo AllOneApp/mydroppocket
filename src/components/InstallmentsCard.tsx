@@ -344,6 +344,25 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
                   </div>
                 </div>
 
+                {d.totalPayments && d.totalPayments > 0 && (
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>
+                        {t("installments.progress", { defaultValue: "Edenemine" })}
+                      </span>
+                      <span>
+                        {d.paid}/{d.totalPayments} · {Math.round((d.paid / d.totalPayments) * 100)}%
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-accent">
+                      <div
+                        className="h-full brand-gradient-bg transition-[width]"
+                        style={{ width: `${Math.min(100, Math.max(0, (d.paid / d.totalPayments) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setPayDialog(d)}
