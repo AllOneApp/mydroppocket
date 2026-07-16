@@ -433,7 +433,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
-        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes, d.iban, d.bank, d.reference_number, d.payee_name, d.payment_day_of_month]
+        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, (d as unknown as { total_payments?: number | null }).total_payments, d.currency, d.notes, d.iban, d.bank, d.reference_number, d.payee_name, d.payment_day_of_month]
           .some((v) => v !== null && v !== undefined && v !== "");
         if (!filled) {
           toast.error(t("agreements.analysisNoData"));
@@ -452,6 +452,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           end_date: (d.end_date as string) || f.end_date,
           monthly_payment: d.monthly_payment != null ? String(d.monthly_payment) : f.monthly_payment,
           total_amount: d.total_amount != null ? String(d.total_amount) : f.total_amount,
+          total_payments: (d as unknown as { total_payments?: number | null }).total_payments != null ? String((d as unknown as { total_payments?: number | null }).total_payments) : f.total_payments,
           currency: (d.currency as string) || f.currency,
           notes: (d.notes as string) || f.notes,
           iban: (d.iban as string) || f.iban,
