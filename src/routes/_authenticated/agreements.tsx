@@ -546,24 +546,40 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           if (attErr) throw attErr;
         }
 
-        // Sync all attachments to per-agreement Drive folder.
-        try {
-          await syncAgreementAttachments({ data: { agreementId: recordId } });
-        } catch (err) {
-          console.warn("[gdrive] agreement attachments sync failed", err);
-        }
       }
 
-      try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
-      // Best-effort: if this is an installment, refresh its Google Calendar event.
-      // Also refresh agreement-end events for non-installment types with an end date.
-      if (recordId) {
-        try { await syncInstallmentAgreement({ data: { agreementId: recordId } }); } catch (e) { console.warn("[gcal] installment sync failed", e); }
-      }
       qc.invalidateQueries({ queryKey: ["agreements"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success(row ? t("common.updated") : t("agreements.added"));
       onOpenChange(false);
+
+      // The record and its attachments are already safely stored. Keep slower
+      // external synchronizations out of the dialog's saving state so the user
+      // does not have to wait for Drive or Calendar network calls to finish.
+      if (recordId) {
+        const savedRecordId = recordId;
+        void Promise.allSettled([
+          (async () => {
+            try {
+              await syncAgreementAttachments({ data: { agreementId: savedRecordId } });
+            } catch (err) {
+              console.warn("[gdrive] agreement attachments sync failed", err);
+            }
+            try {
+              await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang() } });
+            } catch (err) {
+              console.warn("[gdrive] backup sync failed", err);
+            }
+          })(),
+          (async () => {
+            try {
+              await syncInstallmentAgreement({ data: { agreementId: savedRecordId } });
+            } catch (err) {
+              console.warn("[gcal] installment sync failed", err);
+            }
+          })(),
+        ]);
+      }
     } catch (e) { toast.error(e instanceof Error ? e.message : t("common.failed")); }
     finally { setSaving(false); }
   }
