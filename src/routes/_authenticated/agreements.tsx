@@ -477,6 +477,11 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    // Blur any focused input (esp. IBAN) so browsers/Google Wallet don't
+    // offer to save the value after the dialog closes.
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     if (!activeProfileId) {
       toast.error(t("profiles.notReady", { defaultValue: "Aktiivne profiil pole veel laaditud. Palun proovi mõne hetke pärast uuesti." }));
       return;
@@ -698,7 +703,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             </div>
             <div><Label>{t("agreements.referenceNumber")}</Label><Input inputMode="numeric" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} /></div>
           </div>
-          <div><Label>{t("agreements.iban")}</Label><Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="EE00 0000 0000 0000 0000" /></div>
+          <div><Label>{t("agreements.iban")}</Label><Input name="agreement-iban" value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="EE00 0000 0000 0000 0000" autoComplete="off" autoCorrect="off" autoCapitalize="characters" spellCheck={false} inputMode="text" data-form-type="other" data-lpignore="true" data-1p-ignore="true" /></div>
           <div><Label>{t("agreements.payeeName", { defaultValue: "Saaja nimi" })}</Label><Input value={form.payee_name} onChange={(e) => setForm({ ...form, payee_name: e.target.value })} placeholder="AS Inbank Finance" /></div>
           <div>
             <Label>📅 {t("agreements.paymentDay", { defaultValue: "Igakuine maksetähtaeg" })}</Label>
