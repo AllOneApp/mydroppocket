@@ -57,6 +57,8 @@ type Row = {
   iban: string | null; bank: string | null; reference_number: string | null;
   payee_name: string | null;
   payment_day_of_month: number | null;
+  total_payments: number | null;
+  payments_made: number | null;
   file_path: string | null; file_name: string | null;
 };
 
@@ -251,10 +253,12 @@ function AgreementDetail({
   const isInstallment = row?.agreement_type === "installment";
   const monthly = Number(row?.monthly_payment ?? 0);
   let totalPayments: number | null = null;
-  if (isInstallment && row?.start_date && monthly > 0) {
-    if (row.total_amount) {
+  if (isInstallment && row?.start_date) {
+    if (row.total_payments && row.total_payments > 0) {
+      totalPayments = Math.max(1, Math.round(Number(row.total_payments)));
+    } else if (monthly > 0 && row.total_amount) {
       totalPayments = Math.max(1, Math.round(Number(row.total_amount) / monthly));
-    } else if (row.end_date) {
+    } else if (monthly > 0 && row.end_date) {
       const a = new Date(row.start_date + "T00:00:00");
       const b = new Date(row.end_date + "T00:00:00");
       let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
@@ -265,7 +269,7 @@ function AgreementDetail({
   let paidCount = 0;
   let isPaidOff = false;
   if (isInstallment && row && totalPayments) {
-    const raw = Number((row as unknown as { payments_made?: number | null }).payments_made ?? 0);
+    const raw = Number(row.payments_made ?? 0);
     paidCount = Math.min(Math.max(0, raw), totalPayments);
     isPaidOff = paidCount >= totalPayments;
   }
@@ -296,6 +300,12 @@ function AgreementDetail({
         { label: t("agreements.endDate"), value: formatDate(row.end_date) },
         { label: t("agreements.monthly"), value: row.monthly_payment != null ? formatCurrency(Number(row.monthly_payment), currency) : "—" },
         { label: t("agreements.total"), value: row.total_amount != null ? formatCurrency(Number(row.total_amount), currency) : "—" },
+        ...(isInstallment
+          ? [
+              { label: t("agreements.totalPayments", { defaultValue: "Maksete koguarv (kuudes)" }), value: totalPayments != null ? String(totalPayments) : "—" },
+              { label: t("agreements.paymentsProgress", { defaultValue: "Edenemine" }), value: totalPayments ? `${paidCount}/${totalPayments} (${Math.round((paidCount / totalPayments) * 100)}%)` : "—" },
+            ]
+          : []),
         { label: t("agreements.paymentDay", { defaultValue: "Igakuine maksetähtaeg" }), value: row.payment_day_of_month != null ? t("agreements.paymentDayValue", { defaultValue: "kuu {{day}}. päev", day: row.payment_day_of_month }) : "—" },
         { label: t("agreements.bank"), value: row.bank || "—" },
         { label: t("agreements.payeeName", { defaultValue: "Saaja nimi" }), value: <CopyableValue value={row.payee_name} /> },
@@ -340,6 +350,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
     end_date: row?.end_date ?? "",
     monthly_payment: row?.monthly_payment?.toString() ?? "",
     total_amount: row?.total_amount?.toString() ?? "",
+    total_payments: row?.total_payments != null ? String(row.total_payments) : "",
     currency: row?.currency ?? "EUR",
     notes: row?.notes ?? "",
     iban: row?.iban ?? "",
@@ -365,6 +376,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       end_date: row?.end_date ?? "",
       monthly_payment: row?.monthly_payment?.toString() ?? "",
       total_amount: row?.total_amount?.toString() ?? "",
+      total_payments: row?.total_payments != null ? String(row.total_payments) : "",
       currency: row?.currency ?? "EUR",
       notes: row?.notes ?? "",
       iban: row?.iban ?? "",
@@ -421,7 +433,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
-        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, d.currency, d.notes, d.iban, d.bank, d.reference_number, d.payee_name, d.payment_day_of_month]
+        const filled = [d.title, d.agreement_type, d.company, d.agreement_number, d.start_date, d.end_date, d.monthly_payment, d.total_amount, (d as unknown as { total_payments?: number | null }).total_payments, d.currency, d.notes, d.iban, d.bank, d.reference_number, d.payee_name, d.payment_day_of_month]
           .some((v) => v !== null && v !== undefined && v !== "");
         if (!filled) {
           toast.error(t("agreements.analysisNoData"));
@@ -440,6 +452,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           end_date: (d.end_date as string) || f.end_date,
           monthly_payment: d.monthly_payment != null ? String(d.monthly_payment) : f.monthly_payment,
           total_amount: d.total_amount != null ? String(d.total_amount) : f.total_amount,
+          total_payments: (d as unknown as { total_payments?: number | null }).total_payments != null ? String((d as unknown as { total_payments?: number | null }).total_payments) : f.total_payments,
           currency: (d.currency as string) || f.currency,
           notes: (d.notes as string) || f.notes,
           iban: (d.iban as string) || f.iban,
@@ -484,6 +497,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         end_date: form.end_date || null,
         monthly_payment: form.monthly_payment ? Number(form.monthly_payment) : null,
         total_amount: form.total_amount ? Number(form.total_amount) : null,
+        total_payments: form.total_payments ? Number(form.total_payments) : null,
         currency: form.currency,
         notes: form.notes || null,
         iban: form.iban ? form.iban.replace(/\s+/g, "").toUpperCase() : null,
@@ -652,6 +666,24 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             <div><Label>{t("agreements.monthly")}</Label><Input type="number" step="0.01" value={form.monthly_payment} onChange={(e) => setForm({ ...form, monthly_payment: e.target.value })} /></div>
             <div><Label>{t("agreements.total")}</Label><Input type="number" step="0.01" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} /></div>
           </div>
+          {form.agreement_type === "installment" && (
+            <div>
+              <Label>{t("agreements.totalPayments", { defaultValue: "Maksete koguarv (kuudes)" })}</Label>
+              <Input
+                type="number"
+                min="1"
+                max="600"
+                step="1"
+                inputMode="numeric"
+                value={form.total_payments}
+                onChange={(e) => setForm({ ...form, total_payments: e.target.value })}
+                placeholder={t("agreements.totalPaymentsPlaceholder", { defaultValue: "nt 24" })}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("agreements.totalPaymentsHint", { defaultValue: "AI proovib selle automaatselt lepingult tuvastada. Saad väärtust ka käsitsi muuta." })}
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>{t("agreements.bank")}</Label>

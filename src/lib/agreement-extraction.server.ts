@@ -14,6 +14,7 @@ export type AgreementExtraction = {
   reference_number: string | null;
   payee_name: string | null;
   payment_day_of_month: number | null;
+  total_payments: number | null;
 };
 
 const AGREEMENT_TYPES = ["installment", "warranty_extension", "purchase_contract", "service", "contract"] as const;
@@ -42,6 +43,7 @@ Extract these fields independently. A missing field must be null and must never 
 - reference_number: payment reference number (viitenumber / reference / makseviide) the customer must include with each payment. Digits only, no spaces. Null when not stated.
 - payee_name: the payment beneficiary / account owner name that the customer pays to (for example "AS Inbank Finance", "AS Inbank", "AS SEB Pank", "LHV Finance AS", "Holm Bank AS", "Bigbank AS", "TF Bank AB", "Coop Finants AS"). Return the legal name verbatim from the document. Null when not stated.
 - payment_day_of_month: integer between 1 and 31 for the recurring monthly payment due day; null when not stated
+- total_payments: total number of monthly payments in the whole agreement (contract length in months). Look for labels such as "Maksete arv", "Maksete koguarv", "Kuumaksete arv", "Osamaksete arv", "Tenor", "Loan term", "Number of instalments", "Repayment period (months)", "kestus (kuudes)", "lepingu kestus". If only years are stated, multiply by 12. Return as an integer 1–600; null when not clearly stated.
 - notes: concise useful details not represented above, or null
 - ocr_text: page-labelled source excerpts that support the extracted values, including labels and nearby values
 
@@ -251,6 +253,19 @@ export function parseAgreementResponse(rawResponse: string) {
       if (n == null) return null;
       const day = Math.round(n);
       return day >= 1 && day <= 31 ? day : null;
+    })(),
+    total_payments: (() => {
+      const raw = valueFor(source, [
+        "total_payments", "number_of_payments", "number_of_instalments", "number_of_installments",
+        "payments_count", "instalments_count", "installments_count",
+        "tenor", "tenor_months", "loan_term", "loan_term_months", "term_months", "duration_months",
+        "maksete_arv", "maksete_koguarv", "kuumaksete_arv", "osamaksete_arv",
+        "lepingu_kestus", "kestus", "kestus_kuudes",
+      ]);
+      const n = asNumber(raw);
+      if (n == null) return null;
+      const m = Math.round(n);
+      return m >= 1 && m <= 600 ? m : null;
     })(),
   };
   const invalidFields: string[] = [];

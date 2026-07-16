@@ -44,6 +44,7 @@ type Row = {
   payments_made: number | null;
   agreement_number: string | null;
   payee_name: string | null;
+  total_payments: number | null;
 };
 
 type Derived = {
@@ -80,7 +81,9 @@ function derive(row: Row, todayIso: string): Derived | null {
   if (!row.start_date || !monthly || monthly <= 0) return null;
 
   let totalPayments: number | null = null;
-  if (row.total_amount && monthly > 0) {
+  if (row.total_payments && row.total_payments > 0) {
+    totalPayments = Math.max(1, Math.round(Number(row.total_payments)));
+  } else if (row.total_amount && monthly > 0) {
     totalPayments = Math.max(1, Math.round(Number(row.total_amount) / monthly));
   } else if (row.end_date) {
     totalPayments = Math.max(1, monthsBetween(row.start_date, row.end_date) + 1);
@@ -145,7 +148,7 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
     queryFn: async () => {
       const { data, error } = await supabase
         .from("agreements")
-        .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name")
+        .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, total_payments")
         .eq("profile_id", activeProfileId!)
         .eq("agreement_type", "installment");
       if (error) throw error;
@@ -340,6 +343,25 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
                     </p>
                   </div>
                 </div>
+
+                {d.totalPayments && d.totalPayments > 0 && (
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>
+                        {t("installments.progress", { defaultValue: "Edenemine" })}
+                      </span>
+                      <span>
+                        {d.paid}/{d.totalPayments} · {Math.round((d.paid / d.totalPayments) * 100)}%
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-accent">
+                      <div
+                        className="h-full brand-gradient-bg transition-[width]"
+                        style={{ width: `${Math.min(100, Math.max(0, (d.paid / d.totalPayments) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <button
                   type="button"
