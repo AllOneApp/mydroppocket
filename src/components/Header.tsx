@@ -44,7 +44,7 @@ export function Header({ variant, onMenu }: HeaderProps) {
           <Logo />
         </Link>
         <div className="flex items-center justify-end gap-2">
-          <div className="mt-6 max-w-[160px]">
+          <div className="mt-6 max-w-[160px] translate-y-[20px]">
             <ProfileSwitcher variant="header" />
           </div>
         </div>
