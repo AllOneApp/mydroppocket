@@ -157,7 +157,7 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
     queryFn: async () => {
       const { data, error } = await supabase
         .from("agreements")
-        .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, total_payments")
+        .select("id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, total_payments, payment_day_of_month")
         .eq("profile_id", activeProfileId!)
         .eq("agreement_type", "installment");
       if (error) throw error;
