@@ -482,6 +482,14 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
           <div><Label>{t("expenses.store")}</Label><Input value={form.store} onChange={(e) => setForm({ ...form, store: e.target.value })} /></div>
           <div><Label>{t("expenses.description")}</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
           <div><Label>{t("expenses.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          {!row && form.type === "expense" && (
+            <WarrantyCandidatesBlock
+              items={warrantyItems}
+              onChange={setWarrantyItems}
+              defaultStore={form.store}
+              defaultPurchaseDate={form.expense_date}
+            />
+          )}
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
       </DialogContent>
