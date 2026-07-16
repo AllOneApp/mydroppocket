@@ -369,6 +369,21 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
             <div><Label>{t("warranties.warrantyExpiry")}</Label><Input type="date" value={form.warranty_expiry} onChange={(e) => setForm({ ...form, warranty_expiry: e.target.value })} /></div>
           </div>
           <div><Label>{t("warranties.notes")}</Label><Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          {!row && (
+            <label className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm cursor-pointer">
+              <Checkbox
+                checked={alsoCreateExpense}
+                onCheckedChange={(v) => setAlsoCreateExpense(!!v)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium">💶 Loo automaatselt ka kulukanne</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Kasutab sama tšekki — dokumenti ei dubleerita.
+                </span>
+              </span>
+            </label>
+          )}
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
       </DialogContent>
