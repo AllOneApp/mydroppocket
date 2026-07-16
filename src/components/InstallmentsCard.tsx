@@ -534,6 +534,83 @@ export function InstallmentsCard({ fullPage = false }: { fullPage?: boolean } = 
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <Dialog open={!!resultDialog} onOpenChange={(o) => { if (!o) setResultDialog(null); }}>
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-md gap-3 p-4 sm:p-6">
+        {resultDialog?.status === "success" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                {t("installments.result.successTitle", { defaultValue: "Makse registreeriti edukalt" })}
+              </DialogTitle>
+              <DialogDescription className="break-words">
+                {t("installments.result.successDesc", {
+                  defaultValue:
+                    "Kuumakse lisati automaatselt 'Tulud ja kulud' moodulisse. Soovitame korraks üle vaadata, et kulukanne on korrektne.",
+                })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-2 sm:flex-col sm:space-x-0 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setResultDialog(null);
+                  void navigate({ to: "/expenses" });
+                }}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg brand-gradient-bg px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+              >
+                {t("installments.result.viewExpense", { defaultValue: "Vaata kulukannet" })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultDialog(null)}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border bg-background px-4 py-2.5 text-sm font-semibold transition hover:bg-muted"
+              >
+                {t("common.close", { defaultValue: "Sulge" })}
+              </button>
+            </DialogFooter>
+          </>
+        ) : resultDialog?.status === "error" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                {t("installments.result.errorTitle", { defaultValue: "Kulukande automaatne lisamine ebaõnnestus" })}
+              </DialogTitle>
+              <DialogDescription className="break-words">
+                {t("installments.result.errorDesc", {
+                  defaultValue:
+                    "Makse märgiti tasutuks, kuid kulukannet ei õnnestunud automaatselt lisada. Palun lisa see käsitsi 'Tulud ja kulud' moodulisse.",
+                })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-2 sm:flex-col sm:space-x-0 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setResultDialog(null);
+                  void navigate({ to: "/expenses" });
+                }}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg brand-gradient-bg px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+              >
+                {t("installments.result.openExpenses", { defaultValue: "Ava Tulud ja kulud" })}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setResultDialog(null);
+                  void navigate({ to: "/expenses" });
+                }}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border bg-background px-4 py-2.5 text-sm font-semibold transition hover:bg-muted"
+              >
+                {t("installments.result.addManually", { defaultValue: "Lisa käsitsi" })}
+              </button>
+            </DialogFooter>
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
