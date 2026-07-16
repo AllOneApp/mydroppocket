@@ -207,6 +207,7 @@ function OverviewPage() {
   const installments = agreements.filter((a: { agreement_type?: string | null }) => a.agreement_type === "installment") as Array<{
     id: string; title: string; start_date: string | null; end_date: string | null;
     monthly_payment: number | null; total_amount: number | null; payments_made: number | null; currency: string | null;
+    total_payments: number | null;
   }>;
 
   function addMonths(iso: string, n: number): string {
@@ -230,7 +231,8 @@ function OverviewPage() {
     const monthly = Number(row.monthly_payment ?? 0);
     if (!row.start_date || monthly <= 0) return null;
     let totalPayments: number | null = null;
-    if (row.total_amount && monthly > 0) totalPayments = Math.max(1, Math.round(Number(row.total_amount) / monthly));
+    if (row.total_payments && row.total_payments > 0) totalPayments = Math.max(1, Math.round(Number(row.total_payments)));
+    else if (row.total_amount && monthly > 0) totalPayments = Math.max(1, Math.round(Number(row.total_amount) / monthly));
     else if (row.end_date) totalPayments = Math.max(1, monthsBetween(row.start_date, row.end_date) + 1);
     const paid = Math.max(0, Number(row.payments_made ?? 0));
     if (totalPayments && paid >= totalPayments) return null;
