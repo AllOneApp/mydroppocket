@@ -666,6 +666,24 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             <div><Label>{t("agreements.monthly")}</Label><Input type="number" step="0.01" value={form.monthly_payment} onChange={(e) => setForm({ ...form, monthly_payment: e.target.value })} /></div>
             <div><Label>{t("agreements.total")}</Label><Input type="number" step="0.01" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} /></div>
           </div>
+          {form.agreement_type === "installment" && (
+            <div>
+              <Label>{t("agreements.totalPayments", { defaultValue: "Maksete koguarv (kuudes)" })}</Label>
+              <Input
+                type="number"
+                min="1"
+                max="600"
+                step="1"
+                inputMode="numeric"
+                value={form.total_payments}
+                onChange={(e) => setForm({ ...form, total_payments: e.target.value })}
+                placeholder={t("agreements.totalPaymentsPlaceholder", { defaultValue: "nt 24" })}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("agreements.totalPaymentsHint", { defaultValue: "AI proovib selle automaatselt lepingult tuvastada. Saad väärtust ka käsitsi muuta." })}
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>{t("agreements.bank")}</Label>
