@@ -42,9 +42,11 @@ function WarrantiesPage() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { activeProfileId } = useActiveProfile();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
+  const [summary, setSummary] = useState<{ warranties: number; expenses: number } | null>(null);
 
   const { data } = useQuery({
     queryKey: ["warranties", activeProfileId],
@@ -104,13 +106,53 @@ function WarrantiesPage() {
         open={open}
         onOpenChange={setOpen}
         row={editing}
+        onSaved={(s) => { if (s) setSummary(s); }}
       />
       <ConfirmDeleteDialog
         open={!!pendingDelete}
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
         onConfirm={() => { const r = pendingDelete; setPendingDelete(null); if (r) void performDelete(r); }}
       />
+      <SaveSummaryDialog
+        summary={summary}
+        onClose={() => setSummary(null)}
+        onOpenExpenses={() => { setSummary(null); void navigate({ to: "/expenses" }); }}
+      />
     </AppShell>
+  );
+}
+
+function SaveSummaryDialog({ summary, onClose, onOpenExpenses }: {
+  summary: { warranties: number; expenses: number } | null;
+  onClose: () => void;
+  onOpenExpenses: () => void;
+}) {
+  const open = !!summary;
+  const w = summary?.warranties ?? 0;
+  const e = summary?.expenses ?? 0;
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>✅ Salvestamine õnnestus!</DialogTitle>
+          <DialogDescription>
+            MyDropPocket lõi automaatselt:
+          </DialogDescription>
+        </DialogHeader>
+        <ul className="space-y-1 text-sm">
+          {w > 0 && <li>🛡️ {w} garantiikirje{w === 1 ? "" : "t"}</li>}
+          {e > 0 && <li>💶 {e} kulukanne{e === 1 ? "" : "t"}</li>}
+        </ul>
+        <p className="text-xs text-muted-foreground">Palun kontrolli, et kõik andmed on korrektsed.</p>
+        <DialogFooter className="flex-wrap gap-2 sm:justify-end">
+          {e > 0 && (
+            <Button variant="outline" onClick={onOpenExpenses}>💶 Ava kulud</Button>
+          )}
+          <Button variant="outline" onClick={onClose}>👁 Ava garantiid</Button>
+          <Button onClick={onClose}>Sulge</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
