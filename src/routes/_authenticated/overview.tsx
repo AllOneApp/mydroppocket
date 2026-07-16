@@ -208,6 +208,7 @@ function OverviewPage() {
     id: string; title: string; start_date: string | null; end_date: string | null;
     monthly_payment: number | null; total_amount: number | null; payments_made: number | null; currency: string | null;
     total_payments: number | null;
+    payment_day_of_month: number | null;
   }>;
 
   function addMonths(iso: string, n: number): string {
@@ -226,6 +227,13 @@ function OverviewPage() {
     if (b.getDate() < a.getDate()) m -= 1;
     return m;
   }
+  function snapToPaymentDay(iso: string, dom: number | null | undefined): string {
+    if (!dom || dom < 1 || dom > 31) return iso;
+    const d = new Date(iso + "T00:00:00");
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(dom, lastDay));
+    return d.toISOString().slice(0, 10);
+  }
 
   const installmentDerived = installments.map((row) => {
     const monthly = Number(row.monthly_payment ?? 0);
@@ -236,7 +244,7 @@ function OverviewPage() {
     else if (row.end_date) totalPayments = Math.max(1, monthsBetween(row.start_date, row.end_date) + 1);
     const paid = Math.max(0, Number(row.payments_made ?? 0));
     if (totalPayments && paid >= totalPayments) return null;
-    const nextDue = addMonths(row.start_date, paid);
+    const nextDue = snapToPaymentDay(addMonths(row.start_date, paid), row.payment_day_of_month);
     const remaining = totalPayments ? totalPayments - paid : null;
     const daysUntil = Math.round((new Date(nextDue + "T00:00:00").getTime() - Date.now()) / 86400000);
     return { row, monthly, nextDue, remaining, daysUntil };
