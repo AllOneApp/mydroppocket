@@ -214,7 +214,10 @@ function AgreementsPage() {
       )}
 
       <AgreementDialog
-        key={`${activeProfileId ?? "no-profile"}:${editing?.id ?? "new"}`}
+        // Key by editing target only. AI auto-fill / OCR must not be tied
+        // to the active profile — profile switching mid-scan would otherwise
+        // remount the dialog and cancel the in-flight extract() call.
+        key={editing?.id ?? "new"}
         open={open}
         onOpenChange={setOpen}
         row={editing}
