@@ -1,7 +1,7 @@
 import { formatDate } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, FileText, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -211,7 +211,12 @@ function AgreementsPage() {
         </div>
       )}
 
-      <AgreementDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} />
+      <AgreementDialog
+        key={`${activeProfileId ?? "no-profile"}:${editing?.id ?? "new"}`}
+        open={open}
+        onOpenChange={setOpen}
+        row={editing}
+      />
       <AgreementDetail
         row={detail}
         attachments={detailAtts}
@@ -325,6 +330,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
   const [legacyRemoved, setLegacyRemoved] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const scanRequestRef = useRef(0);
   const [form, setForm] = useState(() => ({
     title: row?.title ?? "",
     agreement_type: row?.agreement_type ?? "contract",
@@ -346,10 +352,28 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
   // Load existing attachments when editing.
   useEffect(() => {
     if (!open) return;
+    const requestId = ++scanRequestRef.current;
     setPendingFiles([]);
     setRemovedExistingIds([]);
     setLegacyRemoved(false);
-    if (!row) { setExisting([]); return; }
+    setForm({
+      title: row?.title ?? "",
+      agreement_type: row?.agreement_type ?? "contract",
+      company: row?.company ?? "",
+      agreement_number: row?.agreement_number ?? "",
+      start_date: row?.start_date ?? "",
+      end_date: row?.end_date ?? "",
+      monthly_payment: row?.monthly_payment?.toString() ?? "",
+      total_amount: row?.total_amount?.toString() ?? "",
+      currency: row?.currency ?? "EUR",
+      notes: row?.notes ?? "",
+      iban: row?.iban ?? "",
+      bank: row?.bank ?? "",
+      reference_number: row?.reference_number ?? "",
+      payee_name: row?.payee_name ?? "",
+      payment_day_of_month: row?.payment_day_of_month != null ? String(row.payment_day_of_month) : "",
+    });
+    if (!row) { setExisting([]); return () => { scanRequestRef.current += 1; }; }
     (async () => {
       const { data } = await supabase
         .from("agreement_attachments")
@@ -363,8 +387,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       if (row.file_path && !list.some((a) => a.filePath === row.file_path)) {
         list.unshift({ id: "__legacy__", name: row.file_name ?? "Fail", filePath: row.file_path });
       }
-      setExisting(list);
+      if (scanRequestRef.current === requestId) setExisting(list);
     })();
+    return () => { scanRequestRef.current += 1; };
   }, [open, row]);
 
   async function scan() {
@@ -382,6 +407,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       fileCount: pendingFiles.length,
       files: pendingFiles.map((file, index) => ({ index, name: file.name, type: file.type, size: file.size })),
     });
+    const requestId = ++scanRequestRef.current;
     setScanning(true);
     try {
       const files = await Promise.all(pendingFiles.map(async (file, index) => {
@@ -391,6 +417,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       }));
       const locale = (i18n.language?.toLowerCase().startsWith("et") ? "et" : "en") as "et" | "en";
       const res = await extract({ data: { kind: "agreement", files, locale } });
+      if (scanRequestRef.current !== requestId) return;
       console.info("[scan] agreement response", res);
       if (res.ok) {
         const d = res.data;
@@ -430,7 +457,9 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       console.error("[scan] failed", e);
       toast.error(e instanceof Error ? e.message : t("common.scanFailed"));
     }
-    finally { setScanning(false); }
+    finally {
+      if (scanRequestRef.current === requestId) setScanning(false);
+    }
   }
 
   async function save(e: React.FormEvent) {

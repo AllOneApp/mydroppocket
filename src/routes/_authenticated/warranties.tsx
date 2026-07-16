@@ -1,7 +1,7 @@
 import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
@@ -96,7 +96,12 @@ function WarrantiesPage() {
       <Section title={t("warranties.active")} count={groups.active.length} tone="green" items={groups.active} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={setPendingDelete} />
       <Section title={t("warranties.expired")} count={groups.expired.length} tone="red" items={groups.expired} onEdit={(r) => { setEditing(r); setOpen(true); }} onDelete={setPendingDelete} />
       {data?.length === 0 && <EmptyCard icon={ShieldCheck} title={t("warranties.empty.title")} desc={t("warranties.empty.desc")} onAdd={() => setOpen(true)} />}
-      <WarrantyDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} />
+      <WarrantyDialog
+        key={`${activeProfileId ?? "no-profile"}:${editing?.id ?? "new"}`}
+        open={open}
+        onOpenChange={setOpen}
+        row={editing}
+      />
       <ConfirmDeleteDialog
         open={!!pendingDelete}
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
@@ -153,6 +158,7 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const scanRequestRef = useRef(0);
   const [form, setForm] = useState(() => ({
     product_name: row?.product_name ?? "",
     store: row?.store ?? "",
@@ -162,6 +168,22 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
     currency: row?.currency ?? "EUR",
     notes: row?.notes ?? "",
   }));
+
+  useEffect(() => {
+    if (!open) return;
+    scanRequestRef.current += 1;
+    setFile(null);
+    setForm({
+      product_name: row?.product_name ?? "",
+      store: row?.store ?? "",
+      purchase_date: row?.purchase_date ?? "",
+      warranty_expiry: row?.warranty_expiry ?? "",
+      amount: row?.amount?.toString() ?? "",
+      currency: row?.currency ?? "EUR",
+      notes: row?.notes ?? "",
+    });
+    return () => { scanRequestRef.current += 1; };
+  }, [open, row]);
 
   async function scan() {
     if (!file) {
@@ -174,6 +196,7 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
       return;
     }
     console.info("[scan] warranty starting", { name: file.name, type: file.type, size: file.size });
+    const requestId = ++scanRequestRef.current;
     setScanning(true);
     try {
       const base64 = await fileToBase64(file);
@@ -184,6 +207,7 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
       }
       const locale = (i18n.language?.toLowerCase().startsWith("et") ? "et" : "en") as "et" | "en";
       const res = await extract({ data: { kind: "warranty", mime: file.type || "application/octet-stream", base64, locale } });
+      if (scanRequestRef.current !== requestId) return;
       console.info("[scan] warranty response", res);
       if (res.ok) {
         const d = res.data;
@@ -209,7 +233,9 @@ function WarrantyDialog({ open, onOpenChange, row }: { open: boolean; onOpenChan
     } catch (e) {
       console.error("[scan] failed", e);
       toast.error(e instanceof Error ? e.message : t("common.scanFailed"));
-    } finally { setScanning(false); }
+    } finally {
+      if (scanRequestRef.current === requestId) setScanning(false);
+    }
   }
 
   async function save(e: React.FormEvent) {

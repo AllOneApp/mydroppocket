@@ -380,7 +380,12 @@ function RecurringPage() {
         )}
       </div>
 
-      <RecurringDialog key={editing?.id ?? "new"} open={open} onOpenChange={setOpen} row={editing} />
+      <RecurringDialog
+        key={`${activeProfileId ?? "no-profile"}:${editing?.id ?? "new"}`}
+        open={open}
+        onOpenChange={setOpen}
+        row={editing}
+      />
       <AttachReceiptDialog data={payAsk} onClose={() => setPayAsk(null)} />
       <ConfirmDeleteDialog
         open={!!pendingDelete}
