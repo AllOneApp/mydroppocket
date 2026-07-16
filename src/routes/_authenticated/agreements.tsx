@@ -497,6 +497,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         end_date: form.end_date || null,
         monthly_payment: form.monthly_payment ? Number(form.monthly_payment) : null,
         total_amount: form.total_amount ? Number(form.total_amount) : null,
+        total_payments: form.total_payments ? Number(form.total_payments) : null,
         currency: form.currency,
         notes: form.notes || null,
         iban: form.iban ? form.iban.replace(/\s+/g, "").toUpperCase() : null,
