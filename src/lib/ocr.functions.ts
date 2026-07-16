@@ -43,6 +43,16 @@ export const extractDocument = createServerFn({ method: "POST" })
       description: z.string().nullable(),
       vat: z.number().nullable(),
       purchased_items: z.array(z.string()).nullable(),
+      warranty_candidates: z
+        .array(
+          z.object({
+            name: z.string(),
+            is_warranty_candidate: z.boolean(),
+            suggested_warranty_months: z.number().nullable(),
+            estimated_price: z.number().nullable(),
+          }),
+        )
+        .nullable(),
     });
     const agreementSchema = z.object({
       title: z.string().nullable(),
@@ -69,7 +79,13 @@ Return null for an unknown scalar field and never invent a value.
 - vat: total VAT amount only when explicitly present
 - purchased_items: all purchased product/service row names in document order; omit prices, quantities, discounts, totals, payment lines and loyalty lines; return null only if no item row is readable
 - description: exactly "[store] ost" when store is known, otherwise null
-- category: one of Groceries, Fuel, Restaurant, Coffee, Shopping, Healthcare, Travel, Other when supported by the receipt, otherwise null.`,
+- category: one of Groceries, Fuel, Restaurant, Coffee, Shopping, Healthcare, Travel, Other when supported by the receipt, otherwise null.
+- warranty_candidates: for every purchased row that is a durable physical product likely to have a manufacturer warranty (electronics, appliances, phones, computers, tablets, cameras, TVs, kitchen appliances such as kettles/mixers/coffee machines/vacuum cleaners, power tools, sporting equipment, furniture with mechanical/electrical parts, bicycles, watches), return an object:
+  * name: the product name from that row, cleaned
+  * is_warranty_candidate: true when the row plausibly has a warranty, false otherwise
+  * suggested_warranty_months: typical consumer warranty length in months (24 for electronics/appliances/phones/computers in the EU, 12 for small electronics/accessories, 60 for premium appliances when explicitly stated); null when unclear
+  * estimated_price: the row-level price if visible on the receipt, otherwise null
+  Do NOT include consumables (food, beverages, tobacco, cleaning supplies, cosmetics, medicines, fuel, parking, services). Return null when nothing on the receipt looks like a warranty candidate.`,
       agreement: AGREEMENT_ANALYSIS_PROMPT,
     };
     const locale = data.locale ?? "en";
