@@ -356,6 +356,7 @@ type AgreementRow = {
   agreement_number: string | null;
   payee_name: string | null;
   payment_day_of_month: number | null;
+  total_payments: number | null;
 };
 
 function addMonths(iso: string, n: number): string {
@@ -432,7 +433,9 @@ function planInstallment(row: AgreementRow): InstallmentPlan | null {
   if (!row.start_date || !monthly || monthly <= 0) return null;
 
   let totalPayments: number | null = null;
-  if (row.total_amount && monthly > 0) {
+  if (row.total_payments && row.total_payments > 0) {
+    totalPayments = Math.max(1, Math.round(Number(row.total_payments)));
+  } else if (row.total_amount && monthly > 0) {
     totalPayments = Math.max(1, Math.round(Number(row.total_amount) / monthly));
   } else if (row.end_date) {
     totalPayments = Math.max(1, monthsBetween(row.start_date, row.end_date) + 1);
