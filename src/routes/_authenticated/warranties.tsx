@@ -319,7 +319,11 @@ function WarrantyDialog({ open, onOpenChange, row, onSaved }: { open: boolean; o
         // Update the linked expense (same file_path + profile) if one exists.
         if (row.file_path) {
           try {
-            const expUpdate: Record<string, unknown> = {
+            const expUpdate: {
+              amount: number | null; currency: string; store: string | null;
+              expense_date: string | null; description: string | null;
+              file_path?: string; file_name?: string; file_mime?: string;
+            } = {
               amount: form.amount ? Number(form.amount) : null,
               currency: form.currency || "EUR",
               store: form.store || null,
