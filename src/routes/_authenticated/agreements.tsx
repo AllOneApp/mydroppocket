@@ -57,6 +57,8 @@ type Row = {
   iban: string | null; bank: string | null; reference_number: string | null;
   payee_name: string | null;
   payment_day_of_month: number | null;
+  total_payments: number | null;
+  payments_made: number | null;
   file_path: string | null; file_name: string | null;
 };
 
