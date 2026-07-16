@@ -68,7 +68,14 @@ export const extractDocument = createServerFn({ method: "POST" })
     });
     const extractionPrompts = {
       warranty:
-        "Extract purchase receipt fields for a warranty record. Return null when a field is not clearly present.",
+        `Read this receipt/invoice carefully using OCR and extract fields for a warranty record.
+Return a JSON object with EXACTLY these keys (no others): product_name, store, purchase_date, amount, currency.
+Return null for any field that is not clearly present, and never invent a value.
+- product_name: the main purchased product name (the durable item being warranted). If several items exist, pick the most expensive durable good; otherwise the first product row. Clean brand/model text, no prices or quantities.
+- store: merchant/store name, without address or company registration suffix when a clear brand name is shown
+- purchase_date: transaction date in YYYY-MM-DD
+- amount: final amount paid / grand total, not a subtotal
+- currency: ISO currency code only when stated by code or symbol (e.g. EUR, USD)`,
       expense:
         `Read this receipt/document carefully using OCR and extract every clearly visible expense field.
 Return null for an unknown scalar field and never invent a value.
