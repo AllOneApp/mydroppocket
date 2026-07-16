@@ -416,6 +416,10 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (!activeProfileId) {
+      toast.error(t("profiles.notReady", { defaultValue: "Aktiivne profiil pole veel laaditud. Palun proovi mõne hetke pärast uuesti." }));
+      return;
+    }
     setSaving(true);
     try {
       const { data: userRes } = await supabase.auth.getUser();
