@@ -88,6 +88,7 @@ export type Database = {
           start_date: string | null
           title: string
           total_amount: number | null
+          total_payments: number | null
           updated_at: string
           user_id: string
         }
@@ -117,6 +118,7 @@ export type Database = {
           start_date?: string | null
           title: string
           total_amount?: number | null
+          total_payments?: number | null
           updated_at?: string
           user_id: string
         }
@@ -146,6 +148,7 @@ export type Database = {
           start_date?: string | null
           title?: string
           total_amount?: number | null
+          total_payments?: number | null
           updated_at?: string
           user_id?: string
         }
