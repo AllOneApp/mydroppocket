@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { ExpenseDialog } from "./expenses";
 import { InstallmentsCard } from "@/components/InstallmentsCard";
 import { useActiveProfile } from "@/hooks/useActiveProfile";
+import { AiAssistantCard } from "@/components/AiAssistantCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -181,6 +182,8 @@ function Dashboard() {
       </div>
 
       <ExpenseDialog open={quickOpen} onOpenChange={setQuickOpen} row={null} prefill={null} initialMode={quickMode} />
+
+      <AiAssistantCard />
 
       {data?.expiring && data.expiring.length > 0 && (
         <div className="card-soft mb-6 flex items-start gap-3 border-orange-200 bg-orange-50 p-4 dark:border-orange-900/40 dark:bg-orange-950/30">
