@@ -22,48 +22,54 @@ export function currentBackupLang(): "et" | "en" {
  */
 export const startGoogleDriveConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { origin: string }) => input)
+  .inputValidator((input: { origin: string; profileId?: string | null }) => input)
   .handler(async ({ data, context }) => {
     const { buildAuthorizationUrl, signState, GOOGLE_OAUTH_CALLBACK_PATH } = await import("./google-drive.server");
     // Use the browser's current origin so the redirect returns to the same host
     // that opened the popup (preview / staging / prod / custom domain).
     const origin = new URL(data.origin).origin;
     const redirectUri = `${origin}${GOOGLE_OAUTH_CALLBACK_PATH}`;
-    const state = signState({ userId: context.userId, origin });
+    const state = signState({ userId: context.userId, origin, profileId: data.profileId ?? null });
     const authorizationUrl = buildAuthorizationUrl({ redirectUri, state });
     return { authorizationUrl };
   });
 
 export const getGoogleDriveStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input?: { profileId?: string | null }) => input ?? {})
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
+    let q = supabaseAdmin
       .from("google_drive_connections")
       .select("google_email, root_folder_id, root_folder_name, connected_at")
-      .eq("user_id", context.userId)
-      .maybeSingle();
+      .eq("user_id", context.userId);
+    if (data?.profileId) q = q.eq("profile_id", data.profileId);
+    else q = q.is("profile_id", null);
+    const { data: row, error } = await q.maybeSingle();
     if (error) throw error;
-    if (!data) return { connected: false as const };
+    if (!row) return { connected: false as const };
     return {
       connected: true as const,
-      email: data.google_email,
-      folderId: data.root_folder_id,
-      folderName: data.root_folder_name,
-      connectedAt: data.connected_at,
+      email: row.google_email,
+      folderId: row.root_folder_id,
+      folderName: row.root_folder_name,
+      connectedAt: row.connected_at,
     };
   });
 
 export const disconnectGoogleDrive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input?: { profileId?: string | null }) => input ?? {})
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // Best-effort token revoke.
-    const { data: row } = await supabaseAdmin
+    let selectQ = supabaseAdmin
       .from("google_drive_connections")
       .select("refresh_token_ciphertext")
-      .eq("user_id", context.userId)
-      .maybeSingle();
+      .eq("user_id", context.userId);
+    if (data?.profileId) selectQ = selectQ.eq("profile_id", data.profileId);
+    else selectQ = selectQ.is("profile_id", null);
+    const { data: row } = await selectQ.maybeSingle();
     if (row?.refresh_token_ciphertext) {
       try {
         const { decryptToken } = await import("./google-drive.server");
@@ -76,8 +82,124 @@ export const disconnectGoogleDrive = createServerFn({ method: "POST" })
         // ignore; still delete the local row
       }
     }
-    await supabaseAdmin.from("google_drive_connections").delete().eq("user_id", context.userId);
+    let delQ = supabaseAdmin.from("google_drive_connections").delete().eq("user_id", context.userId);
+    if (data?.profileId) delQ = delQ.eq("profile_id", data.profileId);
+    else delQ = delQ.is("profile_id", null);
+    await delQ;
     return { ok: true };
+  });
+
+/**
+ * Profiili-teadlik Drive'i staatus: milline režiim (jagatud/eraldi), kas ühendus
+ * on olemas, mis on salvestuskoht (kaustatee).
+ */
+export const getProfileDriveStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Load profile + drive mode.
+    const { data: profile } = await supabaseAdmin
+      .from("user_profiles")
+      .select("id, name, drive_mode, is_default")
+      .eq("id", data.profileId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!profile) throw new Error("Profiili ei leitud");
+    const p = profile as { name: string; drive_mode: string; is_default: boolean };
+    const mode = (p.drive_mode === "separate" ? "separate" : "shared") as "shared" | "separate";
+
+    if (mode === "shared") {
+      // Kasuta põhikonto ühendust; salvestuskoht MyDropPocket/{profiili nimi}.
+      const { data: prim } = await supabaseAdmin
+        .from("google_drive_connections")
+        .select("google_email")
+        .eq("user_id", context.userId)
+        .is("profile_id", null)
+        .maybeSingle();
+      return {
+        mode,
+        connected: !!prim,
+        email: prim ? (prim as { google_email: string }).google_email : null,
+        storagePath: `MyDropPocket / ${p.name}`,
+      };
+    }
+    // separate režiim
+    const { data: own } = await supabaseAdmin
+      .from("google_drive_connections")
+      .select("google_email")
+      .eq("user_id", context.userId)
+      .eq("profile_id", data.profileId)
+      .maybeSingle();
+    return {
+      mode,
+      connected: !!own,
+      email: own ? (own as { google_email: string }).google_email : null,
+      storagePath: `MyDropPocket`,
+    };
+  });
+
+/**
+ * Muuda profiili Drive režiimi. Kui vahetatakse `separate` → `shared`, siis
+ * eraldi konto ühendus jääb alles (kasutaja saab hiljem uuesti sisse lülitada).
+ */
+export const setProfileDriveMode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string; mode: "shared" | "separate" }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("user_profiles")
+      .update({ drive_mode: data.mode })
+      .eq("id", data.profileId)
+      .eq("user_id", context.userId);
+    if (error) throw error;
+    return { ok: true as const };
+  });
+
+/**
+ * Nimeta profiili alamkaust põhikonto Drive'is ümber (jagatud režiimis).
+ * Kui uue nimega kaust juba eksisteerib → { ok: false, reason: 'conflict' }.
+ */
+export const renameProfileDriveFolder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string; newName: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { renameProfileFolderInDrive } = await import("./google-drive.server");
+    return renameProfileFolderInDrive({ userId: context.userId, profileId: data.profileId, newName: data.newName });
+  });
+
+/**
+ * Kontrolli, kas kuvada legacy migreerimisdialoog.
+ */
+export const checkLegacyDriveLayout = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { detectLegacyDriveLayout } = await import("./google-drive.server");
+    return detectLegacyDriveLayout(context.userId);
+  });
+
+/**
+ * Liiguta legacy struktuur (MyDropPocket/{kategooria}/…) vaikeprofiili kausta alla.
+ */
+export const runLegacyDriveMigration = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { migrateLegacyDriveToProfile } = await import("./google-drive.server");
+    return migrateLegacyDriveToProfile(context.userId);
+  });
+
+/** Peida legacy migreerimisdialoog seniks — ilmub uuesti järgmisel korral. */
+export const dismissLegacyDriveMigration = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin
+      .from("user_profiles")
+      .update({ legacy_drive_migration_dismissed_at: new Date().toISOString() })
+      .eq("user_id", context.userId)
+      .eq("is_default", true);
+    return { ok: true as const };
   });
 
 type SyncTable =
