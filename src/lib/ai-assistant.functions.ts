@@ -166,6 +166,8 @@ Available data modules (intents):
 
 Return JSON matching the schema:
 - intents: which modules to search. Pick all that could plausibly match. If unsure, include multiple. If completely unrelated to the modules, return an empty array.
+  - When the user names a product/item without saying which module (e.g. "leia ripptool", "kus on minu telefon"), a receipt/warranty/installment could all match — return ["warranties","expenses","agreements","installments"] (add "recurring" only if the wording clearly implies a subscription).
+  - Do NOT ask the user to clarify. When in doubt, include more intents rather than fewer.
 - filters.query: main fuzzy text to search across product names, stores, descriptions. Correct obvious typos (e.g. "purma" -> "puma", "eronics" -> "euronics"). Understand synonyms: tšekk/ost/arve/dokument all mean receipts; telefon/mobiil/nutitelefon all mean phone.
 - filters.brand: brand-like tokens (Bosch, Puma, LG, ...)
 - filters.store: store/company (Euronics, Sportland, Bolt, ...)
