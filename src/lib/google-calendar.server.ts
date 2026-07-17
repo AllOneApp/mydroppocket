@@ -657,22 +657,21 @@ export async function syncInstallmentForUser(opts: {
   return { status, created, updated, removed };
 }
 
-export async function syncAllInstallmentsForUser(userId: string): Promise<{
+export async function syncAllInstallmentsForUser(userId: string, profileId?: string | null): Promise<{
   created: number;
   updated: number;
   removed: number;
   skipped: number;
 }> {
-  const conn = await getValidCalendarAccessTokenForUser(userId);
-  if (!conn) return { created: 0, updated: 0, removed: 0, skipped: 0 };
-
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
-  const { data, error } = await dbAny
+  let q = dbAny
     .from("agreements")
     .select("id")
     .eq("user_id", userId)
     .eq("agreement_type", "installment");
+  if (profileId) q = q.eq("profile_id", profileId);
+  const { data, error } = await q;
   if (error) throw error;
   const rows = (data ?? []) as { id: string }[];
   let created = 0,
