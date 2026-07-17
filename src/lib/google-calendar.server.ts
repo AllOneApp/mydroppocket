@@ -522,7 +522,7 @@ export async function syncInstallmentForUser(opts: {
   const { data: agRow, error: agErr } = await dbAny
     .from("agreements")
     .select(
-      "id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, payment_day_of_month, total_payments, user_id",
+      "id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, payment_day_of_month, total_payments, user_id, profile_id",
     )
     .eq("id", opts.agreementId)
     .maybeSingle();
@@ -530,6 +530,9 @@ export async function syncInstallmentForUser(opts: {
   if (!agRow || (agRow.user_id as string) !== opts.userId) {
     return { status: "skipped" };
   }
+  const rowProfileId = ((agRow as unknown as { profile_id?: string | null }).profile_id) ?? null;
+  const conn2 = await getValidCalendarAccessTokenForUser(opts.userId, rowProfileId);
+  const effectiveConn = conn2 ?? conn;
   const row = agRow as unknown as AgreementRow;
   const plan = planInstallment(row);
 
