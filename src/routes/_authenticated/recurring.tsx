@@ -570,6 +570,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 function AttachReceiptDialog({ data, onClose }: { data: { instance: Instance; recurring: Recurring } | null; onClose: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const { activeProfileId } = useActiveProfile();
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -596,6 +597,7 @@ function AttachReceiptDialog({ data, onClose }: { data: { instance: Instance; re
             filePath: info.path,
             fileName: info.name,
             mime: info.mime,
+            profileId: activeProfileId,
           },
         });
       } catch (err) {
