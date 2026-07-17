@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Plus, Pencil, Trash2, Star, Users, Upload, X } from "lucide-react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Plus, Pencil, Trash2, Star, Users, Upload, X, Cloud, Calendar as CalendarIcon, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -21,6 +21,13 @@ import {
   type UserProfile,
 } from "@/lib/profiles";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import {
+  getProfileCalendarStatus,
+  setProfileCalendarMode,
+  startGoogleCalendarConnect,
+  disconnectGoogleCalendar,
+  syncCalendarNow,
+} from "@/lib/google-calendar.functions";
 
 export const Route = createFileRoute("/_authenticated/profiles")({
   head: () => ({ meta: [{ title: "Profiilid — MyDropPocket" }] }),
