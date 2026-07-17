@@ -164,6 +164,20 @@ function Dashboard() {
             <Pencil className="h-4 w-4" />{t("expenses.fillManually")}
           </button>
         </div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <Link
+            to="/warranties"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg bg-sky-100 text-sm font-medium text-sky-900 transition hover:bg-sky-200 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-900/50"
+          >
+            <ShieldCheck className="h-4 w-4" />🛡️ {t("nav.warranties")}
+          </Link>
+          <Link
+            to="/agreements"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg bg-sky-100 text-sm font-medium text-sky-900 transition hover:bg-sky-200 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-900/50"
+          >
+            <FileText className="h-4 w-4" />📄 {t("nav.agreementsInstallments", { defaultValue: "Lepingud / Järelmaksulepingud" })}
+          </Link>
+        </div>
       </div>
 
       <ExpenseDialog open={quickOpen} onOpenChange={setQuickOpen} row={null} prefill={null} initialMode={quickMode} />
