@@ -43,7 +43,7 @@ function b64urlDecode(str: string): Buffer {
   return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/") + pad, "base64");
 }
 
-export function signCalendarState(payload: { userId: string; origin: string }): string {
+export function signCalendarState(payload: { userId: string; origin: string; profileId?: string | null }): string {
   const body = {
     ...payload,
     kind: "calendar",
@@ -55,7 +55,7 @@ export function signCalendarState(payload: { userId: string; origin: string }): 
   return `${bodyStr}.${sig}`;
 }
 
-export function verifyCalendarState(token: string): { userId: string; origin: string } {
+export function verifyCalendarState(token: string): { userId: string; origin: string; profileId?: string | null } {
   const [bodyStr, sig] = token.split(".");
   if (!bodyStr || !sig) throw new Error("Invalid state format");
   const expected = b64url(createHmac("sha256", stateSecret()).update(bodyStr).digest());
@@ -65,12 +65,13 @@ export function verifyCalendarState(token: string): { userId: string; origin: st
   const parsed = JSON.parse(b64urlDecode(bodyStr).toString("utf8")) as {
     userId: string;
     origin: string;
+    profileId?: string | null;
     kind?: string;
     exp: number;
   };
   if (parsed.kind !== "calendar") throw new Error("Wrong state kind");
   if (Math.floor(Date.now() / 1000) > parsed.exp) throw new Error("State expired");
-  return { userId: parsed.userId, origin: parsed.origin };
+  return { userId: parsed.userId, origin: parsed.origin, profileId: parsed.profileId ?? null };
 }
 
 // ---------- OAuth URL + token exchange ----------
