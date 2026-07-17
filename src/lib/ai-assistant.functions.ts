@@ -323,7 +323,24 @@ export const askAssistant = createServerFn({ method: "POST" })
       return items.length > 0 ? summarizeGroup(intent, items) : null;
     });
     const resolved = await Promise.all(groupPromises);
-    const groups = resolved.filter((g): g is AssistantGroup => !!g);
+    let groups = resolved.filter((g): g is AssistantGroup => !!g);
+
+    // Reliability net: if the LLM narrowed intents or over-constrained filters
+    // and we got zero hits, retry across ALL modules with softened filters so
+    // behaviour stays identical across profiles regardless of classifier mood.
+    if (groups.length === 0) {
+      const softened: AssistantFilters = { ...filters, activeOnly: null, expiringInDays: null };
+      const fallbackIntents = INTENTS as unknown as AssistantIntent[];
+      const retry = await Promise.all(
+        fallbackIntents.map(async (intent) => {
+          const searcher = MODULE_SEARCHERS[intent];
+          if (!searcher) return null;
+          const items = await searcher(context.supabase, data.profileId, softened);
+          return items.length > 0 ? summarizeGroup(intent, items) : null;
+        }),
+      );
+      groups = retry.filter((g): g is AssistantGroup => !!g);
+    }
 
     const answer = buildAnswer(effective, groups, locale, question);
     const suggestions = suggestFollowups(groups, locale);
