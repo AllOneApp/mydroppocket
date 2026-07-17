@@ -98,10 +98,8 @@ async function classify(question: string, locale: "et" | "en", history: { role: 
     const { output } = await generateText({
       model,
       output: Output.object({ schema: ClassificationSchema as z.ZodType<Record<string, unknown>> }),
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: userText },
-      ],
+      system,
+      prompt: userText,
     });
     return output as unknown as Classification;
   } catch (err) {
