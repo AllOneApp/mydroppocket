@@ -390,15 +390,20 @@ function CalendarProfileBlock({ profile }: { profile: UserProfile }) {
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ created: number; updated: number; removed: number; skipped: number } | null>(null);
+  const [postConnect, setPostConnect] = useState<{ open: boolean; count: number }>({ open: false, count: 0 });
 
   useEffect(() => {
-    function onMessage(e: MessageEvent) {
+    async function onMessage(e: MessageEvent) {
       const d = e.data as { type?: string; ok?: boolean; error?: string } | undefined;
       if (!d || d.type !== "mydroppocket:google-calendar:oauth") return;
       setConnecting(false);
       if (d.ok) {
         toast.success("Google Calendar ühendatud");
-        void qc.invalidateQueries({ queryKey: ["profile-calendar-status", profile.id] });
+        await qc.invalidateQueries({ queryKey: ["profile-calendar-status", profile.id] });
+        try {
+          const counts = await getProfilePendingCloudCounts({ data: { profileId: profile.id } });
+          if (counts.calendarItems > 0) setPostConnect({ open: true, count: counts.calendarItems });
+        } catch { /* ignore */ }
       } else {
         toast.error(d.error ?? "Ühendus ebaõnnestus");
       }
@@ -525,6 +530,13 @@ function CalendarProfileBlock({ profile }: { profile: UserProfile }) {
           Loodud: {syncResult.created} · Uuendatud: {syncResult.updated} · Eemaldatud: {syncResult.removed} · Vahele jäetud: {syncResult.skipped}
         </div>
       )}
+      <PostConnectSyncPrompt
+        open={postConnect.open}
+        count={postConnect.count}
+        service="calendar"
+        onDismiss={() => setPostConnect({ open: false, count: 0 })}
+        onConfirm={() => { setPostConnect({ open: false, count: 0 }); void handleSync(); }}
+      />
     </div>
   );
 }
