@@ -448,5 +448,32 @@
       "Subscription": "Subscription",
       "Other": "Other"
     }
+  },
+  "aiAssistant": {
+    "title": "AI Assistant",
+    "subtitle": "Ask anything about your documents, warranties, expenses or contracts.",
+    "placeholder": "Ask e.g.: \"Find my Puma shoes receipt\", \"Is my Bosch drill still under warranty?\"",
+    "send": "Ask AI",
+    "thinking": "AI is thinking...",
+    "viewAll": "View all",
+    "warrantyUntil": "Warranty until {{date}}",
+    "endsOn": "Ends {{date}}",
+    "nextDue": "Next payment {{date}}",
+    "privacy": "Your questions and documents stay private. Data is not used to train AI.",
+    "groups": {
+      "warranties": "Warranty receipts",
+      "expenses": "Expenses",
+      "income": "Income",
+      "agreements": "Contracts",
+      "installments": "Installments",
+      "recurring": "Recurring"
+    },
+    "actions": {
+      "open": "Open",
+      "openDrive": "Open in Drive",
+      "openModule": "Open module",
+      "share": "Share",
+      "linkCopied": "Link copied"
+    }
   }
 }
