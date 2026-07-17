@@ -1,99 +1,223 @@
-
 ## Eesmärk
-Iga profiil saab kasutada kas põhikonto Google Drive'i (üks Drive, alamkaustad profiilide järgi) või ühendada oma eraldi Google konto. Olemasolevad kasutajad ei märka muudatust.
 
-## 1. Andmemudel
+Laiendan olemasolevat profiilipõhist Google Drive'i loogikat samamoodi Google Calendarile ja lisan mõlemale võimaluse sünkroonida tagantjärele kõik olemasolevad kirjed ühe nupuvajutusega. Olemasolev Drive'i loogika, AI OCR, automaattäitmine, Dashboard ja dokumentide lisamise voog jäävad puutumata.
 
-**Migratsioon:**
-- `user_profiles` → uus veerg `drive_mode text not null default 'shared'` (`'shared' | 'separate'`).
-- `google_drive_connections` → uus veerg `profile_id uuid null references user_profiles(id) on delete cascade`.
-  - Uus unikaalne indeks `(user_id) where profile_id is null` (üks põhikonto).
-  - Uus unikaalne indeks `(user_id, profile_id) where profile_id is not null` (üks eraldi ühendus profiili kohta).
-  - Vana `user_id_key` unique piirang eemaldatakse.
-- Uus tabel `google_drive_folders`:
-  - `connection_id uuid` (FK), `profile_id uuid null` (FK), `category text`, `folder_id text`, `folder_name text`.
-  - Unique `(connection_id, coalesce(profile_id, '00000000-…'), category)`.
-  - Ehk konkreetne kaust ühe ühenduse + profiili konteksti + kategooria kohta.
+## 1. Andmemudel (1 migratsioon)
 
-**Migreeritakse taustal olemasolevad `subfolders_json` väärtused** uude tabelisse `profile_id = null` all (need on täna kõik "MyDropPocket/{kategooria}" all põhikontos).
+`google_calendar_connections`:
 
-## 2. Kaustaresolver (üks funktsioon kõigile moodulitele)
+- Lisa `profile_id uuid null references user_profiles(id) on delete cascade`.
+- Asenda vana `user_id` unique kahe osalise indeksiga:
+  - `(user_id) where profile_id is null` – põhikonnektor
+  - `(user_id, profile_id) where profile_id is not null` – profiili-spetsiifiline
+- Lisa `calendar_mode text` profiili tasandil pole vaja — režiim tuleneb sellest, kas eraldi rida on olemas.
 
-Uus `resolveProfileDriveTarget(userId, profileId, category)` (`google-drive.server.ts`):
-1. Loeb profiili + selle `drive_mode`.
-2. Kui `separate` → laeb selle profiili `google_drive_connections` rea; kui puudub, tagastab „not connected" (üleslaadimine läheb vahele nagu praegu, kui Drive ühendumata).
-3. Kui `shared` → laeb kasutaja põhikonto rea (`profile_id is null`).
-4. Loob/leiab kausta hierarhia vastavalt režiimile:
-   - `shared`: `MyDropPocket / {profiili nimi} / {kategooria}`
-   - `separate`: `MyDropPocket / {kategooria}`
-5. Kirjutab folder id-d `google_drive_folders` tabelisse cache'iks. Uute kategooriate lisamine tulevikus = ainult üks uus rida, koodimuudatust ei vaja.
+`user_profiles`:
 
-Kõik olemasolevad üleslaadimispunktid (`agreements.tsx`, `warranties.tsx`, `expenses.tsx`, `recurring.tsx` serveri poolel + `google-drive.functions.ts`) kasutavad seda uut resolverit `(getValidAccessTokenForUser + ensureSubfolderId)` asemel. Praegune `FOLDER_KEY_TO_NAME` mapping säilib kategooria nimede allikana.
+- Lisa `calendar_mode text not null default 'shared'` (`'shared' | 'separate'`) — sümmeetriline `drive_mode`-ga.
 
-## 3. OAuth voog profiili jaoks
+`calendar_events`:
 
-- `signState` payload'ile lisatakse `profileId?: string` ja `mode: 'primary' | 'separate'`.
-- `startDriveConnect` serveri fn saab uue parameetri `profileId?: string`. Kui antud + režiim `separate`, alustatakse OAuth voogu selle profiili jaoks. Muidu tavaline põhikonto ühendus.
-- Callback (`/api/public/google-drive/callback`) loeb state'ist `profileId` ja salvestab tokenid `google_drive_connections` reale, kus `profile_id = <uuid>` (või `null` põhikonto puhul).
-- Peale eraldi ühenduse loomist: automaatselt luuakse `MyDropPocket / {kategooriad}` sellesse Drive'i (ilma profiili alamkaustata).
+- Lisa `profile_id uuid null` + backfill vaikeprofiilile.
+- Uuenda unique-i nii, et see hõlmab `profile_id`-d, et vältida ristprofiili duplikaate.
 
-## 4. Profiili ümbernimetamine (kaust automaatselt kaasa)
+## 2. Serverikiht (`src/lib/google-calendar.server.ts` + `.functions.ts`)
 
-Kui kasutaja nimetab profiili ümber (`user_profiles.name` muutub) JA profiili `drive_mode = 'shared'`:
-- Rakendus üritab põhikonto Drive'is kaust ümber nimetada uue nimega.
-- Enne ümbernimetamist Drive'is otsitakse, kas uue nimega kaust juba eksisteerib põhikausta `MyDropPocket` all:
-  - Kui **jah** → ei tehta midagi automaatselt; kasutajale kuvatakse hoiatus („Kaustanimega X on Drive'is juba olemas — palun vali teine nimi või lahenda käsitsi"). Profiili nimi jääb muutmata (tehingutehe SQL-tasemel tagasi ei võeta, aga eelvalideerime kliendi poolel enne salvestamist).
-  - Kui **ei** → Drive API `files.update` (name), + uuendame `google_drive_folders.folder_name` ridu selle profiili all.
+- `resolveProfileCalendarConnection(userId, profileId)` – shared režiimis põhikonnektor, separate režiimis profiili oma. Peegeldab `resolveProfileDriveTarget`-i.
+- `signCalendarState` / `verifyCalendarState` võtab kaasa `profileId`.
+- OAuth callback (`/api/public/google-calendar/callback`) salvestab tokenid profiili-spetsiifilise reaga.
+- Kõik olemasolevad sünkroonijad (`syncInstallmentForUser`, `syncRecurringForUser`, `syncWarrantyForUser`, `syncAgreementEndForUser`, `removeSourceEventsForUser`) võtavad optsionaalse `profileId` parameetri ning kirjutavad sündmused ainult sellele profiilile määratud kalendrisse. `calendar_events` päringud filtreerivad alati `profile_id`-ga.
+- Uus `syncAllForProfile(userId, profileId)` – itereerib profiili garantiid + lepingud + püsimaksed + järelmaksud ja loob sündmused idempotentselt. Tagastab loenduri (`{ warranties, agreements, recurring, installments }`).
 
-Eraldi Drive'i režiimis pole profiili alamkausta, seega ümbernimetamisel Drive'is midagi ei muudata.
+## 3. Server functions (`google-calendar.functions.ts`)
 
-## 5. Ühekordne migreerimine olemasolevatele kasutajatele
+- `startGoogleCalendarConnect({ origin, profileId? })` – kui profileId antud ja profiil pole vaikeprofiil, algatab eraldi OAuthi.
+- `getGoogleCalendarStatus({ profileId? })` – tagastab režiimi (`shared` / `separate`) + connectioni infot antud profiili kontekstis.
+- `setProfileCalendarMode({ profileId, mode })` – shared/separate lülitus (separate → suunab OAuthi; shared → kustutab profiili eraldi connectioni valikuliselt).
+- `disconnectGoogleCalendar({ profileId? })` – kustutab õige rea.
+- `updateProfileCalendarSettings({ profileId, ...reminders })` – meeldetuletuste päevad + iga tüübi lülitid, hoitakse `google_calendar_connections` real.
+- `syncExistingCalendarEntries({ profileId })` – käivitab `syncAllForProfile` ja tagastab loenduri UI-le.
 
-Uus staatuse päring `checkLegacyDriveLayout()`:
-- Kui kasutajal on `google_drive_connections` (põhikonto) ja Drive juurkaustas „MyDropPocket" on kaustad „Garantiid" / „Lepingud" / „Tulud ja kulud" otse (ilma profiili alamkaustata) JA kasutajal on ainult vaikeprofiil („Isiklik") ilma andmeid teistes profiilides → näita bänner/dialoog:
-  - „MyDropPocketi kaustastruktuur on uuendatud… Tõsta olemasolevad dokumendid automaatselt MyDropPocket/Isiklik alla?" Nupud: „Jah, tõsta automaatselt" / „Hiljem".
-- „Jah" → serveri fn `migrateLegacyDriveToProfile` liigutab kolm kausta uue „Isiklik" alamkausta alla (Drive'i `files.update` parents).
-- „Hiljem" → salvestatakse dismiss timestamp `profiles.legacy_drive_migration_dismissed_at` veergu; dialoog ilmub uuesti järgmisel sisselogimisel/seadete avamisel.
-- „Tehtud" → salvestatakse `legacy_drive_migration_done_at`; dialoog enam ei ilmu.
+Iga mooduli (`agreements.tsx`, `warranties.tsx`, `recurring.tsx`, `InstallmentsCard.tsx`) sünkroonimise kutse edastab nüüd `activeProfileId` — sama muster nagu Drive.
 
-Seni kuni migreerimist ei ole tehtud, salvestatakse uued failid juba KOHE uude „Isiklik / {kategooria}" struktuuri (vana struktuur ei sega — resolver töötab uue reegli järgi juhul, kui profiili alamkaust on olemas või puudub loob selle). See tähendab, et kasutaja saab „Hiljem" valida ilma andmete kadumiseta.
+## 4. UI
 
-## 6. Seadete UI
+`**src/routes/_authenticated/profiles.tsx**` – iga profiili kaardile lisandub sektsioon **Google Calendar** (peegeldab olemasolevat Drive'i sektsiooni):
 
-Iga profiili kaardile lisandub `Profiilid` lehel sektsioon **Google Drive**:
-- Kaks raadionuppu:
-  - `✅ Kasuta põhiprofiili Google Drive'i` (vaikimisi)
-  - `⭕ Ühenda teine Google Drive` — vajutamisel avaneb OAuth vooluke selle profiili jaoks
-- Kui ühendatud (eraldi režiimis): kuva „🟢 Ühendatud – nimi@gmail.com", „Salvestuskoht: MyDropPocket", nupp „Katkesta ühendus".
-- Jagatud režiimis kuva „Salvestuskoht: MyDropPocket / {profiili nimi}" ja lühiselgitus.
-- Põhiprofiili kaardil (`is_default = true`) valikut ei kuvata — see on alati kasutaja põhi-Drive.
+- Kaks raadionuppu: „Kasuta põhiprofiili Google Calendarit" / „Ühenda teine Google Calendar".
+- Kui ühendatud (separate): kuva `🟢 nimi@gmail.com`, kalendri nimi, „Katkesta ühendus".
+- Meeldetuletuste seaded (checkbox'id: 30 / 14 / 7 / 1 päev) garantiide ja lepingute jaoks.
+- Nupp „Sünkrooni olemasolevad sündmused" (kutsub `syncExistingCalendarEntries`).
+- Post-connect dialog: „📅 Google Calendar ühendatud! Selles profiilis on X garantiid ja Y lepingut, mida pole veel sünkroonitud. Sünkroonida?" — nupud „Jah" / „Hiljem". Edenemine + kokkuvõte.
 
-## 7. Ei muudeta
+**Google Drive – analoogne täiendus** samas failis:
 
+- Pärast edukat Drive'i ühendumist käivitab post-connect kontroll (kas profiili peale on kirjeid, mille `drive_file_id is null`).
+- Kui jah, kuvatakse dialog „☁️ Google Drive ühendatud! Sünkrooni olemasolevad dokumendid?" — nupud „Jah" / „Hiljem".
+- Seadetes lisandub alaline nupp „Sünkrooni olemasolevad dokumendid" (Drive) ja „Sünkrooni olemasolevad sündmused" (Calendar).
+- Edenemisriba (loenduri sõnum „37 / 185 dokumenti sünkroonitud") + lõpu kokkuvõte („85 kuludokumenti, 23 garantiid, 8 lepingut").
+
+**Uus komponent** `src/components/SyncProgressDialog.tsx` – jagatud edenemisriba (kasutame nii Drive kui Calendar sünkroonimise ajal).
+
+## 5. Bulk-sünkroonimise implementatsioon
+
+- Drive: uus server fn `syncExistingDriveDocuments({ profileId })` – itereerib `expenses`, `warranties`, `agreements`, `agreement_attachments` kirjed selle profiili all, kus `drive_file_id is null` või `sync_status != 'synced'`. Iga faili laadib storage'ist ja kutsub olemasoleva `syncFileToGoogleDrive` loogika. Ebaõnnestunud failid kogutakse listi. Idempotentne — enne üleslaadimist kontrollib olemasolu (kasutame juba salvestatud `drive_file_id`).
+- Streamib progressi läbi kliendipoolse polling'i (server fn tagastab `{ total, done, failed }` jooksva olekuga kuni valmis; teeme lihtsa versiooni: server fn töötab sünkroonselt ja klient kutsub batchidena á 10 faili).
+- Calendar: `syncAllForProfile` on juba idempotentne (`upsertSourceEvents` teeb `onConflict`).
+
+## 6. Ei muuda
+
+- Drive'i tuumfunktsionaalsust (kaustastruktuur, resolver, callback) – lisandub ainult „sync existing" täiendus.
 - AI OCR / automaattäitmine.
-- Dashboard, Ülevaate, järelmaksude arvutus.
-- Google Calendar integratsioon (järgmine etapp).
-- Failide üleslaadimise dialoogide UX (ainult tagataust vahetub).
+- Dashboard, Ülevaade, järelmaksude arvutus.
+- Dokumentide lisamise dialoogid.
 
-## Tehnilised muudetavad failid
+## Muudetavad failid
 
-**Andmebaas:** 1 migratsioon (uued veerud + tabel + backfill `google_drive_folders`).
+- **Migratsioon** (1 tk): profile_id veerud + unikaalsuse indeksid + backfill.
+- `src/lib/google-calendar.server.ts` – resolver + profileId kõikjale.
+- `src/lib/google-calendar.functions.ts` – uued server fn-id.
+- `src/routes/api/public/google-calendar/callback.ts` – profileId state'ist.
+- `src/lib/google-drive.functions.ts` – lisandub `syncExistingDriveDocuments`.
+- `src/routes/_authenticated/profiles.tsx` – Calendar sektsioon + bulk-sync UI + post-connect dialog (Drive'ile samuti).
+- `src/components/SyncProgressDialog.tsx` – uus.
+- `src/routes/_authenticated/agreements.tsx`, `warranties.tsx`, `recurring.tsx`, `InstallmentsCard.tsx` – edastavad `activeProfileId` ka Calendari sünkroonimisele.
+- `src/i18n/locales/et.json`, `en.json` – uued tekstid.
 
-**Server:**
-- `src/lib/google-drive.server.ts` – uus `resolveProfileDriveTarget`, `renameProfileFolder`, `detectLegacyLayout`, `migrateLegacyDriveToProfile`; state'i laiendus.
-- `src/lib/google-drive.functions.ts` – `startDriveConnect(profileId?)`, `disconnectDrive(profileId?)`, uus `getProfileDriveStatus`.
-- `src/routes/api/public/google-drive/callback.ts` – kirjuta rida õige `profile_id`-ga.
-- Iga mooduli salvestusloogika (`agreements.tsx`, `warranties.tsx`, `expenses.tsx`, `recurring.tsx`) – asendada olemasolev Drive-üleslaadimise helper üleskutsega, mis läbib profiili resolveri (mitte üks-ühele ümber kirjutades, ainult sisemine `ensureSubfolderId` osa).
+## Testiplaan
 
-**Klient:**
-- `src/routes/_authenticated/profiles.tsx` – uus Google Drive sektsioon.
-- Uus `LegacyDriveMigrationDialog` komponent, mis kuvab AppShellis pärast sisselogimist ainult kui `checkLegacyDriveLayout` ütleb, et bänner on vajalik.
-- `i18n/locales/et.json` + `en.json` uued võtmed.
+1. Loo profiil „Ema", vali „Ühenda teine Google Calendar" → OAuth → sündmused ilmuvad Ema Google Calendarisse, mitte põhiprofiili omasse.
+2. Lülita „Ema" tagasi shared'ile → uued sündmused lähevad põhikalendrisse; vanad Ema kalendris ei kustu (ainult connection eemaldatakse).
+3. Ühenda Calendar profiilile, kus on juba 5 garantiid – dialog pakub sünkroonimist → 5 sündmust luuakse.
+4. Ühenda Drive profiilile, kus on 40 varasemat kuludokumenti – dialog pakub sünkroonimist → progressiribaga laaditakse üles, duplikaate ei teki.
+5. Ühenduse katkemisel: „Sünkrooni olemasolevad" nupp seadetes jätkab (idempotentne).
+6. Profiili vahetamisel Calendari sündmused ega Drive'i failid ei sega omavahel.lisaksin 5 täiendust
+  ## 1. Google Calendari ka nimi võiks olla nähtav
+  Praegu kirjutab ta:
+  > Google konto
+  ja
+  > kalendri nimi
+  Ma täpsustaksin selle ära.
+  Näiteks:
+  ```
 
-## Testimisplaan
+  ```
+  ```
+  Google Calendar
 
-1. Uus kasutaja loob profiili „Ema" → drive_mode = shared → lisab garantii → Drive: `MyDropPocket / Ema / Garantiid / <fail>`.
-2. Profiil „Ettevõte" → valib „Ühenda teine Google Drive" → OAuth teise kontoga → lisab kulukande → uue konto Drive: `MyDropPocket / Tulud ja kulud / <fail>`.
-3. Nimeta „Ema" → „Ema Mari" (shared) → Drive'is kaust nimetatakse ümber. Kui juba olemas → hoiatus kuvatakse, muudatust ei tehta.
-4. Olemasolev kasutaja (ainult „Isiklik" + faile põhikaustas): näeb üks kord bännerit; „Jah" → kolm kausta liiguvad `MyDropPocket / Isiklik /` alla. „Hiljem" → uued failid juba lähevad õigesse alamkausta, vanad jäävad.
-5. Aktiivse profiili vahetamine → järgmine üleslaadimine läheb 100% õigesse profiili kausta, ei kunagi valesse.
+  🟢 Ühendatud
+
+  Google konto:
+
+  ema@gmail.com
+
+  Kalender:
+
+  Primary Calendar
+
+  või
+
+  MyDropPocket Calendar
+  ```
+  See aitab kasutajal kohe aru saada, kuhu sündmused lähevad.
+  ---
+  # 2. Kui profiil nimetatakse ümber
+  Me juba tegime Drive'i jaoks selle otsuse.
+  Täpselt sama võiks kehtida Calendarile.
+  Näiteks:
+  ```
+
+  ```
+  ```
+  Ema
+
+  ↓
+
+  Ema Mari
+  ```
+  siis võiks kõik tulevased sündmused minna endiselt sellele profiilile.
+  Sündmused ei tohiks kaduda ega hakata kuhugi mujale tekkima.
+  Selle võiks lihtsalt ühe lausena juurde kirjutada.
+  ---
+  # 3. Drive + Calendar võiks olla ühes kohas
+  Praegu jääb mulje nagu oleks kaks täiesti erinevat seadistust.
+  Mina paneks seadetes näiteks:
+  ```
+
+  ```
+  ```
+  Pilveteenused
+
+  Google Drive
+
+  Google Calendar
+  ```
+  ehk ühe sektsiooni alla.
+  Kasutajal on palju loogilisem.
+  ---
+  # 4. Väga oluline asi
+  Seda ei ole üldse kirjas.
+  Kui kasutaja teeb:
+  ```
+
+  ```
+  ```
+  Katkesta ühendus
+  ```
+  kas:
+  -   
+  Google Drive failid kustutatakse?  
+
+  või
+  -   
+  Google Calendar sündmused kustutatakse?  
+
+  **Minu arvates EI TOHI.**
+  Need peavad alles jääma.
+  Katkestatakse ainult tulevane sünkroonimine.
+  Seda soovitaksin kindlasti täpsustada.
+  Näiteks:
+  > Google Drive või Google Calendar ühenduse katkestamine ei kustuta kasutaja Google kontol juba olemasolevaid faile ega kalendrisündmusi. Katkestatakse ainult edasine automaatne sünkroonimine.
+  See on väga oluline kasutaja usalduse jaoks.
+  ---
+  # 5. Kõige olulisem täiendus
+  See jäi üldse välja.
+  Kui kasutaja ühendab:
+  ```
+
+  ```
+  ```
+  Google Drive
+
+  Google Calendar
+  ```
+  ja valib
+  ```
+
+  ```
+  ```
+  shared
+  ```
+  siis võiks kohe olla näha:
+  ```
+
+  ```
+  ```
+  Kasutab põhiprofiili ühendust
+
+  Google konto:
+
+  eelika@gmail.com
+  ```
+  mitte lihtsalt
+  ```
+
+  ```
+  ```
+  shared
+  ```
+  Muidu kasutaja ei tea üldse, millise konto külge ta parasjagu ühendatud on. Enne rakendamist palun lisa veel järgmised täiendused:
+  - kuva alati ühendatud Google konto ja kasutatav Google Calendar/Drive ka siis, kui profiil kasutab "Kasuta põhiprofiili" režiimi;
+  - ühenduse katkestamine ei tohi kustutada juba Google Drive'i üles laaditud faile ega Google Calendarisse loodud sündmusi, vaid lõpetab ainult edasise automaatse sünkroonimise;
+  - koonda Google Drive ja Google Calendar seadetes ühe "Pilveteenused" sektsiooni alla, et kasutajale oleks loogilisem;
+  - profiili ümbernimetamisel peab ühendus säilima ning tulevased sündmused ja dokumendid peavad jätkuvalt kuuluma samale profiilile.
