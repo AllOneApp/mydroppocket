@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Star, Users, Upload, X, Cloud, Calendar as CalendarIcon, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Star, Users, Upload, X, Cloud, Calendar as CalendarIcon, RefreshCw, ChevronDown, ChevronUp, HardDrive } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -28,6 +28,15 @@ import {
   disconnectGoogleCalendar,
   syncCalendarNow,
 } from "@/lib/google-calendar.functions";
+import {
+  getProfileDriveStatus,
+  setProfileDriveMode,
+  startGoogleDriveConnect,
+  disconnectGoogleDrive,
+  getProfilePendingCloudCounts,
+  syncDriveExistingBatch,
+} from "@/lib/google-drive.functions";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/_authenticated/profiles")({
   head: () => ({ meta: [{ title: "Profiilid — MyDropPocket" }] }),
@@ -365,6 +374,7 @@ function CloudServicesSection({ profile }: { profile: UserProfile }) {
       {expanded && (
         <div className="mt-3 space-y-3">
           <CalendarProfileBlock profile={profile} />
+          <DriveProfileBlock profile={profile} />
         </div>
       )}
     </div>
