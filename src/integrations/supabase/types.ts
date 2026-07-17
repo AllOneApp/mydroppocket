@@ -169,6 +169,7 @@ export type Database = {
           event_date: string
           google_event_id: string
           id: string
+          profile_id: string | null
           sequence: number
           source_id: string
           source_type: string
@@ -182,6 +183,7 @@ export type Database = {
           event_date: string
           google_event_id: string
           id?: string
+          profile_id?: string | null
           sequence?: number
           source_id: string
           source_type: string
@@ -195,6 +197,7 @@ export type Database = {
           event_date?: string
           google_event_id?: string
           id?: string
+          profile_id?: string | null
           sequence?: number
           source_id?: string
           source_type?: string
@@ -202,7 +205,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "calendar_events_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       expenses: {
         Row: {
@@ -286,6 +297,7 @@ export type Database = {
           google_email: string
           google_sub: string
           id: string
+          profile_id: string | null
           refresh_token_ciphertext: string
           reminder_minutes: number[]
           scope: string
@@ -307,6 +319,7 @@ export type Database = {
           google_email: string
           google_sub: string
           id?: string
+          profile_id?: string | null
           refresh_token_ciphertext: string
           reminder_minutes?: number[]
           scope: string
@@ -328,6 +341,7 @@ export type Database = {
           google_email?: string
           google_sub?: string
           id?: string
+          profile_id?: string | null
           refresh_token_ciphertext?: string
           reminder_minutes?: number[]
           scope?: string
@@ -339,7 +353,15 @@ export type Database = {
           user_id?: string
           warranty_reminder_days?: number[]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "google_calendar_connections_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       google_drive_connections: {
         Row: {
@@ -648,6 +670,7 @@ export type Database = {
       user_profiles: {
         Row: {
           avatar_url: string | null
+          calendar_mode: string
           color: string
           created_at: string
           drive_mode: string
@@ -662,6 +685,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          calendar_mode?: string
           color?: string
           created_at?: string
           drive_mode?: string
@@ -676,6 +700,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          calendar_mode?: string
           color?: string
           created_at?: string
           drive_mode?: string

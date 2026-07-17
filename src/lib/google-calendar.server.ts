@@ -43,7 +43,7 @@ function b64urlDecode(str: string): Buffer {
   return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/") + pad, "base64");
 }
 
-export function signCalendarState(payload: { userId: string; origin: string }): string {
+export function signCalendarState(payload: { userId: string; origin: string; profileId?: string | null }): string {
   const body = {
     ...payload,
     kind: "calendar",
@@ -55,7 +55,7 @@ export function signCalendarState(payload: { userId: string; origin: string }): 
   return `${bodyStr}.${sig}`;
 }
 
-export function verifyCalendarState(token: string): { userId: string; origin: string } {
+export function verifyCalendarState(token: string): { userId: string; origin: string; profileId?: string | null } {
   const [bodyStr, sig] = token.split(".");
   if (!bodyStr || !sig) throw new Error("Invalid state format");
   const expected = b64url(createHmac("sha256", stateSecret()).update(bodyStr).digest());
@@ -65,12 +65,13 @@ export function verifyCalendarState(token: string): { userId: string; origin: st
   const parsed = JSON.parse(b64urlDecode(bodyStr).toString("utf8")) as {
     userId: string;
     origin: string;
+    profileId?: string | null;
     kind?: string;
     exp: number;
   };
   if (parsed.kind !== "calendar") throw new Error("Wrong state kind");
   if (Math.floor(Date.now() / 1000) > parsed.exp) throw new Error("State expired");
-  return { userId: parsed.userId, origin: parsed.origin };
+  return { userId: parsed.userId, origin: parsed.origin, profileId: parsed.profileId ?? null };
 }
 
 // ---------- OAuth URL + token exchange ----------
@@ -167,19 +168,35 @@ export interface CalendarConnection {
 
 export async function getValidCalendarAccessTokenForUser(
   userId: string,
+  profileId?: string | null,
 ): Promise<CalendarConnection | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   // Cast: new tables from this migration may not yet appear in the generated types file.
   const db = supabaseAdmin as unknown as {
     from: (t: string) => any;
   };
-  const { data, error } = await db
-    .from("google_calendar_connections")
-    .select("access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, calendar_id, calendar_name, reminder_minutes, sync_installments, sync_recurring, sync_warranties, sync_agreements, warranty_reminder_days, agreement_reminder_days")
-    .eq("user_id", userId)
-    .maybeSingle();
+  // Resolve which connection to use: profile-specific ("separate") or primary
+  // ("shared" / fallback). If profileId is given and that profile is in
+  // separate mode with its own connection row, use it. Otherwise fall back to
+  // the user's primary connection (profile_id IS NULL).
+  let targetProfileIdForRow: string | null = null;
+  if (profileId) {
+    const { data: prof } = await db
+      .from("user_profiles")
+      .select("calendar_mode")
+      .eq("id", profileId)
+      .maybeSingle();
+    const mode = (prof && (prof as { calendar_mode?: string }).calendar_mode) === "separate" ? "separate" : "shared";
+    if (mode === "separate") targetProfileIdForRow = profileId;
+  }
+  const selectCols = "id, access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, calendar_id, calendar_name, reminder_minutes, sync_installments, sync_recurring, sync_warranties, sync_agreements, warranty_reminder_days, agreement_reminder_days";
+  let q = db.from("google_calendar_connections").select(selectCols).eq("user_id", userId);
+  if (targetProfileIdForRow) q = q.eq("profile_id", targetProfileIdForRow);
+  else q = q.is("profile_id", null);
+  const { data, error } = await q.maybeSingle();
   if (error) throw error;
   if (!data) return null;
+  const connRowId = (data as { id: string }).id;
 
   let accessToken = decryptToken(data.access_token_ciphertext as string);
   const expiresAt = new Date(data.access_token_expires_at as string).getTime();
@@ -196,7 +213,7 @@ export async function getValidCalendarAccessTokenForUser(
         access_token_expires_at: newExpiresAt,
         updated_at: new Date().toISOString(),
       })
-      .eq("user_id", userId);
+      .eq("id", connRowId);
   }
 
   let calendarId = (data.calendar_id as string | null) ?? null;
@@ -206,7 +223,7 @@ export async function getValidCalendarAccessTokenForUser(
     await db
       .from("google_calendar_connections")
       .update({ calendar_id: calendarId, updated_at: new Date().toISOString() })
-      .eq("user_id", userId);
+      .eq("id", connRowId);
   }
 
   return {
@@ -495,17 +512,13 @@ export async function syncInstallmentForUser(opts: {
   updated?: number;
   removed?: number;
 }> {
-  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
-  if (!conn) return { status: "not-connected" };
-  if (!conn.syncInstallments) return { status: "skipped" };
-
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
 
   const { data: agRow, error: agErr } = await dbAny
     .from("agreements")
     .select(
-      "id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, payment_day_of_month, total_payments, user_id",
+      "id, title, agreement_type, start_date, end_date, monthly_payment, total_amount, currency, iban, bank, reference_number, payments_made, agreement_number, payee_name, payment_day_of_month, total_payments, user_id, profile_id",
     )
     .eq("id", opts.agreementId)
     .maybeSingle();
@@ -513,6 +526,10 @@ export async function syncInstallmentForUser(opts: {
   if (!agRow || (agRow.user_id as string) !== opts.userId) {
     return { status: "skipped" };
   }
+  const rowProfileId = ((agRow as unknown as { profile_id?: string | null }).profile_id) ?? null;
+  const conn = await getValidCalendarAccessTokenForUser(opts.userId, rowProfileId);
+  if (!conn) return { status: "not-connected" };
+  if (!conn.syncInstallments) return { status: "skipped" };
   const row = agRow as unknown as AgreementRow;
   const plan = planInstallment(row);
 
@@ -581,6 +598,7 @@ export async function syncInstallmentForUser(opts: {
       });
       await dbAny.from("calendar_events").insert({
         user_id: opts.userId,
+        profile_id: rowProfileId,
         source_type: "installment",
         source_id: opts.agreementId,
         sequence: seq,
@@ -639,22 +657,21 @@ export async function syncInstallmentForUser(opts: {
   return { status, created, updated, removed };
 }
 
-export async function syncAllInstallmentsForUser(userId: string): Promise<{
+export async function syncAllInstallmentsForUser(userId: string, profileId?: string | null): Promise<{
   created: number;
   updated: number;
   removed: number;
   skipped: number;
 }> {
-  const conn = await getValidCalendarAccessTokenForUser(userId);
-  if (!conn) return { created: 0, updated: 0, removed: 0, skipped: 0 };
-
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
-  const { data, error } = await dbAny
+  let q = dbAny
     .from("agreements")
     .select("id")
     .eq("user_id", userId)
     .eq("agreement_type", "installment");
+  if (profileId) q = q.eq("profile_id", profileId);
+  const { data, error } = await q;
   if (error) throw error;
   const rows = (data ?? []) as { id: string }[];
   let created = 0,
@@ -716,6 +733,7 @@ function addDaysIso(iso: string, delta: number): string {
 
 async function upsertSourceEvents(opts: {
   userId: string;
+  profileId: string | null;
   sourceType: CalendarSourceType;
   sourceId: string;
   desired: DesiredEvent[];
@@ -771,6 +789,7 @@ async function upsertSourceEvents(opts: {
       });
       await dbAny.from("calendar_events").insert({
         user_id: opts.userId,
+        profile_id: opts.profileId,
         source_type: opts.sourceType,
         source_id: opts.sourceId,
         sequence: d.sequence,
@@ -843,19 +862,32 @@ export async function removeSourceEventsForUser(opts: {
   sourceType: CalendarSourceType;
   sourceId: string;
 }): Promise<{ removed: number; status: "removed" | "not-connected" | "skipped" }> {
-  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
-  if (!conn) return { removed: 0, status: "not-connected" };
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
   const { data: trackedRows } = await dbAny
     .from("calendar_events")
-    .select("id, google_event_id, calendar_id")
+    .select("id, google_event_id, calendar_id, profile_id")
     .eq("user_id", opts.userId)
     .eq("source_type", opts.sourceType)
     .eq("source_id", opts.sourceId);
-  const tracked = (trackedRows ?? []) as Array<{ id: string; google_event_id: string; calendar_id: string }>;
+  const tracked = (trackedRows ?? []) as Array<{ id: string; google_event_id: string; calendar_id: string; profile_id: string | null }>;
+  if (tracked.length === 0) return { removed: 0, status: "skipped" };
+  // Resolve the right connection per tracked profile_id (some profiles may
+  // have a separate calendar). Cache resolutions to avoid re-hitting DB.
+  const connCache = new Map<string, CalendarConnection | null>();
+  const resolve = async (pid: string | null) => {
+    const key = pid ?? "_primary";
+    if (!connCache.has(key)) connCache.set(key, await getValidCalendarAccessTokenForUser(opts.userId, pid));
+    return connCache.get(key) ?? null;
+  };
   let removed = 0;
   for (const t of tracked) {
+    const conn = await resolve(t.profile_id);
+    if (!conn) {
+      // No connection for that profile any more; just drop the local row.
+      await dbAny.from("calendar_events").delete().eq("id", t.id);
+      continue;
+    }
     try {
       await deleteEvent({ accessToken: conn.accessToken, calendarId: t.calendar_id, eventId: t.google_event_id });
     } catch (e) {
@@ -900,23 +932,23 @@ export async function syncRecurringForUser(opts: {
   userId: string;
   recurringId: string;
 }): Promise<{ status: string; created?: number; updated?: number; removed?: number }> {
-  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
-  if (!conn) return { status: "not-connected" };
-  if (!conn.syncRecurring) {
-    // If user turned it off, cleanup any stale events.
-    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "recurring", sourceId: opts.recurringId });
-    return { status: "skipped", removed: r.removed };
-  }
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
   const { data, error } = await dbAny
     .from("recurring_payments")
-    .select("id, user_id, service_name, provider, category, amount, currency, frequency, end_date, next_due_date")
+    .select("id, user_id, service_name, provider, category, amount, currency, frequency, end_date, next_due_date, profile_id")
     .eq("id", opts.recurringId)
     .maybeSingle();
   if (error) throw error;
   if (!data || (data.user_id as string) !== opts.userId) return { status: "skipped" };
   const row = data as unknown as RecurringRow;
+  const rowProfileId = ((data as unknown as { profile_id?: string | null }).profile_id) ?? null;
+  const conn = await getValidCalendarAccessTokenForUser(opts.userId, rowProfileId);
+  if (!conn) return { status: "not-connected" };
+  if (!conn.syncRecurring) {
+    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "recurring", sourceId: opts.recurringId });
+    return { status: "skipped", removed: r.removed };
+  }
   if (!row.next_due_date) {
     const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "recurring", sourceId: row.id });
     return { status: "removed", removed: r.removed };
@@ -930,6 +962,7 @@ export async function syncRecurringForUser(opts: {
   ];
   const stats = await upsertSourceEvents({
     userId: opts.userId,
+    profileId: rowProfileId,
     sourceType: "recurring",
     sourceId: row.id,
     desired,
@@ -938,12 +971,12 @@ export async function syncRecurringForUser(opts: {
   return { status: "ok", ...stats };
 }
 
-export async function syncAllRecurringForUser(userId: string): Promise<SyncStats & { skipped: number }> {
-  const conn = await getValidCalendarAccessTokenForUser(userId);
-  if (!conn || !conn.syncRecurring) return { created: 0, updated: 0, removed: 0, skipped: 0 };
+export async function syncAllRecurringForUser(userId: string, profileId?: string | null): Promise<SyncStats & { skipped: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
-  const { data } = await dbAny.from("recurring_payments").select("id").eq("user_id", userId);
+  let q = dbAny.from("recurring_payments").select("id").eq("user_id", userId);
+  if (profileId) q = q.eq("profile_id", profileId);
+  const { data } = await q;
   const rows = (data ?? []) as { id: string }[];
   const acc = { created: 0, updated: 0, removed: 0, skipped: 0 };
   for (const r of rows) {
@@ -988,22 +1021,23 @@ export async function syncWarrantyForUser(opts: {
   userId: string;
   warrantyId: string;
 }): Promise<{ status: string; created?: number; updated?: number; removed?: number }> {
-  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
-  if (!conn) return { status: "not-connected" };
-  if (!conn.syncWarranties) {
-    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "warranty", sourceId: opts.warrantyId });
-    return { status: "skipped", removed: r.removed };
-  }
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
   const { data, error } = await dbAny
     .from("warranties")
-    .select("id, user_id, product_name, store, warranty_expiry")
+    .select("id, user_id, product_name, store, warranty_expiry, profile_id")
     .eq("id", opts.warrantyId)
     .maybeSingle();
   if (error) throw error;
   if (!data || (data.user_id as string) !== opts.userId) return { status: "skipped" };
   const row = data as unknown as WarrantyRow;
+  const rowProfileId = ((data as unknown as { profile_id?: string | null }).profile_id) ?? null;
+  const conn = await getValidCalendarAccessTokenForUser(opts.userId, rowProfileId);
+  if (!conn) return { status: "not-connected" };
+  if (!conn.syncWarranties) {
+    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "warranty", sourceId: opts.warrantyId });
+    return { status: "skipped", removed: r.removed };
+  }
   if (!row.warranty_expiry) {
     const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "warranty", sourceId: row.id });
     return { status: "removed", removed: r.removed };
@@ -1022,6 +1056,7 @@ export async function syncWarrantyForUser(opts: {
   });
   const stats = await upsertSourceEvents({
     userId: opts.userId,
+    profileId: rowProfileId,
     sourceType: "warranty",
     sourceId: row.id,
     desired,
@@ -1030,12 +1065,12 @@ export async function syncWarrantyForUser(opts: {
   return { status: "ok", ...stats };
 }
 
-export async function syncAllWarrantiesForUser(userId: string): Promise<SyncStats & { skipped: number }> {
-  const conn = await getValidCalendarAccessTokenForUser(userId);
-  if (!conn || !conn.syncWarranties) return { created: 0, updated: 0, removed: 0, skipped: 0 };
+export async function syncAllWarrantiesForUser(userId: string, profileId?: string | null): Promise<SyncStats & { skipped: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
-  const { data } = await dbAny.from("warranties").select("id").eq("user_id", userId);
+  let q = dbAny.from("warranties").select("id").eq("user_id", userId);
+  if (profileId) q = q.eq("profile_id", profileId);
+  const { data } = await q;
   const rows = (data ?? []) as { id: string }[];
   const acc = { created: 0, updated: 0, removed: 0, skipped: 0 };
   for (const r of rows) {
@@ -1077,22 +1112,23 @@ export async function syncAgreementEndForUser(opts: {
   userId: string;
   agreementId: string;
 }): Promise<{ status: string; created?: number; updated?: number; removed?: number }> {
-  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
-  if (!conn) return { status: "not-connected" };
-  if (!conn.syncAgreements) {
-    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "agreement_end", sourceId: opts.agreementId });
-    return { status: "skipped", removed: r.removed };
-  }
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
   const { data, error } = await dbAny
     .from("agreements")
-    .select("id, user_id, title, agreement_type, end_date")
+    .select("id, user_id, title, agreement_type, end_date, profile_id")
     .eq("id", opts.agreementId)
     .maybeSingle();
   if (error) throw error;
   if (!data || (data.user_id as string) !== opts.userId) return { status: "skipped" };
   const row = data as unknown as AgreementEndRow;
+  const rowProfileId = ((data as unknown as { profile_id?: string | null }).profile_id) ?? null;
+  const conn = await getValidCalendarAccessTokenForUser(opts.userId, rowProfileId);
+  if (!conn) return { status: "not-connected" };
+  if (!conn.syncAgreements) {
+    const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "agreement_end", sourceId: opts.agreementId });
+    return { status: "skipped", removed: r.removed };
+  }
   // Only non-installment agreements with an end date get "leping lõpeb" events.
   if (row.agreement_type === "installment" || !row.end_date) {
     const r = await removeSourceEventsForUser({ userId: opts.userId, sourceType: "agreement_end", sourceId: row.id });
@@ -1111,6 +1147,7 @@ export async function syncAgreementEndForUser(opts: {
   });
   const stats = await upsertSourceEvents({
     userId: opts.userId,
+    profileId: rowProfileId,
     sourceType: "agreement_end",
     sourceId: row.id,
     desired,
@@ -1119,15 +1156,15 @@ export async function syncAgreementEndForUser(opts: {
   return { status: "ok", ...stats };
 }
 
-export async function syncAllAgreementEndsForUser(userId: string): Promise<SyncStats & { skipped: number }> {
-  const conn = await getValidCalendarAccessTokenForUser(userId);
-  if (!conn || !conn.syncAgreements) return { created: 0, updated: 0, removed: 0, skipped: 0 };
+export async function syncAllAgreementEndsForUser(userId: string, profileId?: string | null): Promise<SyncStats & { skipped: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
-  const { data } = await dbAny
+  let q = dbAny
     .from("agreements")
     .select("id, agreement_type, end_date")
     .eq("user_id", userId);
+  if (profileId) q = q.eq("profile_id", profileId);
+  const { data } = await q;
   const rows = (data ?? []) as { id: string; agreement_type: string; end_date: string | null }[];
   const acc = { created: 0, updated: 0, removed: 0, skipped: 0 };
   for (const r of rows) {
@@ -1148,19 +1185,17 @@ export async function syncAllAgreementEndsForUser(userId: string): Promise<SyncS
 
 // ------------------ combined full sync ------------------
 
-export async function syncEverythingForUser(userId: string): Promise<{
+export async function syncEverythingForUser(userId: string, profileId?: string | null): Promise<{
   created: number;
   updated: number;
   removed: number;
   skipped: number;
 }> {
-  const conn = await getValidCalendarAccessTokenForUser(userId);
-  if (!conn) return { created: 0, updated: 0, removed: 0, skipped: 0 };
   const [a, b, c, d] = await Promise.all([
-    syncAllInstallmentsForUser(userId),
-    syncAllRecurringForUser(userId),
-    syncAllWarrantiesForUser(userId),
-    syncAllAgreementEndsForUser(userId),
+    syncAllInstallmentsForUser(userId, profileId ?? null),
+    syncAllRecurringForUser(userId, profileId ?? null),
+    syncAllWarrantiesForUser(userId, profileId ?? null),
+    syncAllAgreementEndsForUser(userId, profileId ?? null),
   ]);
   return {
     created: a.created + b.created + c.created + d.created,

@@ -87,21 +87,36 @@ export const Route = createFileRoute("/api/public/google-calendar/callback")({
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
           const db = supabaseAdmin as unknown as { from: (t: string) => any };
-          const { error } = await db.from("google_calendar_connections").upsert(
-            {
-              user_id: state.userId,
-              google_email: email,
-              google_sub: sub,
-              access_token_ciphertext: encryptToken(tokens.access_token),
-              refresh_token_ciphertext: encryptToken(tokens.refresh_token),
-              access_token_expires_at: expiresAt,
-              scope: tokens.scope,
-              calendar_id: calendarId,
-              calendar_name: MY_DROPPOCKET_CALENDAR_NAME,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id" },
-          );
+          const profileId = state.profileId ?? null;
+          // Upsert: onConflict differs by profile scope because uniqueness is a
+          // partial index (user_id where profile_id IS NULL, or user_id+profile_id).
+          // Do a manual find-or-insert to avoid dealing with partial-index conflict targets.
+          let existQ = db
+            .from("google_calendar_connections")
+            .select("id")
+            .eq("user_id", state.userId);
+          if (profileId) existQ = existQ.eq("profile_id", profileId);
+          else existQ = existQ.is("profile_id", null);
+          const { data: existing } = await existQ.maybeSingle();
+          const payload: Record<string, unknown> = {
+            user_id: state.userId,
+            profile_id: profileId,
+            google_email: email,
+            google_sub: sub,
+            access_token_ciphertext: encryptToken(tokens.access_token),
+            refresh_token_ciphertext: encryptToken(tokens.refresh_token),
+            access_token_expires_at: expiresAt,
+            scope: tokens.scope,
+            calendar_id: calendarId,
+            calendar_name: MY_DROPPOCKET_CALENDAR_NAME,
+            updated_at: new Date().toISOString(),
+          };
+          const { error } = existing
+            ? await db
+                .from("google_calendar_connections")
+                .update(payload)
+                .eq("id", (existing as { id: string }).id)
+            : await db.from("google_calendar_connections").insert(payload);
           if (error) throw error;
 
           return renderResult({ origin: state.origin, ok: true, email });

@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { origin: string }) => input)
+  .inputValidator((input: { origin: string; profileId?: string | null }) => input)
   .handler(async ({ data, context }) => {
     const {
       buildCalendarAuthorizationUrl,
@@ -12,44 +12,50 @@ export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
     } = await import("./google-calendar.server");
     const origin = new URL(data.origin).origin;
     const redirectUri = `${origin}${GOOGLE_CALENDAR_CALLBACK_PATH}`;
-    const state = signCalendarState({ userId: context.userId, origin });
+    const state = signCalendarState({ userId: context.userId, origin, profileId: data.profileId ?? null });
     const authorizationUrl = buildCalendarAuthorizationUrl({ redirectUri, state });
     return { authorizationUrl };
   });
 
 export const getGoogleCalendarStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input?: { profileId?: string | null }) => input ?? {})
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as unknown as { from: (t: string) => any };
-    const { data, error } = await db
+    let q = db
       .from("google_calendar_connections")
       .select("google_email, calendar_id, calendar_name, sync_installments, reminder_minutes, connected_at")
-      .eq("user_id", context.userId)
-      .maybeSingle();
+      .eq("user_id", context.userId);
+    if (data?.profileId) q = q.eq("profile_id", data.profileId);
+    else q = q.is("profile_id", null);
+    const { data: row, error } = await q.maybeSingle();
     if (error) throw error;
-    if (!data) return { connected: false as const };
+    if (!row) return { connected: false as const };
     return {
       connected: true as const,
-      email: data.google_email as string,
-      calendarId: data.calendar_id as string | null,
-      calendarName: data.calendar_name as string,
-      syncInstallments: (data.sync_installments as boolean) ?? true,
-      reminderMinutes: (data.reminder_minutes as number[]) ?? [1440],
-      connectedAt: data.connected_at as string,
+      email: row.google_email as string,
+      calendarId: row.calendar_id as string | null,
+      calendarName: row.calendar_name as string,
+      syncInstallments: (row.sync_installments as boolean) ?? true,
+      reminderMinutes: (row.reminder_minutes as number[]) ?? [1440],
+      connectedAt: row.connected_at as string,
     };
   });
 
 export const disconnectGoogleCalendar = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input?: { profileId?: string | null }) => input ?? {})
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as unknown as { from: (t: string) => any };
-    const { data: row } = await db
+    let selQ = db
       .from("google_calendar_connections")
       .select("refresh_token_ciphertext")
-      .eq("user_id", context.userId)
-      .maybeSingle();
+      .eq("user_id", context.userId);
+    if (data?.profileId) selQ = selQ.eq("profile_id", data.profileId);
+    else selQ = selQ.is("profile_id", null);
+    const { data: row } = await selQ.maybeSingle();
     if (row?.refresh_token_ciphertext) {
       try {
         const { decryptToken } = await import("./google-drive.server");
@@ -63,15 +69,21 @@ export const disconnectGoogleCalendar = createServerFn({ method: "POST" })
       }
     }
     // Best-effort: leave the actual Google calendar in place (user may want to keep past events);
-    // just drop the connection + local event tracking so we won't try to write to it.
-    await db.from("calendar_events").delete().eq("user_id", context.userId);
-    await db.from("google_calendar_connections").delete().eq("user_id", context.userId);
+    // just drop the connection + local event tracking for this profile scope.
+    if (data?.profileId) {
+      await db.from("calendar_events").delete().eq("user_id", context.userId).eq("profile_id", data.profileId);
+      await db.from("google_calendar_connections").delete().eq("user_id", context.userId).eq("profile_id", data.profileId);
+    } else {
+      await db.from("calendar_events").delete().eq("user_id", context.userId).is("profile_id", null);
+      await db.from("google_calendar_connections").delete().eq("user_id", context.userId).is("profile_id", null);
+    }
     return { ok: true };
   });
 
 export const updateCalendarSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: {
+    profileId?: string | null;
     syncInstallments?: boolean;
     syncRecurring?: boolean;
     syncWarranties?: boolean;
@@ -106,10 +118,10 @@ export const updateCalendarSettings = createServerFn({ method: "POST" })
         .filter((n) => Number.isFinite(n));
       patch.agreement_reminder_days = clean.length > 0 ? clean : [30, 7, 0];
     }
-    const { error } = await db
-      .from("google_calendar_connections")
-      .update(patch)
-      .eq("user_id", context.userId);
+    let upQ = db.from("google_calendar_connections").update(patch).eq("user_id", context.userId);
+    if (data.profileId) upQ = upQ.eq("profile_id", data.profileId);
+    else upQ = upQ.is("profile_id", null);
+    const { error } = await upQ;
     if (error) throw error;
     return { ok: true };
   });
@@ -120,9 +132,10 @@ export const updateCalendarSettings = createServerFn({ method: "POST" })
  */
 export const syncCalendarNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input?: { profileId?: string | null }) => input ?? {})
+  .handler(async ({ data, context }) => {
     const { syncEverythingForUser } = await import("./google-calendar.server");
-    const stats = await syncEverythingForUser(context.userId);
+    const stats = await syncEverythingForUser(context.userId, data?.profileId ?? null);
     return stats;
   });
 
@@ -172,4 +185,66 @@ export const removeCalendarSource = createServerFn({ method: "POST" })
       sourceType: data.sourceType,
       sourceId: data.sourceId,
     });
+  });
+
+/**
+ * Profiili-teadlik kalendri staatus: režiim (jagatud/eraldi), kas eraldi
+ * ühendus on olemas, salvestuskoht (kalendri nimi).
+ */
+export const getProfileCalendarStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as unknown as { from: (t: string) => any };
+    const { data: profile } = await db
+      .from("user_profiles")
+      .select("id, name, calendar_mode, is_default")
+      .eq("id", data.profileId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!profile) throw new Error("Profiili ei leitud");
+    const p = profile as { name: string; calendar_mode: string; is_default: boolean };
+    const mode = (p.calendar_mode === "separate" ? "separate" : "shared") as "shared" | "separate";
+
+    if (mode === "shared") {
+      const { data: prim } = await db
+        .from("google_calendar_connections")
+        .select("google_email, calendar_name")
+        .eq("user_id", context.userId)
+        .is("profile_id", null)
+        .maybeSingle();
+      return {
+        mode,
+        connected: !!prim,
+        email: prim ? (prim as { google_email: string }).google_email : null,
+        calendarName: prim ? (prim as { calendar_name: string }).calendar_name : "MyDropPocket",
+      };
+    }
+    const { data: own } = await db
+      .from("google_calendar_connections")
+      .select("google_email, calendar_name")
+      .eq("user_id", context.userId)
+      .eq("profile_id", data.profileId)
+      .maybeSingle();
+    return {
+      mode,
+      connected: !!own,
+      email: own ? (own as { google_email: string }).google_email : null,
+      calendarName: own ? (own as { calendar_name: string }).calendar_name : "MyDropPocket",
+    };
+  });
+
+export const setProfileCalendarMode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string; mode: "shared" | "separate" }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await (supabaseAdmin as unknown as { from: (t: string) => any })
+      .from("user_profiles")
+      .update({ calendar_mode: data.mode })
+      .eq("id", data.profileId)
+      .eq("user_id", context.userId);
+    if (error) throw error;
+    return { ok: true as const };
   });
