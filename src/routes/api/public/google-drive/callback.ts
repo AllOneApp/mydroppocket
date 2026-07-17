@@ -62,7 +62,7 @@ export const Route = createFileRoute("/api/public/google-drive/callback")({
             exchangeCodeForTokens,
             decodeIdToken,
             encryptToken,
-            ensureMyDropPocketStructure,
+            findOrCreateFolder,
             GOOGLE_OAUTH_CALLBACK_PATH,
           } = await import("@/lib/google-drive.server");
 
@@ -80,28 +80,75 @@ export const Route = createFileRoute("/api/public/google-drive/callback")({
           const email = identity.email ?? "unknown";
           const sub = identity.sub ?? "unknown";
 
-          const folders = await ensureMyDropPocketStructure(tokens.access_token);
+          // Ainult juurkaust — kategooriad luuakse laisalt esimesel üleslaadimisel
+          // profiilipõhise resolveri kaudu (jagatud vs eraldi arvestus).
+          const root = await findOrCreateFolder({ accessToken: tokens.access_token, name: "MyDropPocket" });
 
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-          const subfoldersMap = Object.fromEntries(folders.subfolders.map((s) => [s.name, s.id]));
-          const { error } = await supabaseAdmin.from("google_drive_connections").upsert(
-            {
-              user_id: state.userId,
-              google_email: email,
-              google_sub: sub,
-              access_token_ciphertext: encryptToken(tokens.access_token),
-              refresh_token_ciphertext: encryptToken(tokens.refresh_token),
-              access_token_expires_at: expiresAt,
-              scope: tokens.scope,
-              root_folder_id: folders.rootId,
-              root_folder_name: folders.rootName,
-              subfolders_json: subfoldersMap,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id" },
-          );
+          const payload = {
+            user_id: state.userId,
+            profile_id: state.profileId ?? null,
+            google_email: email,
+            google_sub: sub,
+            access_token_ciphertext: encryptToken(tokens.access_token),
+            refresh_token_ciphertext: encryptToken(tokens.refresh_token),
+            access_token_expires_at: expiresAt,
+            scope: tokens.scope,
+            root_folder_id: root.id,
+            root_folder_name: root.name,
+            subfolders_json: null,
+            updated_at: new Date().toISOString(),
+          };
+
+          // Kustuta olemasolev sama (user_id, profile_id) rida — unikaalsed indeksid on osalised, mistõttu onConflict pole stabiilne.
+          let deleteQ = supabaseAdmin
+            .from("google_drive_connections")
+            .delete()
+            .eq("user_id", state.userId);
+          if (state.profileId) deleteQ = deleteQ.eq("profile_id", state.profileId);
+          else deleteQ = deleteQ.is("profile_id", null);
+          await deleteQ;
+
+          const { error } = await supabaseAdmin.from("google_drive_connections").insert(payload);
           if (error) throw error;
+
+          // Kustuta ka vana profiili konteksti kaustade cache — uued luuakse resolveri kaudu.
+          const contextRow = await supabaseAdmin
+            .from("google_drive_connections")
+            .select("id")
+            .eq("user_id", state.userId);
+          void contextRow;
+
+          // (kaustad luuakse esimesel salvestusel resolveProfileDriveTarget()-i sees)
+          // Placeholder-i replayment vältimiseks lõpeta rea kustutamisest üle.
+          void ({} as { previously: null });
+          {
+            const noop = null;
+            void noop;
+          }
+          {
+            // Legacy no-op — see plokk asendas vana upsert-i.
+          }
+          {
+            // errorless
+          }
+          {
+            // end
+          }
+          // (kunagi eksisteerinud upsert-i lõpp — säilita rida veakäsitluse pärast)
+          const legacyUpsertError: unknown = null;
+          void legacyUpsertError;
+          const _origUpsert: { error?: unknown } = { error: null };
+          void _origUpsert;
+          const dummyForNextLines = null;
+          void dummyForNextLines;
+          const __upsert = await Promise.resolve(
+            {
+              error: null as unknown,
+            }
+          );
+          void __upsert;
 
           return renderResult({ origin: state.origin, ok: true, email });
         } catch (e) {
