@@ -759,50 +759,11 @@ export async function getValidAccessTokenForUser(userId: string): Promise<{
   rootId: string;
   subfolders: Record<string, string>;
 } | null> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin
-    .from("google_drive_connections")
-    .select("access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, root_folder_id, subfolders_json")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-
-  let accessToken = decryptToken(data.access_token_ciphertext);
-  const expiresAt = new Date(data.access_token_expires_at).getTime();
-  const now = Date.now();
-  if (expiresAt - now < 60_000) {
-    const refreshToken = decryptToken(data.refresh_token_ciphertext);
-    const refreshed = await refreshAccessToken(refreshToken);
-    accessToken = refreshed.access_token;
-    const newExpiresAt = new Date(now + refreshed.expires_in * 1000).toISOString();
-    await supabaseAdmin
-      .from("google_drive_connections")
-      .update({
-        access_token_ciphertext: encryptToken(accessToken),
-        access_token_expires_at: newExpiresAt,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId);
-  }
-
-  let subfolders = (data.subfolders_json as Record<string, string> | null) ?? null;
-  let rootId = data.root_folder_id as string | null;
-  if (!subfolders || !rootId) {
-    const built = await ensureMyDropPocketStructure(accessToken);
-    subfolders = Object.fromEntries(built.subfolders.map((s) => [s.name, s.id]));
-    rootId = built.rootId;
-    await supabaseAdmin
-      .from("google_drive_connections")
-      .update({
-        root_folder_id: rootId,
-        subfolders_json: subfolders,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId);
-  }
-
-  return { accessToken, rootId: rootId!, subfolders };
+  // Backwards-compatible wrapper — kutsub uut profiiliteadlikku resolveri
+  // legacy režiimis (profileId = null → põhikonto, MyDropPocket/{kategooria}).
+  const resolved = await resolveProfileDriveTarget(userId, null);
+  if (!resolved) return null;
+  return { accessToken: resolved.accessToken, rootId: resolved.rootId, subfolders: resolved.subfolders };
 }
 
 /**
