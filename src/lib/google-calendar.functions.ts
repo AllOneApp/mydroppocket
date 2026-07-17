@@ -186,3 +186,65 @@ export const removeCalendarSource = createServerFn({ method: "POST" })
       sourceId: data.sourceId,
     });
   });
+
+/**
+ * Profiili-teadlik kalendri staatus: režiim (jagatud/eraldi), kas eraldi
+ * ühendus on olemas, salvestuskoht (kalendri nimi).
+ */
+export const getProfileCalendarStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as unknown as { from: (t: string) => any };
+    const { data: profile } = await db
+      .from("user_profiles")
+      .select("id, name, calendar_mode, is_default")
+      .eq("id", data.profileId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!profile) throw new Error("Profiili ei leitud");
+    const p = profile as { name: string; calendar_mode: string; is_default: boolean };
+    const mode = (p.calendar_mode === "separate" ? "separate" : "shared") as "shared" | "separate";
+
+    if (mode === "shared") {
+      const { data: prim } = await db
+        .from("google_calendar_connections")
+        .select("google_email, calendar_name")
+        .eq("user_id", context.userId)
+        .is("profile_id", null)
+        .maybeSingle();
+      return {
+        mode,
+        connected: !!prim,
+        email: prim ? (prim as { google_email: string }).google_email : null,
+        calendarName: prim ? (prim as { calendar_name: string }).calendar_name : "MyDropPocket",
+      };
+    }
+    const { data: own } = await db
+      .from("google_calendar_connections")
+      .select("google_email, calendar_name")
+      .eq("user_id", context.userId)
+      .eq("profile_id", data.profileId)
+      .maybeSingle();
+    return {
+      mode,
+      connected: !!own,
+      email: own ? (own as { google_email: string }).google_email : null,
+      calendarName: own ? (own as { calendar_name: string }).calendar_name : "MyDropPocket",
+    };
+  });
+
+export const setProfileCalendarMode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string; mode: "shared" | "separate" }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await (supabaseAdmin as unknown as { from: (t: string) => any })
+      .from("user_profiles")
+      .update({ calendar_mode: data.mode })
+      .eq("id", data.profileId)
+      .eq("user_id", context.userId);
+    if (error) throw error;
+    return { ok: true as const };
+  });
