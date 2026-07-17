@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Star, Users, Upload, X, Cloud, Calendar as CalendarIcon, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Star, Users, Upload, X, Cloud, Calendar as CalendarIcon, RefreshCw, ChevronDown, ChevronUp, HardDrive } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -28,6 +28,15 @@ import {
   disconnectGoogleCalendar,
   syncCalendarNow,
 } from "@/lib/google-calendar.functions";
+import {
+  getProfileDriveStatus,
+  setProfileDriveMode,
+  startGoogleDriveConnect,
+  disconnectGoogleDrive,
+  getProfilePendingCloudCounts,
+  syncDriveExistingBatch,
+} from "@/lib/google-drive.functions";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/_authenticated/profiles")({
   head: () => ({ meta: [{ title: "Profiilid — MyDropPocket" }] }),
@@ -365,6 +374,7 @@ function CloudServicesSection({ profile }: { profile: UserProfile }) {
       {expanded && (
         <div className="mt-3 space-y-3">
           <CalendarProfileBlock profile={profile} />
+          <DriveProfileBlock profile={profile} />
         </div>
       )}
     </div>
@@ -380,15 +390,20 @@ function CalendarProfileBlock({ profile }: { profile: UserProfile }) {
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ created: number; updated: number; removed: number; skipped: number } | null>(null);
+  const [postConnect, setPostConnect] = useState<{ open: boolean; count: number }>({ open: false, count: 0 });
 
   useEffect(() => {
-    function onMessage(e: MessageEvent) {
+    async function onMessage(e: MessageEvent) {
       const d = e.data as { type?: string; ok?: boolean; error?: string } | undefined;
       if (!d || d.type !== "mydroppocket:google-calendar:oauth") return;
       setConnecting(false);
       if (d.ok) {
         toast.success("Google Calendar ühendatud");
-        void qc.invalidateQueries({ queryKey: ["profile-calendar-status", profile.id] });
+        await qc.invalidateQueries({ queryKey: ["profile-calendar-status", profile.id] });
+        try {
+          const counts = await getProfilePendingCloudCounts({ data: { profileId: profile.id } });
+          if (counts.calendarItems > 0) setPostConnect({ open: true, count: counts.calendarItems });
+        } catch { /* ignore */ }
       } else {
         toast.error(d.error ?? "Ühendus ebaõnnestus");
       }
@@ -515,6 +530,210 @@ function CalendarProfileBlock({ profile }: { profile: UserProfile }) {
           Loodud: {syncResult.created} · Uuendatud: {syncResult.updated} · Eemaldatud: {syncResult.removed} · Vahele jäetud: {syncResult.skipped}
         </div>
       )}
+      <PostConnectSyncPrompt
+        open={postConnect.open}
+        count={postConnect.count}
+        service="calendar"
+        onDismiss={() => setPostConnect({ open: false, count: 0 })}
+        onConfirm={() => { setPostConnect({ open: false, count: 0 }); void handleSync(); }}
+      />
+    </div>
+  );
+}
+
+function PostConnectSyncPrompt({
+  open, count, service, onConfirm, onDismiss,
+}: { open: boolean; count: number; service: "calendar" | "drive"; onConfirm: () => void; onDismiss: () => void }) {
+  const isCal = service === "calendar";
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onDismiss(); }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{isCal ? "📅 Google Calendar ühendatud!" : "💾 Google Drive ühendatud!"}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {isCal
+            ? "Selles profiilis on olemas varasemad sündmused. Kas soovid need kohe Google Calendarisse sünkroonida?"
+            : `Selles profiilis on ${count} dokumenti, mida pole veel Google Drive'i laetud. Kas soovid need kohe sünkroonida?`}
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={onDismiss}>Hiljem</Button>
+          <Button size="sm" onClick={onConfirm}>✅ Sünkrooni kohe</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DriveProfileBlock({ profile }: { profile: UserProfile }) {
+  const qc = useQueryClient();
+  const statusQ = useQuery({
+    queryKey: ["profile-drive-status", profile.id],
+    queryFn: () => getProfileDriveStatus({ data: { profileId: profile.id } }),
+  });
+  const [connecting, setConnecting] = useState(false);
+  const [prompt, setPrompt] = useState<{ open: boolean; count: number }>({ open: false, count: 0 });
+  const [progress, setProgress] = useState<{ open: boolean; total: number; done: number; uploaded: number; failed: number; skipped: number; finished: boolean; cancel: boolean }>({
+    open: false, total: 0, done: 0, uploaded: 0, failed: 0, skipped: 0, finished: false, cancel: false,
+  });
+
+  useEffect(() => {
+    async function onMessage(e: MessageEvent) {
+      const d = e.data as { type?: string; ok?: boolean; error?: string } | undefined;
+      if (!d || d.type !== "mydroppocket:google-drive:oauth") return;
+      setConnecting(false);
+      if (!d.ok) { toast.error(d.error ?? "Ühendus ebaõnnestus"); return; }
+      toast.success("Google Drive ühendatud");
+      await qc.invalidateQueries({ queryKey: ["profile-drive-status", profile.id] });
+      // Küsi kohe: kas sünkroonida varem lisatud dokumendid?
+      try {
+        const counts = await getProfilePendingCloudCounts({ data: { profileId: profile.id } });
+        if (counts.driveUnsynced > 0) setPrompt({ open: true, count: counts.driveUnsynced });
+      } catch { /* ignore */ }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [qc, profile.id]);
+
+  const modeMut = useMutation({
+    mutationFn: (mode: "shared" | "separate") => setProfileDriveMode({ data: { profileId: profile.id, mode } }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["profile-drive-status", profile.id] }); toast.success("Salvestatud"); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Salvestamine ebaõnnestus"),
+  });
+
+  const disconnectMut = useMutation({
+    mutationFn: () => disconnectGoogleDrive({ data: { profileId: profile.id } }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["profile-drive-status", profile.id] }); toast.success("Ühendus katkestatud"); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Katkestamine ebaõnnestus"),
+  });
+
+  async function handleConnect() {
+    const popup = window.open("", `mydroppocket-gdrive-${profile.id}`, "width=560,height=680");
+    if (!popup) { toast.error("Palun luba hüpikaknad"); return; }
+    setConnecting(true);
+    try {
+      const { authorizationUrl } = await startGoogleDriveConnect({
+        data: { origin: window.location.origin, profileId: profile.id },
+      });
+      popup.location.href = authorizationUrl;
+      const timer = setInterval(() => { if (popup.closed) { clearInterval(timer); setConnecting(false); } }, 500);
+    } catch (e) {
+      popup.close(); setConnecting(false);
+      toast.error(e instanceof Error ? e.message : "OAuth ebaõnnestus");
+    }
+  }
+
+  async function startBulkSync() {
+    // Loenda esmalt palju on üldse teha (progressiriba jaoks).
+    const counts = await getProfilePendingCloudCounts({ data: { profileId: profile.id } }).catch(() => ({ driveUnsynced: 0 }));
+    const total = counts.driveUnsynced;
+    if (total === 0) { toast.info("Sünkroonimist ootavaid dokumente ei ole"); return; }
+    setProgress({ open: true, total, done: 0, uploaded: 0, failed: 0, skipped: 0, finished: false, cancel: false });
+
+    let cursor: any = undefined;
+    let uploaded = 0, failed = 0, skipped = 0, done = 0;
+    // Snapshot for cancellation
+    let cancelled = false;
+    const cancelChecker = { get: () => cancelled };
+    setProgress((p) => ({ ...p, open: true }));
+    // Loop
+    while (true) {
+      if (cancelChecker.get()) break;
+      const res: any = await syncDriveExistingBatch({ data: { profileId: profile.id, cursor, batchSize: 5 } })
+        .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+      if (res?.error) { toast.error(res.error); break; }
+      uploaded += res.uploaded ?? 0;
+      failed += res.failed ?? 0;
+      skipped += res.skipped ?? 0;
+      done = uploaded + failed + skipped;
+      cursor = res.cursor;
+      setProgress({ open: true, total, done, uploaded, failed, skipped, finished: !!res.done, cancel: false });
+      if (res.done) break;
+    }
+    setProgress((p) => ({ ...p, finished: true }));
+  }
+
+  const s = statusQ.data;
+  const mode = s?.mode ?? "shared";
+  const isDefault = profile.is_default;
+
+  return (
+    <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+      <div className="flex items-center gap-2">
+        <HardDrive className="h-4 w-4 text-primary" />
+        <span className="text-sm font-semibold">Google Drive</span>
+      </div>
+
+      {!isDefault && (
+        <div className="mt-2 space-y-1.5">
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input type="radio" name={`drv-mode-${profile.id}`} checked={mode === "shared"} onChange={() => modeMut.mutate("shared")} />
+            <span>✅ Kasuta põhiprofiili Google Drive'i</span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input type="radio" name={`drv-mode-${profile.id}`} checked={mode === "separate"} onChange={() => modeMut.mutate("separate")} />
+            <span>⭕ Ühenda teine Google Drive</span>
+          </label>
+        </div>
+      )}
+
+      <div className="mt-2 text-xs text-muted-foreground">
+        {s?.connected ? (
+          <>🟢 Ühendatud{s.email ? ` – ${s.email}` : ""} · Salvestuskoht: {s.storagePath}</>
+        ) : mode === "separate" ? (
+          <>Ühendus puudub.</>
+        ) : (
+          <>Salvestuskoht: {s?.storagePath ?? `MyDropPocket / ${profile.name}`}</>
+        )}
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        {mode === "separate" && !s?.connected && (
+          <Button size="sm" onClick={handleConnect} disabled={connecting}>
+            {connecting ? "Ühendan…" : "Ühenda Google Drive"}
+          </Button>
+        )}
+        {mode === "separate" && s?.connected && (
+          <Button size="sm" variant="outline" onClick={() => disconnectMut.mutate()} disabled={disconnectMut.isPending}>
+            Katkesta ühendus
+          </Button>
+        )}
+        {s?.connected && (
+          <Button size="sm" variant="secondary" onClick={startBulkSync} disabled={progress.open && !progress.finished}>
+            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${progress.open && !progress.finished ? "animate-spin" : ""}`} />
+            Sünkrooni olemasolevad dokumendid
+          </Button>
+        )}
+      </div>
+
+      <PostConnectSyncPrompt
+        open={prompt.open}
+        count={prompt.count}
+        service="drive"
+        onDismiss={() => setPrompt({ open: false, count: 0 })}
+        onConfirm={() => { setPrompt({ open: false, count: 0 }); void startBulkSync(); }}
+      />
+
+      <Dialog open={progress.open} onOpenChange={(o) => { if (!o && progress.finished) setProgress((p) => ({ ...p, open: false })); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Sünkroonin Google Drive'iga</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Progress value={progress.total > 0 ? (progress.done / progress.total) * 100 : 0} />
+            <div className="text-sm text-muted-foreground">
+              {progress.done} / {progress.total} · Laetud: {progress.uploaded} · Vahele jäetud: {progress.skipped} · Vigu: {progress.failed}
+            </div>
+            {progress.finished ? (
+              <div className="flex justify-end">
+                <Button size="sm" onClick={() => setProgress((p) => ({ ...p, open: false }))}>Sulge</Button>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">Palun ära sulge akent…</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -764,3 +764,155 @@ export const deleteAgreementDriveFolder = createServerFn({ method: "POST" })
     await deleteDriveFile({ accessToken: conn.accessToken, fileId: data.folderId });
     return { ok: true as const };
   });
+
+// ---------------------------------------------------------------------------
+// Bulk-sünkroonimine: leiab profiilis kõik varem lisatud dokumendid, millel
+// pole veel Drive'i faili viidet, ja laeb need üles paketikaupa. Kasutaja
+// näeb reaalajas edenemisriba (klient kutsub batch-i tsüklis, kuni done=true).
+// ---------------------------------------------------------------------------
+
+type BulkSyncCursor = {
+  stage: "warranties" | "expenses" | "agreements" | "recurring_instances_receipt" | "recurring_instances_invoice" | "done";
+  offset: number;
+};
+
+const INITIAL_CURSOR: BulkSyncCursor = { stage: "warranties", offset: 0 };
+
+/** Loenda profiili sünkroonimata failid + kas kalendri jaoks üldse on kirjeid. */
+export const getProfilePendingCloudCounts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = supabaseAdmin as unknown as { from: (t: string) => any };
+    const uid = context.userId;
+    const pid = data.profileId;
+
+    async function countUnsynced(table: string, pathCol: string, idCol: string): Promise<number> {
+      const { count } = await admin
+        .from(table)
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", uid)
+        .eq("profile_id", pid)
+        .not(pathCol, "is", null)
+        .is(idCol, null);
+      return (count as number) ?? 0;
+    }
+    async function countRows(table: string): Promise<number> {
+      const { count } = await admin
+        .from(table)
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", uid)
+        .eq("profile_id", pid);
+      return (count as number) ?? 0;
+    }
+
+    const [w, e, a, ri, ri2] = await Promise.all([
+      countUnsynced("warranties", "file_path", "gdrive_file_id"),
+      countUnsynced("expenses", "file_path", "gdrive_file_id"),
+      countUnsynced("agreements", "file_path", "gdrive_file_id"),
+      countUnsynced("recurring_payment_instances", "receipt_file_path", "receipt_gdrive_file_id"),
+      countUnsynced("recurring_payment_instances", "invoice_file_path", "invoice_gdrive_file_id"),
+    ]);
+    const driveUnsynced = w + e + a + ri + ri2;
+
+    const [wc, ac, rc] = await Promise.all([
+      countRows("warranties"),
+      countRows("agreements"),
+      countRows("recurring_payments"),
+    ]);
+    const calendarItems = wc + ac + rc;
+
+    return { driveUnsynced, calendarItems };
+  });
+
+/**
+ * Sünkrooni üks pakett (kuni ~5 faili) profiili sünkroonimata failidest.
+ * Klient kutsub selle korduvalt cursor-iga, kuni tagastatakse done=true.
+ */
+export const syncDriveExistingBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string; cursor?: BulkSyncCursor; batchSize?: number }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { resolveProfileDriveTarget, uploadBytesToDriveFolder, FOLDER_KEY_TO_NAME } =
+      await import("./google-drive.server");
+    const admin = supabaseAdmin as unknown as { from: (t: string) => any };
+    const uid = context.userId;
+    const pid = data.profileId;
+    const batchSize = Math.max(1, Math.min(10, data.batchSize ?? 5));
+    let cursor: BulkSyncCursor = data.cursor ?? INITIAL_CURSOR;
+
+    if (cursor.stage === "done") return { done: true as const, cursor, uploaded: 0, failed: 0, skipped: 0 };
+
+    const conn = await resolveProfileDriveTarget(uid, pid);
+    if (!conn) return { done: true as const, cursor: { stage: "done", offset: 0 } as BulkSyncCursor, uploaded: 0, failed: 0, skipped: 0, reason: "not_connected" as const };
+
+    let uploaded = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    // Helper to process one table stage with (table, pathCol, idCol, folderKey).
+    async function runTable(table: string, pathCol: string, idCol: string, folderKey: string, nameCol = "file_name", mimeCol = "file_mime"): Promise<boolean> {
+      const { data: rows } = await admin
+        .from(table)
+        .select(`id, ${pathCol}, ${nameCol}, ${mimeCol}`)
+        .eq("user_id", uid)
+        .eq("profile_id", pid)
+        .not(pathCol, "is", null)
+        .is(idCol, null)
+        .order("created_at", { ascending: true })
+        .limit(batchSize);
+      const list = (rows as any[]) ?? [];
+      if (list.length === 0) return true; // stage done
+      for (const r of list) {
+        const parentId = conn!.subfolders[FOLDER_KEY_TO_NAME[folderKey as keyof typeof FOLDER_KEY_TO_NAME]];
+        if (!parentId) { failed++; continue; }
+        const filePath = r[pathCol] as string;
+        if (!filePath?.startsWith(`${uid}/`)) { skipped++; continue; }
+        try {
+          const dl = await supabaseAdmin.storage.from("documents").download(filePath);
+          if (dl.error || !dl.data) { failed++; continue; }
+          const bytes = new Uint8Array(await dl.data.arrayBuffer());
+          const up = await uploadBytesToDriveFolder({
+            accessToken: conn!.accessToken,
+            parentId,
+            name: (r[nameCol] as string) || filePath.split("/").pop() || "fail",
+            mime: (r[mimeCol] as string) || "application/octet-stream",
+            bytes,
+          });
+          await admin.from(table).update({ [idCol]: up.id }).eq("id", r.id);
+          uploaded++;
+        } catch {
+          failed++;
+        }
+      }
+      return list.length < batchSize; // when fewer than batchSize returned, stage is done
+    }
+
+    let stageDone = false;
+    switch (cursor.stage) {
+      case "warranties":
+        stageDone = await runTable("warranties", "file_path", "gdrive_file_id", "warranty");
+        if (stageDone) cursor = { stage: "expenses", offset: 0 };
+        break;
+      case "expenses":
+        stageDone = await runTable("expenses", "file_path", "gdrive_file_id", "expense");
+        if (stageDone) cursor = { stage: "agreements", offset: 0 };
+        break;
+      case "agreements":
+        stageDone = await runTable("agreements", "file_path", "gdrive_file_id", "agreement");
+        if (stageDone) cursor = { stage: "recurring_instances_receipt", offset: 0 };
+        break;
+      case "recurring_instances_receipt":
+        stageDone = await runTable("recurring_payment_instances", "receipt_file_path", "receipt_gdrive_file_id", "receipt", "receipt_file_name", "receipt_file_mime");
+        if (stageDone) cursor = { stage: "recurring_instances_invoice", offset: 0 };
+        break;
+      case "recurring_instances_invoice":
+        stageDone = await runTable("recurring_payment_instances", "invoice_file_path", "invoice_gdrive_file_id", "invoice", "invoice_file_name", "invoice_file_mime");
+        if (stageDone) cursor = { stage: "done", offset: 0 };
+        break;
+    }
+
+    return { done: cursor.stage === "done", cursor, uploaded, failed, skipped };
+  });
