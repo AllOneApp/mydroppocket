@@ -166,7 +166,10 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
       })
       .filter((r) => {
         if (!f.activeOnly) return true;
-        return r.warranty_expiry ? r.warranty_expiry >= today : false;
+        // Treat unknown expiry as "possibly active" — don't hide the row just
+        // because the field wasn't captured from OCR. Only exclude items that
+        // are definitely expired.
+        return r.warranty_expiry ? r.warranty_expiry >= today : true;
       })
       .slice(0, HAY_LIMIT)
       .map((r) => ({
@@ -242,7 +245,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["company", "payee_name"], f.store))
       .filter((r) => inRange(r.start_date, f.dateFrom, f.dateTo))
       .filter((r) => amountInRange(r.total_amount ?? r.monthly_payment, f.minAmount, f.maxAmount))
-      .filter((r) => (f.activeOnly ? !r.end_date || r.end_date >= today : true))
+      .filter((r) => (f.activeOnly ? (!r.end_date || r.end_date >= today) : true))
       .filter((r) => {
         if (f.expiringInDays == null) return true;
         if (!r.end_date) return false;
