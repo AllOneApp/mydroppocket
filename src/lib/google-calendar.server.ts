@@ -512,10 +512,6 @@ export async function syncInstallmentForUser(opts: {
   updated?: number;
   removed?: number;
 }> {
-  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
-  if (!conn) return { status: "not-connected" };
-  if (!conn.syncInstallments) return { status: "skipped" };
-
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
 
@@ -531,8 +527,9 @@ export async function syncInstallmentForUser(opts: {
     return { status: "skipped" };
   }
   const rowProfileId = ((agRow as unknown as { profile_id?: string | null }).profile_id) ?? null;
-  const conn2 = await getValidCalendarAccessTokenForUser(opts.userId, rowProfileId);
-  const effectiveConn = conn2 ?? conn;
+  const conn = await getValidCalendarAccessTokenForUser(opts.userId, rowProfileId);
+  if (!conn) return { status: "not-connected" };
+  if (!conn.syncInstallments) return { status: "skipped" };
   const row = agRow as unknown as AgreementRow;
   const plan = planInstallment(row);
 
