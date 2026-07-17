@@ -61,7 +61,7 @@ function b64urlDecode(str: string): Buffer {
   return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/") + pad, "base64");
 }
 
-export function signState(payload: { userId: string; origin: string }): string {
+export function signState(payload: { userId: string; origin: string; profileId?: string | null }): string {
   const body = {
     ...payload,
     n: randomBytes(8).toString("hex"),
