@@ -1,40 +1,99 @@
-# MyDropPocket AI häälassistendi plaan
 
-Suur ettepanek — jagan etappideks. Palun kinnita, milliseid etappe kohe teha (soovitan kõiki järjekorras 1→5).
+## Eesmärk
+Iga profiil saab kasutada kas põhikonto Google Drive'i (üks Drive, alamkaustad profiilide järgi) või ühendada oma eraldi Google konto. Olemasolevad kasutajad ei märka muudatust.
 
-## 1. Ühtne AI mikrofoni komponent (alus kõigele)
-- Uus `src/components/VoiceInput.tsx` — kasutab brauseri `MediaRecorder` + Lovable AI STT (`openai/gpt-4o-mini-transcribe`) → tagastab teksti.
-- Uus server function `src/lib/voice.functions.ts`:
-  - `transcribeAudio` — võtab base64 audio, tagastab teksti.
-  - `parseVoiceCommand` — võtab teksti + konteksti ("expense" | "income" | "search" | "document" | "warranty" | "agreement") ja tagastab AI-ga (`google/gemini-3-flash-preview`, structured output) parsitud struktuuri.
-- Nupp modulaarne: `<VoiceInput context="expense" onResult={(data) => setForm(data)} />`.
-- Lisan ta: Expenses, Warranties, Agreements, Search, FileDrop dialoogidesse.
+## 1. Andmemudel
 
-## 2. Kulud → "Tulud ja kulud"
-- Migratsioon: lisan `expenses` tabelisse veeru `type text not null default 'expense'` (`'expense' | 'income'`).
-- Lisan kategooriad: Palk, Müük, Muu tulu, Kingitus, Investeering.
-- Vormis lisan Tüüp vahetaja (Kulu/Tulu). Nimetan mooduli i18n-is ümber "Tulud ja kulud".
-- Sidebar/nav: "Kulud" → "Tulud ja kulud", route jääb `/expenses` (URL katkestuste vältimiseks).
+**Migratsioon:**
+- `user_profiles` → uus veerg `drive_mode text not null default 'shared'` (`'shared' | 'separate'`).
+- `google_drive_connections` → uus veerg `profile_id uuid null references user_profiles(id) on delete cascade`.
+  - Uus unikaalne indeks `(user_id) where profile_id is null` (üks põhikonto).
+  - Uus unikaalne indeks `(user_id, profile_id) where profile_id is not null` (üks eraldi ühendus profiili kohta).
+  - Vana `user_id_key` unique piirang eemaldatakse.
+- Uus tabel `google_drive_folders`:
+  - `connection_id uuid` (FK), `profile_id uuid null` (FK), `category text`, `folder_id text`, `folder_name text`.
+  - Unique `(connection_id, coalesce(profile_id, '00000000-…'), category)`.
+  - Ehk konkreetne kaust ühe ühenduse + profiili konteksti + kategooria kohta.
 
-## 3. Kuupäevafiltrid + saldo
-- Uus komponent `DateRangeFilter.tsx`: presetid (Täna, Eile, See/eelmine nädal/kuu/aasta) + Kohandatud (2 kuupäeva).
-- Expenses lehel: filtrite riba + kokkuvõtte kaardid: Tulud / Kulud / Saldo valitud perioodil.
-- Dashboardil: kaardid Täna/Nädal/Kuu/Aasta — igas tulud, kulud, saldo.
+**Migreeritakse taustal olemasolevad `subfolders_json` väärtused** uude tabelisse `profile_id = null` all (need on täna kõik "MyDropPocket/{kategooria}" all põhikontos).
 
-## 4. AI otsing
-- Search lehele mikrofon + AI parser tagastab `{ module, filters: { store?, category?, dateRange?, type? } }` → päring kõigi tabelite peale.
+## 2. Kaustaresolver (üks funktsioon kõigile moodulitele)
 
-## 5. Dokumendi AI linkimine + harjumuste õpe
-- Dokumendi lisamisel: kui kasutaja räägib, AI otsib olemasolevatest kirjetest (warranty/expense/agreement) sobivaimad ja pakub linkimist (uus tabel `document_links` või lisan `related_id` olemasolevatesse).
-- Harjumused: pärast salvestamist kirjutan `store→category` seosed `profiles.preferences` jsonb-veergu; järgmisel korral eeltäidetakse.
+Uus `resolveProfileDriveTarget(userId, profileId, category)` (`google-drive.server.ts`):
+1. Loeb profiili + selle `drive_mode`.
+2. Kui `separate` → laeb selle profiili `google_drive_connections` rea; kui puudub, tagastab „not connected" (üleslaadimine läheb vahele nagu praegu, kui Drive ühendumata).
+3. Kui `shared` → laeb kasutaja põhikonto rea (`profile_id is null`).
+4. Loob/leiab kausta hierarhia vastavalt režiimile:
+   - `shared`: `MyDropPocket / {profiili nimi} / {kategooria}`
+   - `separate`: `MyDropPocket / {kategooria}`
+5. Kirjutab folder id-d `google_drive_folders` tabelisse cache'iks. Uute kategooriate lisamine tulevikus = ainult üks uus rida, koodimuudatust ei vaja.
 
-## Tehnilised detailid
-- STT: `openai/gpt-4o-mini-transcribe` (Lovable AI Gateway).
-- Parser: `google/gemini-3-flash-preview` structured output-iga, keel = kasutaja i18n keel (et/en).
-- AI ei salvesta automaatselt — täidab vaid vormi, kasutaja kinnitab.
-- Kõik server functions `requireSupabaseAuth` all.
+Kõik olemasolevad üleslaadimispunktid (`agreements.tsx`, `warranties.tsx`, `expenses.tsx`, `recurring.tsx` serveri poolel + `google-drive.functions.ts`) kasutavad seda uut resolverit `(getValidAccessTokenForUser + ensureSubfolderId)` asemel. Praegune `FOLDER_KEY_TO_NAME` mapping säilib kategooria nimede allikana.
 
-## Küsimused enne kodeerimist
-1. Kas alustan **kõigist 5 etapist järjest** ühe suure PR-ina, või teeme etapp-haaval (soovitan **etapp 1+2+3 kohe**, siis 4, siis 5)?
-2. Uute tuluokategooriate loetelu OK (Palk, Müük, Muu tulu, Kingitus, Investeering)?
-3. Kas mikrofoni nupp peaks olema **eraldi nupp vormis** või **hõljuv nupp (FAB) igal moodulilehel**, mis avab dialoogi?
+## 3. OAuth voog profiili jaoks
+
+- `signState` payload'ile lisatakse `profileId?: string` ja `mode: 'primary' | 'separate'`.
+- `startDriveConnect` serveri fn saab uue parameetri `profileId?: string`. Kui antud + režiim `separate`, alustatakse OAuth voogu selle profiili jaoks. Muidu tavaline põhikonto ühendus.
+- Callback (`/api/public/google-drive/callback`) loeb state'ist `profileId` ja salvestab tokenid `google_drive_connections` reale, kus `profile_id = <uuid>` (või `null` põhikonto puhul).
+- Peale eraldi ühenduse loomist: automaatselt luuakse `MyDropPocket / {kategooriad}` sellesse Drive'i (ilma profiili alamkaustata).
+
+## 4. Profiili ümbernimetamine (kaust automaatselt kaasa)
+
+Kui kasutaja nimetab profiili ümber (`user_profiles.name` muutub) JA profiili `drive_mode = 'shared'`:
+- Rakendus üritab põhikonto Drive'is kaust ümber nimetada uue nimega.
+- Enne ümbernimetamist Drive'is otsitakse, kas uue nimega kaust juba eksisteerib põhikausta `MyDropPocket` all:
+  - Kui **jah** → ei tehta midagi automaatselt; kasutajale kuvatakse hoiatus („Kaustanimega X on Drive'is juba olemas — palun vali teine nimi või lahenda käsitsi"). Profiili nimi jääb muutmata (tehingutehe SQL-tasemel tagasi ei võeta, aga eelvalideerime kliendi poolel enne salvestamist).
+  - Kui **ei** → Drive API `files.update` (name), + uuendame `google_drive_folders.folder_name` ridu selle profiili all.
+
+Eraldi Drive'i režiimis pole profiili alamkausta, seega ümbernimetamisel Drive'is midagi ei muudata.
+
+## 5. Ühekordne migreerimine olemasolevatele kasutajatele
+
+Uus staatuse päring `checkLegacyDriveLayout()`:
+- Kui kasutajal on `google_drive_connections` (põhikonto) ja Drive juurkaustas „MyDropPocket" on kaustad „Garantiid" / „Lepingud" / „Tulud ja kulud" otse (ilma profiili alamkaustata) JA kasutajal on ainult vaikeprofiil („Isiklik") ilma andmeid teistes profiilides → näita bänner/dialoog:
+  - „MyDropPocketi kaustastruktuur on uuendatud… Tõsta olemasolevad dokumendid automaatselt MyDropPocket/Isiklik alla?" Nupud: „Jah, tõsta automaatselt" / „Hiljem".
+- „Jah" → serveri fn `migrateLegacyDriveToProfile` liigutab kolm kausta uue „Isiklik" alamkausta alla (Drive'i `files.update` parents).
+- „Hiljem" → salvestatakse dismiss timestamp `profiles.legacy_drive_migration_dismissed_at` veergu; dialoog ilmub uuesti järgmisel sisselogimisel/seadete avamisel.
+- „Tehtud" → salvestatakse `legacy_drive_migration_done_at`; dialoog enam ei ilmu.
+
+Seni kuni migreerimist ei ole tehtud, salvestatakse uued failid juba KOHE uude „Isiklik / {kategooria}" struktuuri (vana struktuur ei sega — resolver töötab uue reegli järgi juhul, kui profiili alamkaust on olemas või puudub loob selle). See tähendab, et kasutaja saab „Hiljem" valida ilma andmete kadumiseta.
+
+## 6. Seadete UI
+
+Iga profiili kaardile lisandub `Profiilid` lehel sektsioon **Google Drive**:
+- Kaks raadionuppu:
+  - `✅ Kasuta põhiprofiili Google Drive'i` (vaikimisi)
+  - `⭕ Ühenda teine Google Drive` — vajutamisel avaneb OAuth vooluke selle profiili jaoks
+- Kui ühendatud (eraldi režiimis): kuva „🟢 Ühendatud – nimi@gmail.com", „Salvestuskoht: MyDropPocket", nupp „Katkesta ühendus".
+- Jagatud režiimis kuva „Salvestuskoht: MyDropPocket / {profiili nimi}" ja lühiselgitus.
+- Põhiprofiili kaardil (`is_default = true`) valikut ei kuvata — see on alati kasutaja põhi-Drive.
+
+## 7. Ei muudeta
+
+- AI OCR / automaattäitmine.
+- Dashboard, Ülevaate, järelmaksude arvutus.
+- Google Calendar integratsioon (järgmine etapp).
+- Failide üleslaadimise dialoogide UX (ainult tagataust vahetub).
+
+## Tehnilised muudetavad failid
+
+**Andmebaas:** 1 migratsioon (uued veerud + tabel + backfill `google_drive_folders`).
+
+**Server:**
+- `src/lib/google-drive.server.ts` – uus `resolveProfileDriveTarget`, `renameProfileFolder`, `detectLegacyLayout`, `migrateLegacyDriveToProfile`; state'i laiendus.
+- `src/lib/google-drive.functions.ts` – `startDriveConnect(profileId?)`, `disconnectDrive(profileId?)`, uus `getProfileDriveStatus`.
+- `src/routes/api/public/google-drive/callback.ts` – kirjuta rida õige `profile_id`-ga.
+- Iga mooduli salvestusloogika (`agreements.tsx`, `warranties.tsx`, `expenses.tsx`, `recurring.tsx`) – asendada olemasolev Drive-üleslaadimise helper üleskutsega, mis läbib profiili resolveri (mitte üks-ühele ümber kirjutades, ainult sisemine `ensureSubfolderId` osa).
+
+**Klient:**
+- `src/routes/_authenticated/profiles.tsx` – uus Google Drive sektsioon.
+- Uus `LegacyDriveMigrationDialog` komponent, mis kuvab AppShellis pärast sisselogimist ainult kui `checkLegacyDriveLayout` ütleb, et bänner on vajalik.
+- `i18n/locales/et.json` + `en.json` uued võtmed.
+
+## Testimisplaan
+
+1. Uus kasutaja loob profiili „Ema" → drive_mode = shared → lisab garantii → Drive: `MyDropPocket / Ema / Garantiid / <fail>`.
+2. Profiil „Ettevõte" → valib „Ühenda teine Google Drive" → OAuth teise kontoga → lisab kulukande → uue konto Drive: `MyDropPocket / Tulud ja kulud / <fail>`.
+3. Nimeta „Ema" → „Ema Mari" (shared) → Drive'is kaust nimetatakse ümber. Kui juba olemas → hoiatus kuvatakse, muudatust ei tehta.
+4. Olemasolev kasutaja (ainult „Isiklik" + faile põhikaustas): näeb üks kord bännerit; „Jah" → kolm kausta liiguvad `MyDropPocket / Isiklik /` alla. „Hiljem" → uued failid juba lähevad õigesse alamkausta, vanad jäävad.
+5. Aktiivse profiili vahetamine → järgmine üleslaadimine läheb 100% õigesse profiili kausta, ei kunagi valesse.

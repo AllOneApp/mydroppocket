@@ -150,12 +150,12 @@ function AgreementsPage() {
       try { await removeCalendarSource({ data: { sourceType: "agreement_end", sourceId: r.id } }); } catch (e) { console.warn("[gcal] agreement remove failed", e); }
       const gdriveFolderId = (r as unknown as { gdrive_folder_id?: string | null }).gdrive_folder_id;
       if (gdriveFolderId) {
-        try { await deleteAgreementDriveFolder({ data: { folderId: gdriveFolderId } }); } catch (e) { console.warn("[gdrive] folder delete failed", e); }
+        try { await deleteAgreementDriveFolder({ data: { folderId: gdriveFolderId, profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] folder delete failed", e); }
       } else {
         const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
-        if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
+        if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid, profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
       }
-      try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang(), profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["agreements"], refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
@@ -554,7 +554,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           const a = att as { file_path: string; gdrive_file_id: string | null };
           try { await deleteFile(a.file_path); } catch (err) { console.warn("[storage] delete failed", err); }
           if (a.gdrive_file_id) {
-            try { await deleteGoogleDriveFile({ data: { fileId: a.gdrive_file_id } }); } catch (err) { console.warn("[gdrive] delete failed", err); }
+            try { await deleteGoogleDriveFile({ data: { fileId: a.gdrive_file_id, profileId: activeProfileId } }); } catch (err) { console.warn("[gdrive] delete failed", err); }
           }
         }
         await supabase.from("agreement_attachments").delete().eq("id", attId);
@@ -563,7 +563,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       if (legacyRemoved && row?.file_path) {
         try { await deleteFile(row.file_path); } catch (err) { console.warn("[storage] delete legacy failed", err); }
         const gdid = (row as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
-        if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid } }); } catch (err) { console.warn("[gdrive] delete legacy failed", err); } }
+        if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid, profileId: activeProfileId } }); } catch (err) { console.warn("[gdrive] delete legacy failed", err); } }
       }
 
       // Upload each new pending file → insert attachment row.
@@ -598,12 +598,12 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         void Promise.allSettled([
           (async () => {
             try {
-              await syncAgreementAttachments({ data: { agreementId: savedRecordId } });
+              await syncAgreementAttachments({ data: { agreementId: savedRecordId, profileId: activeProfileId } });
             } catch (err) {
               console.warn("[gdrive] agreement attachments sync failed", err);
             }
             try {
-              await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang() } });
+              await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang(), profileId: activeProfileId } });
             } catch (err) {
               console.warn("[gdrive] backup sync failed", err);
             }

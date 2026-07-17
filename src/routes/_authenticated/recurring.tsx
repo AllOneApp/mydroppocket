@@ -157,8 +157,8 @@ function RecurringPage() {
       toast.success(t("recurring.paidMarked"));
       setPayAsk({ instance: { ...inst, status: "paid" }, recurring: rec });
       try {
-        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang() } });
-        await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } });
+        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
+        await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       try { await syncRecurringPayment({ data: { recurringId: rec.id } }); } catch (e) { console.warn("[gcal] recurring sync failed", e); }
     } catch (e) {
@@ -180,8 +180,8 @@ function RecurringPage() {
       }
       try { await removeCalendarSource({ data: { sourceType: "recurring", sourceId: r.id } }); } catch (e) { console.warn("[gcal] recurring remove failed", e); }
       try {
-        await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } });
-        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang() } });
+        await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId } });
+        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["recurring_payments"], refetchType: "active" }),
@@ -468,13 +468,14 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               filePath: fileInfo.path,
               fileName: fileInfo.name,
               mime: fileInfo.mime,
+              profileId: activeProfileId,
             },
           });
         } catch (err) {
           console.warn("[gdrive] recurring sync failed", err);
         }
       }
-      try { await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       if (recordId) {
         try { await syncRecurringPayment({ data: { recurringId: recordId } }); } catch (e) { console.warn("[gcal] recurring sync failed", e); }
       }
@@ -569,6 +570,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 function AttachReceiptDialog({ data, onClose }: { data: { instance: Instance; recurring: Recurring } | null; onClose: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const { activeProfileId } = useActiveProfile();
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -595,12 +597,13 @@ function AttachReceiptDialog({ data, onClose }: { data: { instance: Instance; re
             filePath: info.path,
             fileName: info.name,
             mime: info.mime,
+            profileId: activeProfileId,
           },
         });
       } catch (err) {
         console.warn("[gdrive] instance sync failed", err);
       }
-      try { await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang() } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
       toast.success(t("common.saved"));
       onClose();

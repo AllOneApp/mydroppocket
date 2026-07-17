@@ -61,7 +61,7 @@ function b64urlDecode(str: string): Buffer {
   return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/") + pad, "base64");
 }
 
-export function signState(payload: { userId: string; origin: string }): string {
+export function signState(payload: { userId: string; origin: string; profileId?: string | null }): string {
   const body = {
     ...payload,
     n: randomBytes(8).toString("hex"),
@@ -72,7 +72,7 @@ export function signState(payload: { userId: string; origin: string }): string {
   return `${bodyStr}.${sig}`;
 }
 
-export function verifyState(token: string): { userId: string; origin: string } {
+export function verifyState(token: string): { userId: string; origin: string; profileId?: string | null } {
   const [bodyStr, sig] = token.split(".");
   if (!bodyStr || !sig) throw new Error("Invalid state format");
   const expected = b64url(createHmac("sha256", stateSecret()).update(bodyStr).digest());
@@ -82,10 +82,11 @@ export function verifyState(token: string): { userId: string; origin: string } {
   const parsed = JSON.parse(b64urlDecode(bodyStr).toString("utf8")) as {
     userId: string;
     origin: string;
+    profileId?: string | null;
     exp: number;
   };
   if (Math.floor(Date.now() / 1000) > parsed.exp) throw new Error("State expired");
-  return { userId: parsed.userId, origin: parsed.origin };
+  return { userId: parsed.userId, origin: parsed.origin, profileId: parsed.profileId ?? null };
 }
 
 // ---------- OAuth URL builders + token exchange ----------
@@ -238,6 +239,516 @@ export const FOLDER_KEY_TO_NAME: Record<FolderKey, string> = {
   invoice: "Järelmaksulepingud",
 };
 
+// -----------------------------------------------------------------------------
+// PROFIILIPÕHINE DRIVE RESOLVER
+//
+// Iga profiil võib olla kas 'shared' (kasutab põhikonto Drive'i profiili alam-
+// kaustaga) või 'separate' (eraldi Google konto, ilma profiili alamkaustata).
+//
+// resolveProfileDriveTarget = üks tõesus kõigile moodulitele:
+// tagastab access-token'i + kausta ID-d juba ÕIGES kontekstis, nii et üleslaadija
+// ei pea profiilirežiimi kohta midagi teadma.
+// -----------------------------------------------------------------------------
+
+type DriveMode = "shared" | "separate";
+
+/** Lae profiili info (nimi + drive_mode + is_default). */
+async function loadProfileInfo(
+  profileId: string,
+): Promise<{ id: string; user_id: string; name: string; drive_mode: DriveMode; is_default: boolean } | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("user_profiles")
+    .select("id, user_id, name, drive_mode, is_default")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const d = data as { id: string; user_id: string; name: string; drive_mode: string; is_default: boolean };
+  return { ...d, drive_mode: (d.drive_mode === "separate" ? "separate" : "shared") as DriveMode };
+}
+
+/**
+ * Lae Drive'i ühenduse rida vastavalt profiili režiimile.
+ * - shared → kasutaja põhikonto ühendus (profile_id IS NULL)
+ * - separate → selle profiili enda ühendus (profile_id = <id>)
+ */
+async function loadConnectionRow(
+  userId: string,
+  profileConnectionId: string | null,
+): Promise<
+  | {
+      id: string;
+      access_token_ciphertext: string;
+      refresh_token_ciphertext: string;
+      access_token_expires_at: string;
+      root_folder_id: string | null;
+      root_folder_name: string;
+      google_email: string;
+      subfolders_json: Record<string, string> | null;
+    }
+  | null
+> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  let q = supabaseAdmin
+    .from("google_drive_connections")
+    .select(
+      "id, access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, root_folder_id, root_folder_name, google_email, subfolders_json",
+    )
+    .eq("user_id", userId);
+  if (profileConnectionId === null) q = q.is("profile_id", null);
+  else q = q.eq("profile_id", profileConnectionId);
+  const { data, error } = await q.maybeSingle();
+  if (error) throw error;
+  return (data as {
+    id: string;
+    access_token_ciphertext: string;
+    refresh_token_ciphertext: string;
+    access_token_expires_at: string;
+    root_folder_id: string | null;
+    root_folder_name: string;
+    google_email: string;
+    subfolders_json: Record<string, string> | null;
+  } | null) ?? null;
+}
+
+/** Refresh + persist access token if expiring within 60s. */
+async function ensureFreshAccessToken(row: {
+  id: string;
+  access_token_ciphertext: string;
+  refresh_token_ciphertext: string;
+  access_token_expires_at: string;
+}): Promise<string> {
+  let accessToken = decryptToken(row.access_token_ciphertext);
+  const expiresAt = new Date(row.access_token_expires_at).getTime();
+  const now = Date.now();
+  if (expiresAt - now < 60_000) {
+    const refreshToken = decryptToken(row.refresh_token_ciphertext);
+    const refreshed = await refreshAccessToken(refreshToken);
+    accessToken = refreshed.access_token;
+    const newExpiresAt = new Date(now + refreshed.expires_in * 1000).toISOString();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin
+      .from("google_drive_connections")
+      .update({
+        access_token_ciphertext: encryptToken(accessToken),
+        access_token_expires_at: newExpiresAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", row.id);
+  }
+  return accessToken;
+}
+
+/** Loe kausta ID vahemälust `google_drive_folders`. */
+async function readFolderCache(opts: {
+  connectionId: string;
+  profileId: string | null;
+  category: string;
+}): Promise<string | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  let q = supabaseAdmin
+    .from("google_drive_folders")
+    .select("folder_id")
+    .eq("connection_id", opts.connectionId)
+    .eq("category", opts.category);
+  if (opts.profileId === null) q = q.is("profile_id", null);
+  else q = q.eq("profile_id", opts.profileId);
+  const { data, error } = await q.maybeSingle();
+  if (error) throw error;
+  return (data as { folder_id: string } | null)?.folder_id ?? null;
+}
+
+/** Kirjuta kausta ID vahemällu. */
+async function writeFolderCache(opts: {
+  connectionId: string;
+  profileId: string | null;
+  category: string;
+  folderId: string;
+  folderName: string;
+  parentFolderId: string | null;
+}) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  // Emulate upsert; unique indexes are partial (NULL vs NOT NULL) so onConflict target isn't stable.
+  const existing = await readFolderCache(opts);
+  if (existing) {
+    let q = supabaseAdmin
+      .from("google_drive_folders")
+      .update({
+        folder_id: opts.folderId,
+        folder_name: opts.folderName,
+        parent_folder_id: opts.parentFolderId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("connection_id", opts.connectionId)
+      .eq("category", opts.category);
+    if (opts.profileId === null) q = q.is("profile_id", null);
+    else q = q.eq("profile_id", opts.profileId);
+    await q;
+    return;
+  }
+  await supabaseAdmin.from("google_drive_folders").insert({
+    connection_id: opts.connectionId,
+    profile_id: opts.profileId,
+    category: opts.category,
+    folder_id: opts.folderId,
+    folder_name: opts.folderName,
+    parent_folder_id: opts.parentFolderId,
+  });
+}
+
+const STANDARD_CATEGORIES = [
+  "Garantiid",
+  "Tšekid",
+  "Lepingud",
+  "Järelmaksulepingud",
+  "Püsimaksed",
+  "Tulud ja kulud",
+  "Pildid",
+  "PDF failid",
+];
+
+/**
+ * Peafunktsioon — kõik moodulid kasutavad seda.
+ *
+ * Käivitab õige Drive'i ühenduse (jagatud vs eraldi) + tagastab tuntud
+ * kategooriate juba resolveeritud kausta ID-d, mis on selles kontekstis
+ * KOHE üleslaadimiseks kasutatavad.
+ *
+ * Reeglid:
+ * - shared režiim: MyDropPocket / {profiili nimi} / {kategooria}
+ * - separate režiim: MyDropPocket / {kategooria}
+ * - profileId === null: legacy käitumine (MyDropPocket / {kategooria} otse põhikontos)
+ */
+export async function resolveProfileDriveTarget(
+  userId: string,
+  profileId: string | null,
+): Promise<
+  | {
+      accessToken: string;
+      rootId: string;
+      /** kategooria nimi → kausta id, juba õige parent'i all */
+      subfolders: Record<string, string>;
+      connectionId: string;
+      profileId: string | null;
+      mode: DriveMode | "legacy";
+      profileFolderId: string | null;
+      googleEmail: string;
+    }
+  | null
+> {
+  // 1. Otsusta, milline ühendus + režiim.
+  let mode: DriveMode | "legacy" = "legacy";
+  let profileInfo: Awaited<ReturnType<typeof loadProfileInfo>> = null;
+  let connProfileId: string | null = null;
+
+  if (profileId) {
+    profileInfo = await loadProfileInfo(profileId);
+    if (profileInfo) {
+      mode = profileInfo.drive_mode;
+      if (mode === "separate") connProfileId = profileId;
+    }
+  }
+
+  const row = await loadConnectionRow(userId, connProfileId);
+  if (!row) return null; // Not connected in this context.
+
+  const accessToken = await ensureFreshAccessToken(row);
+
+  // 2. Veendu, et root ("MyDropPocket") kaust on olemas.
+  let rootId = row.root_folder_id;
+  if (!rootId) {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const root = await findOrCreateFolder({ accessToken, name: "MyDropPocket" });
+    rootId = root.id;
+    await supabaseAdmin
+      .from("google_drive_connections")
+      .update({ root_folder_id: rootId, updated_at: new Date().toISOString() })
+      .eq("id", row.id);
+  }
+
+  // 3. shared → veendu, et profiili alamkaust on olemas.
+  let profileFolderId: string | null = null;
+  if (mode === "shared" && profileInfo) {
+    const cached = await readFolderCache({
+      connectionId: row.id,
+      profileId,
+      category: "__profile_root__",
+    });
+    if (cached) profileFolderId = cached;
+    else {
+      const f = await findOrCreateFolder({
+        accessToken,
+        name: profileInfo.name,
+        parentId: rootId,
+      });
+      profileFolderId = f.id;
+      await writeFolderCache({
+        connectionId: row.id,
+        profileId,
+        category: "__profile_root__",
+        folderId: profileFolderId,
+        folderName: profileInfo.name,
+        parentFolderId: rootId,
+      });
+    }
+  }
+
+  const targetParent = profileFolderId ?? rootId;
+  const cacheProfileId = mode === "shared" ? profileId : null;
+
+  // 4. Ehita subfolders map — cache'ist esimesena, siis loo puuduvad.
+  const subfolders: Record<string, string> = {};
+  for (const category of STANDARD_CATEGORIES) {
+    let folderId = await readFolderCache({
+      connectionId: row.id,
+      profileId: cacheProfileId,
+      category,
+    });
+    if (!folderId) {
+      // For legacy mode we may already have the folder id in subfolders_json.
+      if (mode === "legacy" && row.subfolders_json && row.subfolders_json[category]) {
+        folderId = row.subfolders_json[category];
+        await writeFolderCache({
+          connectionId: row.id,
+          profileId: null,
+          category,
+          folderId,
+          folderName: category,
+          parentFolderId: rootId,
+        });
+      } else {
+        const f = await findOrCreateFolder({ accessToken, name: category, parentId: targetParent });
+        folderId = f.id;
+        await writeFolderCache({
+          connectionId: row.id,
+          profileId: cacheProfileId,
+          category,
+          folderId,
+          folderName: category,
+          parentFolderId: targetParent,
+        });
+      }
+    }
+    subfolders[category] = folderId;
+  }
+
+  return {
+    accessToken,
+    rootId,
+    subfolders,
+    connectionId: row.id,
+    profileId: cacheProfileId,
+    mode,
+    profileFolderId,
+    googleEmail: row.google_email,
+  };
+}
+
+/**
+ * Nimeta jagatud režiimis profiili alamkaust Drive'is ümber. Kui uue nimega
+ * kaust juba eksisteerib MyDropPocketi all, tagastab `{ ok: false, reason: 'conflict' }`
+ * ja midagi ei muudeta.
+ */
+export async function renameProfileFolderInDrive(opts: {
+  userId: string;
+  profileId: string;
+  newName: string;
+}): Promise<{ ok: true; folderId: string } | { ok: false; reason: "not_connected" | "conflict" | "separate_mode" }> {
+  const info = await loadProfileInfo(opts.profileId);
+  if (!info) return { ok: false, reason: "not_connected" };
+  if (info.drive_mode !== "shared") return { ok: false, reason: "separate_mode" };
+  const row = await loadConnectionRow(opts.userId, null);
+  if (!row) return { ok: false, reason: "not_connected" };
+  const accessToken = await ensureFreshAccessToken(row);
+  const rootId = row.root_folder_id;
+  if (!rootId) return { ok: false, reason: "not_connected" };
+
+  // Konflikt: kas MyDropPocketi all on juba selle nimega kaust?
+  const conflictQ = `mimeType='application/vnd.google-apps.folder' and name='${opts.newName.replace(/'/g, "\\'")}' and '${rootId}' in parents and trashed=false`;
+  const conflictRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(conflictQ)}&fields=files(id)&spaces=drive`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  const conflictJson = await conflictRes.json();
+
+  // Loe praegune profiili kaust cache'ist
+  const currentFolderId = await readFolderCache({
+    connectionId: row.id,
+    profileId: opts.profileId,
+    category: "__profile_root__",
+  });
+
+  const conflicts = (conflictJson.files ?? []) as { id: string }[];
+  const otherConflict = conflicts.find((f) => f.id !== currentFolderId);
+  if (otherConflict) return { ok: false, reason: "conflict" };
+
+  if (!currentFolderId) {
+    // Pole veel loodud — loo lihtsalt uue nimega.
+    const f = await findOrCreateFolder({ accessToken, name: opts.newName, parentId: rootId });
+    await writeFolderCache({
+      connectionId: row.id,
+      profileId: opts.profileId,
+      category: "__profile_root__",
+      folderId: f.id,
+      folderName: opts.newName,
+      parentFolderId: rootId,
+    });
+    return { ok: true, folderId: f.id };
+  }
+
+  // Nimeta ümber Drive'is.
+  const renameRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${currentFolderId}?fields=id,name`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: opts.newName }),
+    },
+  );
+  const renameText = await renameRes.text();
+  if (!renameRes.ok) throw new Error(`Drive rename failed (${renameRes.status}): ${renameText}`);
+
+  // Uuenda cache.
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  await supabaseAdmin
+    .from("google_drive_folders")
+    .update({ folder_name: opts.newName, updated_at: new Date().toISOString() })
+    .eq("connection_id", row.id)
+    .eq("profile_id", opts.profileId)
+    .eq("category", "__profile_root__");
+
+  return { ok: true, folderId: currentFolderId };
+}
+
+/**
+ * Kontrolli, kas kasutajal on „legacy" struktuur (failid otse MyDropPocket/{kategooria} all)
+ * ja teisi profiile ei ole. Kui on, näidatakse UI-s ühekordne migreerimisdialoog.
+ */
+export async function detectLegacyDriveLayout(userId: string): Promise<{
+  eligible: boolean;
+  reason?: string;
+}> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  // Profiil peab olema ainult üks (vaikeprofiil).
+  const { data: profiles, error: pErr } = await supabaseAdmin
+    .from("user_profiles")
+    .select("id, name, is_default, legacy_drive_migration_dismissed_at, legacy_drive_migration_done_at")
+    .eq("user_id", userId);
+  if (pErr) throw pErr;
+  const rows = (profiles ?? []) as Array<{
+    id: string;
+    name: string;
+    is_default: boolean;
+    legacy_drive_migration_dismissed_at: string | null;
+    legacy_drive_migration_done_at: string | null;
+  }>;
+  if (rows.length === 0) return { eligible: false, reason: "no_profiles" };
+  const defaultProfile = rows.find((r) => r.is_default);
+  if (!defaultProfile) return { eligible: false, reason: "no_default" };
+  if (defaultProfile.legacy_drive_migration_done_at) return { eligible: false, reason: "already_done" };
+  if (defaultProfile.legacy_drive_migration_dismissed_at) {
+    // Näita uuesti kui hilinemise ajast on möödas 1 päev.
+    const dismissedAt = new Date(defaultProfile.legacy_drive_migration_dismissed_at).getTime();
+    if (Date.now() - dismissedAt < 24 * 60 * 60 * 1000) return { eligible: false, reason: "recently_dismissed" };
+  }
+
+  // Peab olema põhikonto Drive ühendus.
+  const row = await loadConnectionRow(userId, null);
+  if (!row) return { eligible: false, reason: "no_drive" };
+  if (!row.root_folder_id) return { eligible: false, reason: "no_root" };
+
+  // Drive'is peab olema vähemalt üks kategooria otse root'i all.
+  const accessToken = await ensureFreshAccessToken(row);
+  const q = `'${row.root_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&spaces=drive`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  const json = await res.json();
+  const names = new Set(((json.files ?? []) as { name: string }[]).map((f) => f.name));
+  const legacyPresent = STANDARD_CATEGORIES.some((c) => names.has(c));
+  // Profiili alamkaust juba olemas → mitte legacy.
+  if (names.has(defaultProfile.name)) return { eligible: false, reason: "already_migrated" };
+  if (!legacyPresent) return { eligible: false, reason: "no_legacy_folders" };
+  return { eligible: true };
+}
+
+/**
+ * Liiguta legacy struktuur (MyDropPocket/{kategooria}/*) uude MyDropPocket/{profiili nimi}/
+ * alla, muutes iga kategooria kausta parent'iks profiili kausta.
+ */
+export async function migrateLegacyDriveToProfile(userId: string): Promise<{ moved: number }> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: profile } = await supabaseAdmin
+    .from("user_profiles")
+    .select("id, name")
+    .eq("user_id", userId)
+    .eq("is_default", true)
+    .maybeSingle();
+  if (!profile) throw new Error("Vaikeprofiili ei leitud");
+  const row = await loadConnectionRow(userId, null);
+  if (!row || !row.root_folder_id) throw new Error("Drive ei ole ühendatud");
+  const accessToken = await ensureFreshAccessToken(row);
+
+  // Loo/leia profiili kaust.
+  const profileFolder = await findOrCreateFolder({
+    accessToken,
+    name: (profile as { name: string }).name,
+    parentId: row.root_folder_id,
+  });
+  await writeFolderCache({
+    connectionId: row.id,
+    profileId: (profile as { id: string }).id,
+    category: "__profile_root__",
+    folderId: profileFolder.id,
+    folderName: (profile as { name: string }).name,
+    parentFolderId: row.root_folder_id,
+  });
+
+  // Leia legacy kaustad root'i all ja liiguta.
+  const q = `'${row.root_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,parents)&spaces=drive`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  const json = await res.json();
+  const folders = ((json.files ?? []) as { id: string; name: string; parents?: string[] }[]).filter((f) =>
+    STANDARD_CATEGORIES.includes(f.name),
+  );
+
+  let moved = 0;
+  for (const f of folders) {
+    // Move: PATCH with addParents & removeParents.
+    const parents = f.parents ?? [row.root_folder_id];
+    const removeParents = parents.join(",");
+    const patchRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${f.id}?addParents=${profileFolder.id}&removeParents=${removeParents}&fields=id,parents`,
+      { method: "PATCH", headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!patchRes.ok) continue;
+    // Migreeri ka folder cache: kirjuta üle profileId'ga.
+    await writeFolderCache({
+      connectionId: row.id,
+      profileId: (profile as { id: string }).id,
+      category: f.name,
+      folderId: f.id,
+      folderName: f.name,
+      parentFolderId: profileFolder.id,
+    });
+    moved++;
+  }
+
+  // Märgi kasutajal migreerimine tehtuks.
+  await supabaseAdmin
+    .from("user_profiles")
+    .update({ legacy_drive_migration_done_at: new Date().toISOString() })
+    .eq("id", (profile as { id: string }).id);
+
+  return { moved };
+}
+
 /**
  * Get a valid access token for a user, refreshing (and persisting) it if the
  * stored one is expired or about to expire. Also returns the cached subfolder
@@ -248,50 +759,11 @@ export async function getValidAccessTokenForUser(userId: string): Promise<{
   rootId: string;
   subfolders: Record<string, string>;
 } | null> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin
-    .from("google_drive_connections")
-    .select("access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, root_folder_id, subfolders_json")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-
-  let accessToken = decryptToken(data.access_token_ciphertext);
-  const expiresAt = new Date(data.access_token_expires_at).getTime();
-  const now = Date.now();
-  if (expiresAt - now < 60_000) {
-    const refreshToken = decryptToken(data.refresh_token_ciphertext);
-    const refreshed = await refreshAccessToken(refreshToken);
-    accessToken = refreshed.access_token;
-    const newExpiresAt = new Date(now + refreshed.expires_in * 1000).toISOString();
-    await supabaseAdmin
-      .from("google_drive_connections")
-      .update({
-        access_token_ciphertext: encryptToken(accessToken),
-        access_token_expires_at: newExpiresAt,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId);
-  }
-
-  let subfolders = (data.subfolders_json as Record<string, string> | null) ?? null;
-  let rootId = data.root_folder_id as string | null;
-  if (!subfolders || !rootId) {
-    const built = await ensureMyDropPocketStructure(accessToken);
-    subfolders = Object.fromEntries(built.subfolders.map((s) => [s.name, s.id]));
-    rootId = built.rootId;
-    await supabaseAdmin
-      .from("google_drive_connections")
-      .update({
-        root_folder_id: rootId,
-        subfolders_json: subfolders,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId);
-  }
-
-  return { accessToken, rootId: rootId!, subfolders };
+  // Backwards-compatible wrapper — kutsub uut profiiliteadlikku resolveri
+  // legacy režiimis (profileId = null → põhikonto, MyDropPocket/{kategooria}).
+  const resolved = await resolveProfileDriveTarget(userId, null);
+  if (!resolved) return null;
+  return { accessToken: resolved.accessToken, rootId: resolved.rootId, subfolders: resolved.subfolders };
 }
 
 /**

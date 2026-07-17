@@ -349,6 +349,7 @@ export type Database = {
           google_email: string
           google_sub: string
           id: string
+          profile_id: string | null
           refresh_token_ciphertext: string
           root_folder_id: string | null
           root_folder_name: string
@@ -364,6 +365,7 @@ export type Database = {
           google_email: string
           google_sub: string
           id?: string
+          profile_id?: string | null
           refresh_token_ciphertext: string
           root_folder_id?: string | null
           root_folder_name?: string
@@ -379,6 +381,7 @@ export type Database = {
           google_email?: string
           google_sub?: string
           id?: string
+          profile_id?: string | null
           refresh_token_ciphertext?: string
           root_folder_id?: string | null
           root_folder_name?: string
@@ -387,7 +390,66 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "google_drive_connections_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_drive_folders: {
+        Row: {
+          category: string
+          connection_id: string
+          created_at: string
+          folder_id: string
+          folder_name: string
+          id: string
+          parent_folder_id: string | null
+          profile_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          connection_id: string
+          created_at?: string
+          folder_id: string
+          folder_name: string
+          id?: string
+          parent_folder_id?: string | null
+          profile_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          connection_id?: string
+          created_at?: string
+          folder_id?: string
+          folder_name?: string
+          id?: string
+          parent_folder_id?: string | null
+          profile_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_drive_folders_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "google_drive_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_drive_folders_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -588,8 +650,11 @@ export type Database = {
           avatar_url: string | null
           color: string
           created_at: string
+          drive_mode: string
           id: string
           is_default: boolean
+          legacy_drive_migration_dismissed_at: string | null
+          legacy_drive_migration_done_at: string | null
           name: string
           type: Database["public"]["Enums"]["profile_type"]
           updated_at: string
@@ -599,8 +664,11 @@ export type Database = {
           avatar_url?: string | null
           color?: string
           created_at?: string
+          drive_mode?: string
           id?: string
           is_default?: boolean
+          legacy_drive_migration_dismissed_at?: string | null
+          legacy_drive_migration_done_at?: string | null
           name: string
           type?: Database["public"]["Enums"]["profile_type"]
           updated_at?: string
@@ -610,8 +678,11 @@ export type Database = {
           avatar_url?: string | null
           color?: string
           created_at?: string
+          drive_mode?: string
           id?: string
           is_default?: boolean
+          legacy_drive_migration_dismissed_at?: string | null
+          legacy_drive_migration_done_at?: string | null
           name?: string
           type?: Database["public"]["Enums"]["profile_type"]
           updated_at?: string
