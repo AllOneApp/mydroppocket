@@ -219,6 +219,7 @@ interface SyncInput {
   filePath: string;
   fileName: string;
   mime: string;
+  profileId?: string | null;
 }
 
 /**
@@ -232,7 +233,7 @@ export const syncFileToGoogleDrive = createServerFn({ method: "POST" })
   .inputValidator((input: SyncInput) => input)
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { getValidAccessTokenForUser, uploadBytesToDriveFolder, FOLDER_KEY_TO_NAME } =
+    const { resolveProfileDriveTarget, uploadBytesToDriveFolder, FOLDER_KEY_TO_NAME } =
       await import("./google-drive.server");
 
     // Verify the record belongs to this user (RLS-scoped client).
@@ -246,7 +247,7 @@ export const syncFileToGoogleDrive = createServerFn({ method: "POST" })
       throw new Error("Record not found");
     }
 
-    const conn = await getValidAccessTokenForUser(context.userId);
+    const conn = await resolveProfileDriveTarget(context.userId, data.profileId ?? null);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
 
     const folderName = FOLDER_KEY_TO_NAME[data.folderKey];
