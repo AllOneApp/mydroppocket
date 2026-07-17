@@ -298,8 +298,8 @@
     }
   },
   "file": {
-    "drop": "Lohista fail või klõpsa üleslaadimiseks",
-    "types": "Foto, pilt või PDF",
+    "drop": "📷 Pildista või vali fail",
+    "types": "Vali foto galeriist, tee uus pilt või laadi PDF oma failidest.",
     "scanning": "Skaneerin AI-ga…",
     "autoFill": "✨ Täida dokumendist automaatselt",
     "pickFirst": "Lisa esmalt vähemalt üks fail.",

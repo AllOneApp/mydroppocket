@@ -298,8 +298,8 @@
     }
   },
   "file": {
-    "drop": "Drop a file or click to upload",
-    "types": "Photo, image or PDF",
+    "drop": "📷 Take a photo or choose a file",
+    "types": "Pick a photo from your gallery, take a new picture, or upload a PDF from your files.",
     "scanning": "Scanning with AI…",
     "autoFill": "✨ Auto-fill from document",
     "pickFirst": "Add at least one file first.",
