@@ -153,7 +153,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
     const rows = data ?? [];
     const today = new Date().toISOString().slice(0, 10);
     return rows
-      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["product_name", "store", "notes"], f.query))
+      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["product_name", "store", "notes", "file_name", "ocr_raw"], f.query))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["product_name", "notes"], f.brand))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["store"], f.store))
       .filter((r) => inRange(r.purchase_date, f.dateFrom, f.dateTo))
@@ -187,7 +187,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
     const { data } = await s.from("expenses").select("*").eq("profile_id", profileId).eq("type", "expense").limit(300);
     const rows = data ?? [];
     return rows
-      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["description", "store", "category", "notes"], f.query))
+      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["description", "store", "category", "notes", "file_name", "ocr_raw"], f.query))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["description", "notes"], f.brand))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["store"], f.store))
       .filter((r) => tokenMatch(r.category ?? "", f.category))
@@ -212,7 +212,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
     const { data } = await s.from("expenses").select("*").eq("profile_id", profileId).eq("type", "income").limit(300);
     const rows = data ?? [];
     return rows
-      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["description", "store", "category", "notes"], f.query))
+      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["description", "store", "category", "notes", "file_name", "ocr_raw"], f.query))
       .filter((r) => tokenMatch(r.category ?? "", f.category))
       .filter((r) => inRange(r.expense_date, f.dateFrom, f.dateTo))
       .filter((r) => amountInRange(Number(r.amount), f.minAmount, f.maxAmount))
@@ -238,7 +238,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
     const rows = data ?? [];
     const today = new Date().toISOString().slice(0, 10);
     return rows
-      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["title", "company", "notes", "agreement_number", "payee_name"], f.query))
+      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["title", "company", "notes", "agreement_number", "payee_name", "file_name", "ocr_raw"], f.query))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["company", "payee_name"], f.store))
       .filter((r) => inRange(r.start_date, f.dateFrom, f.dateTo))
       .filter((r) => amountInRange(r.total_amount ?? r.monthly_payment, f.minAmount, f.maxAmount))
@@ -269,7 +269,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
     const rows = data ?? [];
     const today = new Date().toISOString().slice(0, 10);
     return rows
-      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["title", "company", "notes", "payee_name"], f.query))
+      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["title", "company", "notes", "payee_name", "agreement_number", "file_name", "ocr_raw"], f.query))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["company", "payee_name"], f.store))
       .filter((r) => amountInRange(r.monthly_payment, f.minAmount, f.maxAmount))
       .filter((r) => (f.activeOnly ? !r.end_date || r.end_date >= today : true))
