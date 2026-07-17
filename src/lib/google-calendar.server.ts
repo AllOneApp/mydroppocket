@@ -734,6 +734,7 @@ function addDaysIso(iso: string, delta: number): string {
 
 async function upsertSourceEvents(opts: {
   userId: string;
+  profileId: string | null;
   sourceType: CalendarSourceType;
   sourceId: string;
   desired: DesiredEvent[];
@@ -789,6 +790,7 @@ async function upsertSourceEvents(opts: {
       });
       await dbAny.from("calendar_events").insert({
         user_id: opts.userId,
+        profile_id: opts.profileId,
         source_type: opts.sourceType,
         source_id: opts.sourceId,
         sequence: d.sequence,
