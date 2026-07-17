@@ -852,30 +852,6 @@ export const syncDriveExistingBatch = createServerFn({ method: "POST" })
     let failed = 0;
     let skipped = 0;
 
-    async function uploadOne(row: { file_path: string; file_name?: string | null; file_mime?: string | null }, folderKey: string, update: () => Promise<void>) {
-      const parentId = conn!.subfolders[FOLDER_KEY_TO_NAME[folderKey as keyof typeof FOLDER_KEY_TO_NAME]];
-      if (!parentId) { failed++; return; }
-      if (!row.file_path?.startsWith(`${uid}/`)) { skipped++; return; }
-      try {
-        const dl = await supabaseAdmin.storage.from("documents").download(row.file_path);
-        if (dl.error || !dl.data) { failed++; return; }
-        const bytes = new Uint8Array(await dl.data.arrayBuffer());
-        const up = await uploadBytesToDriveFolder({
-          accessToken: conn!.accessToken,
-          parentId,
-          name: row.file_name || row.file_path.split("/").pop() || "fail",
-          mime: row.file_mime || "application/octet-stream",
-          bytes,
-        });
-        await update.call(null);
-        // update() should have persisted the id via caller-provided function using up.id
-        void up;
-        uploaded++;
-      } catch {
-        failed++;
-      }
-    }
-
     // Helper to process one table stage with (table, pathCol, idCol, folderKey).
     async function runTable(table: string, pathCol: string, idCol: string, folderKey: string, nameCol = "file_name", mimeCol = "file_mime"): Promise<boolean> {
       const { data: rows } = await admin
