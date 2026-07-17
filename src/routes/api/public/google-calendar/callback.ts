@@ -117,23 +117,6 @@ export const Route = createFileRoute("/api/public/google-calendar/callback")({
                 .update(payload)
                 .eq("id", (existing as { id: string }).id)
             : await db.from("google_calendar_connections").insert(payload);
-          void 0; // marker
-          /* legacy fallback removed:
-          const _res_removed = await db.from("google_calendar_connections").upsert(
-            {
-              user_id: state.userId,
-              google_email: email,
-              google_sub: sub,
-              access_token_ciphertext: encryptToken(tokens.access_token),
-              refresh_token_ciphertext: encryptToken(tokens.refresh_token),
-              access_token_expires_at: expiresAt,
-              scope: tokens.scope,
-              calendar_id: calendarId,
-              calendar_name: MY_DROPPOCKET_CALENDAR_NAME,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id" },
-          );*/
           if (error) throw error;
 
           return renderResult({ origin: state.origin, ok: true, email });
