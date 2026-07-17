@@ -94,12 +94,13 @@ function ProfilesPage() {
           <p className="mt-1 text-sm text-muted-foreground">Lisa esimene profiil, et alustada.</p>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3">
           {profiles.map((p) => (
             <div
               key={p.id}
-              className={`card-soft flex items-center gap-4 p-4 ${p.id === activeProfileId ? "ring-2 ring-primary" : ""}`}
+              className={`card-soft p-4 ${p.id === activeProfileId ? "ring-2 ring-primary" : ""}`}
             >
+              <div className="flex items-center gap-4">
               <ProfileAvatar profile={p} size={48} showTypeBadge />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -148,6 +149,8 @@ function ProfilesPage() {
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
+              </div>
+              <CloudServicesSection profile={p} />
             </div>
           ))}
         </div>
