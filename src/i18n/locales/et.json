@@ -215,7 +215,7 @@
       "contract": "Muu leping"
     },
     "attachments": "Manused",
-    "attachmentsAdd": "Lisa failid",
+    "attachmentsAdd": "📷 Pildista või vali fail",
     "attachmentsCount": "{{count}} / {{max}} faili lisatud",
     "attachmentsMaxReached": "Maksimaalne failide arv on {{max}}.",
     "attachmentsEmpty": "Manuseid pole veel lisatud.",
