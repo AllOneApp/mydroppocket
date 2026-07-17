@@ -386,6 +386,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
               filePath: fileInfo.path,
               fileName: fileInfo.name,
               mime: fileInfo.mime,
+              profileId: activeProfileId,
             },
           });
         } catch (err) {
