@@ -168,19 +168,35 @@ export interface CalendarConnection {
 
 export async function getValidCalendarAccessTokenForUser(
   userId: string,
+  profileId?: string | null,
 ): Promise<CalendarConnection | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   // Cast: new tables from this migration may not yet appear in the generated types file.
   const db = supabaseAdmin as unknown as {
     from: (t: string) => any;
   };
-  const { data, error } = await db
-    .from("google_calendar_connections")
-    .select("access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, calendar_id, calendar_name, reminder_minutes, sync_installments, sync_recurring, sync_warranties, sync_agreements, warranty_reminder_days, agreement_reminder_days")
-    .eq("user_id", userId)
-    .maybeSingle();
+  // Resolve which connection to use: profile-specific ("separate") or primary
+  // ("shared" / fallback). If profileId is given and that profile is in
+  // separate mode with its own connection row, use it. Otherwise fall back to
+  // the user's primary connection (profile_id IS NULL).
+  let targetProfileIdForRow: string | null = null;
+  if (profileId) {
+    const { data: prof } = await db
+      .from("user_profiles")
+      .select("calendar_mode")
+      .eq("id", profileId)
+      .maybeSingle();
+    const mode = (prof && (prof as { calendar_mode?: string }).calendar_mode) === "separate" ? "separate" : "shared";
+    if (mode === "separate") targetProfileIdForRow = profileId;
+  }
+  const selectCols = "id, access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, calendar_id, calendar_name, reminder_minutes, sync_installments, sync_recurring, sync_warranties, sync_agreements, warranty_reminder_days, agreement_reminder_days";
+  let q = db.from("google_calendar_connections").select(selectCols).eq("user_id", userId);
+  if (targetProfileIdForRow) q = q.eq("profile_id", targetProfileIdForRow);
+  else q = q.is("profile_id", null);
+  const { data, error } = await q.maybeSingle();
   if (error) throw error;
   if (!data) return null;
+  const connRowId = (data as { id: string }).id;
 
   let accessToken = decryptToken(data.access_token_ciphertext as string);
   const expiresAt = new Date(data.access_token_expires_at as string).getTime();
@@ -197,7 +213,7 @@ export async function getValidCalendarAccessTokenForUser(
         access_token_expires_at: newExpiresAt,
         updated_at: new Date().toISOString(),
       })
-      .eq("user_id", userId);
+      .eq("id", connRowId);
   }
 
   let calendarId = (data.calendar_id as string | null) ?? null;
@@ -207,7 +223,7 @@ export async function getValidCalendarAccessTokenForUser(
     await db
       .from("google_calendar_connections")
       .update({ calendar_id: calendarId, updated_at: new Date().toISOString() })
-      .eq("user_id", userId);
+      .eq("id", connRowId);
   }
 
   return {
