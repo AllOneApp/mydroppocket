@@ -118,11 +118,10 @@ export const updateCalendarSettings = createServerFn({ method: "POST" })
         .filter((n) => Number.isFinite(n));
       patch.agreement_reminder_days = clean.length > 0 ? clean : [30, 7, 0];
     }
-    const { error } = await db
-      .from("google_calendar_connections")
-      .update(patch)
-      .eq("user_id", context.userId)
-      .filter("profile_id", data.profileId ? "eq" : "is", data.profileId ?? null);
+    let upQ = db.from("google_calendar_connections").update(patch).eq("user_id", context.userId);
+    if (data.profileId) upQ = upQ.eq("profile_id", data.profileId);
+    else upQ = upQ.is("profile_id", null);
+    const { error } = await upQ;
     if (error) throw error;
     return { ok: true };
   });
