@@ -863,19 +863,32 @@ export async function removeSourceEventsForUser(opts: {
   sourceType: CalendarSourceType;
   sourceId: string;
 }): Promise<{ removed: number; status: "removed" | "not-connected" | "skipped" }> {
-  const conn = await getValidCalendarAccessTokenForUser(opts.userId);
-  if (!conn) return { removed: 0, status: "not-connected" };
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
   const { data: trackedRows } = await dbAny
     .from("calendar_events")
-    .select("id, google_event_id, calendar_id")
+    .select("id, google_event_id, calendar_id, profile_id")
     .eq("user_id", opts.userId)
     .eq("source_type", opts.sourceType)
     .eq("source_id", opts.sourceId);
-  const tracked = (trackedRows ?? []) as Array<{ id: string; google_event_id: string; calendar_id: string }>;
+  const tracked = (trackedRows ?? []) as Array<{ id: string; google_event_id: string; calendar_id: string; profile_id: string | null }>;
+  if (tracked.length === 0) return { removed: 0, status: "skipped" };
+  // Resolve the right connection per tracked profile_id (some profiles may
+  // have a separate calendar). Cache resolutions to avoid re-hitting DB.
+  const connCache = new Map<string, CalendarConnection | null>();
+  const resolve = async (pid: string | null) => {
+    const key = pid ?? "_primary";
+    if (!connCache.has(key)) connCache.set(key, await getValidCalendarAccessTokenForUser(opts.userId, pid));
+    return connCache.get(key) ?? null;
+  };
   let removed = 0;
   for (const t of tracked) {
+    const conn = await resolve(t.profile_id);
+    if (!conn) {
+      // No connection for that profile any more; just drop the local row.
+      await dbAny.from("calendar_events").delete().eq("id", t.id);
+      continue;
+    }
     try {
       await deleteEvent({ accessToken: conn.accessToken, calendarId: t.calendar_id, eventId: t.google_event_id });
     } catch (e) {
