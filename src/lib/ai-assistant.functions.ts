@@ -54,6 +54,103 @@ export type AssistantResponse = {
   groups: AssistantGroup[];
 } | { ok: false; error: string };
 
+// -----------------------------------------------------------------------------
+// Deterministic pre-parser: extract date ranges (and simple numeric bounds)
+// from Estonian/English phrases so we don't depend on the LLM for these.
+// -----------------------------------------------------------------------------
+
+function iso(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+function parseDayMonth(str: string, year: number): string | null {
+  // dd.mm or dd.mm.yyyy or dd/mm
+  const m = str.match(/^\s*(\d{1,2})[.\/](\d{1,2})(?:[.\/](\d{2,4}))?\s*$/);
+  if (!m) return null;
+  const dd = parseInt(m[1]!, 10);
+  const mm = parseInt(m[2]!, 10);
+  let yy = m[3] ? parseInt(m[3]!, 10) : year;
+  if (yy < 100) yy += 2000;
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+  return `${yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+}
+
+export function parseDateRange(q: string, now = new Date()): { from?: string; to?: string } {
+  const s = q.toLowerCase();
+  const today = startOfDay(now);
+  const year = today.getFullYear();
+
+  // Explicit range "11.07 kuni 16.07", "11.07–16.07", "11.07 - 16.07"
+  const rangeRe = /(\d{1,2}[.\/]\d{1,2}(?:[.\/]\d{2,4})?)\s*(?:kuni|to|–|—|-)\s*(\d{1,2}[.\/]\d{1,2}(?:[.\/]\d{2,4})?)/i;
+  const rm = q.match(rangeRe);
+  if (rm) {
+    const from = parseDayMonth(rm[1]!, year);
+    const to = parseDayMonth(rm[2]!, year);
+    if (from && to) return { from, to };
+  }
+
+  // Single day mention: "16.07" or "16.07.2026" -> that entire day
+  const single = q.match(/(^|\s)(\d{1,2}[.\/]\d{1,2}(?:[.\/]\d{2,4})?)(\s|$|\?|\.)/);
+  if (single && !rm) {
+    const d = parseDayMonth(single[2]!, year);
+    if (d) return { from: d, to: d };
+  }
+
+  // "viimased N päeva" / "last N days"
+  const lastN = s.match(/viimase[dt]?\s+(\d{1,3})\s*p(?:äev|aev)/) || s.match(/last\s+(\d{1,3})\s*days?/);
+  if (lastN) {
+    const n = parseInt(lastN[1]!, 10);
+    return { from: iso(addDays(today, -n)), to: iso(today) };
+  }
+
+  // "eelmine nädal" / "last week" — Mon..Sun of previous ISO week
+  if (/\beelmi(sel|ne)\s+n(ä|a)dal/.test(s) || /\blast\s+week\b/.test(s)) {
+    const day = today.getDay(); // 0=Sun..6=Sat
+    const mondayThis = addDays(today, day === 0 ? -6 : 1 - day);
+    const from = addDays(mondayThis, -7);
+    const to = addDays(mondayThis, -1);
+    return { from: iso(from), to: iso(to) };
+  }
+  // "see/käesolev nädal" / "this week"
+  if (/\b(see|k(ä|a)esolev)\s+n(ä|a)dal/.test(s) || /\bthis\s+week\b/.test(s)) {
+    const day = today.getDay();
+    const monday = addDays(today, day === 0 ? -6 : 1 - day);
+    const sunday = addDays(monday, 6);
+    return { from: iso(monday), to: iso(sunday) };
+  }
+  // "eelmi(sel|ne) kuu" / "last month"
+  if (/\beelmi(sel|ne)\s+kuu/.test(s) || /\blast\s+month\b/.test(s)) {
+    const from = new Date(year, today.getMonth() - 1, 1);
+    const to = new Date(year, today.getMonth(), 0);
+    return { from: iso(from), to: iso(to) };
+  }
+  // "see/käesolev kuu" / "this month" / "sellel kuul"
+  if (/\b(see|k(ä|a)esolev|sellel)\s+kuu/.test(s) || /\bthis\s+month\b/.test(s)) {
+    const from = new Date(year, today.getMonth(), 1);
+    const to = new Date(year, today.getMonth() + 1, 0);
+    return { from: iso(from), to: iso(to) };
+  }
+  // "sel aastal" / "this year"
+  if (/\bsel(lel)?\s+aastal\b/.test(s) || /\bthis\s+year\b/.test(s)) {
+    return { from: `${year}-01-01`, to: `${year}-12-31` };
+  }
+  // "eelmisel aastal" / "last year"
+  if (/\beelmi(sel|ne)\s+aasta/.test(s) || /\blast\s+year\b/.test(s)) {
+    return { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` };
+  }
+  return {};
+}
+
 function buildClassificationPrompt(locale: "et" | "en", today: string): string {
   const langLine = locale === "en" ? "Reply text in English." : "Vasta eesti keeles.";
   return `You are a routing classifier for a personal-documents assistant. Convert the user's natural-language question into a structured search plan.
@@ -69,6 +166,8 @@ Available data modules (intents):
 
 Return JSON matching the schema:
 - intents: which modules to search. Pick all that could plausibly match. If unsure, include multiple. If completely unrelated to the modules, return an empty array.
+  - When the user names a product/item without saying which module (e.g. "leia ripptool", "kus on minu telefon"), a receipt/warranty/installment could all match — return ["warranties","expenses","agreements","installments"] (add "recurring" only if the wording clearly implies a subscription).
+  - Do NOT ask the user to clarify. When in doubt, include more intents rather than fewer.
 - filters.query: main fuzzy text to search across product names, stores, descriptions. Correct obvious typos (e.g. "purma" -> "puma", "eronics" -> "euronics"). Understand synonyms: tšekk/ost/arve/dokument all mean receipts; telefon/mobiil/nutitelefon all mean phone.
 - filters.brand: brand-like tokens (Bosch, Puma, LG, ...)
 - filters.store: store/company (Euronics, Sportland, Bolt, ...)
@@ -191,23 +290,31 @@ export const askAssistant = createServerFn({ method: "POST" })
     if (pErr || !prof) return { ok: false, error: "Profile not accessible" };
 
     const classification = await classify(question, locale, data.history ?? []);
-    if (!classification) {
-      return {
-        ok: true,
-        answer:
-          locale === "et"
-            ? "Ma ei saanud küsimusest päris hästi aru. Proovi täpsemalt sõnastada."
-            : "I couldn't understand the question. Please rephrase.",
-        suggestions: suggestFollowups([], locale),
-        groups: [],
-      };
-    }
+    // Never bail on the user — always run a search across all modules with
+    // whatever filters we could infer (deterministic parser + optional LLM).
+    const effective: Classification = classification ?? {
+      intents: null,
+      filters: {
+        query: question, brand: null, store: null, category: null,
+        minAmount: null, maxAmount: null, dateFrom: null, dateTo: null,
+        expiringInDays: null, activeOnly: null,
+      },
+      aggregation: "list",
+      answerHint: null,
+    };
 
-    const intents = (classification.intents && classification.intents.length > 0)
-      ? classification.intents
+    // Deterministic date-range override so "11.07 kuni 16.07", "eelmine nädal"
+    // etc. always work — even when the LLM misses them.
+    const parsed = parseDateRange(question);
+    if (parsed.from) effective.filters.dateFrom = parsed.from;
+    if (parsed.to) effective.filters.dateTo = parsed.to;
+    if (!effective.filters.query) effective.filters.query = question;
+
+    const intents = (effective.intents && effective.intents.length > 0)
+      ? effective.intents
       : (INTENTS as unknown as AssistantIntent[]);
 
-    const filters: AssistantFilters = classification.filters;
+    const filters: AssistantFilters = effective.filters;
 
     const groupPromises = intents.map(async (intent) => {
       const searcher = MODULE_SEARCHERS[intent];
@@ -218,7 +325,7 @@ export const askAssistant = createServerFn({ method: "POST" })
     const resolved = await Promise.all(groupPromises);
     const groups = resolved.filter((g): g is AssistantGroup => !!g);
 
-    const answer = buildAnswer(classification, groups, locale, question);
+    const answer = buildAnswer(effective, groups, locale, question);
     const suggestions = suggestFollowups(groups, locale);
 
     return { ok: true, answer, suggestions, groups };

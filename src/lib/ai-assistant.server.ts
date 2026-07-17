@@ -47,17 +47,89 @@ function normalize(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().trim();
 }
 
+// Estonian noun endings and generic suffixes to strip so "ripptooli" matches
+// "ripptool", "garantiitšekk" matches "garantii", etc. Order matters (longest first).
+const ET_SUFFIXES = [
+  "idega", "idele", "idelt", "idesse", "idena", "ideni",
+  "tega", "tele", "telt", "tesse", "tena", "teni",
+  "dega", "dele", "delt", "desse", "dena", "deni",
+  "iga", "ile", "ilt", "isse", "ina", "ini", "iks",
+  "ega", "ele", "elt", "esse", "ena", "eni", "eks",
+  "aga", "ale", "alt", "asse", "ana", "ani", "aks",
+  "uga", "ule", "ult", "usse", "una", "uni", "uks",
+  "tšekk", "tsekk", "tšeki", "tseki",
+  "de", "te", "id", "is", "ks", "le", "lt", "ga", "na", "ni", "st",
+  "i", "u", "a", "e", "l", "s", "t",
+];
+
+function stem(word: string): string {
+  let w = word;
+  for (const s of ET_SUFFIXES) {
+    if (w.length - s.length >= 4 && w.endsWith(s)) {
+      w = w.slice(0, -s.length);
+      break;
+    }
+  }
+  return w;
+}
+
+const STOPWORDS = new Set([
+  "leia", "leida", "näita", "kus", "on", "minu", "mu", "kas", "veel", "kõik", "koik",
+  "ost", "ostud", "ostu", "tšekk", "tsekk", "tšeki", "tseki", "arve", "dokument",
+  "garantii", "garantiid", "garantiitšekk", "garantiitsekk",
+  "find", "show", "where", "is", "my", "the", "all", "receipt", "invoice", "document",
+  "warranty", "purchase",
+]);
+
+function tokenize(needle: string): string[] {
+  return normalize(needle)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length >= 3 && !STOPWORDS.has(w));
+}
+
 function tokenMatch(haystack: string, needle: string | null | undefined): boolean {
   if (!needle) return true;
-  const n = normalize(needle);
-  if (!n) return true;
-  return normalize(haystack).includes(n);
+  const hay = normalize(haystack);
+  if (!hay) return false;
+  const tokens = tokenize(needle);
+  if (tokens.length === 0) {
+    // Fall back to plain substring (short queries, brand-only)
+    const n = normalize(needle);
+    return !n || hay.includes(n);
+  }
+  // Match if ANY meaningful token (or its stem prefix) appears anywhere.
+  return tokens.some((tok) => {
+    if (hay.includes(tok)) return true;
+    const st = stem(tok);
+    if (st.length >= 3 && hay.includes(st)) return true;
+    // last-resort prefix match (min 4 chars)
+    if (tok.length >= 5 && hay.includes(tok.slice(0, Math.max(4, tok.length - 2)))) return true;
+    return false;
+  });
+}
+
+function extractOcrText(raw: unknown): string {
+  if (!raw) return "";
+  if (typeof raw === "string") return raw;
+  try {
+    return JSON.stringify(raw).replace(/[{}[\]",:]/g, " ");
+  } catch {
+    return "";
+  }
 }
 
 function fuzzyText(row: Record<string, unknown>, keys: string[], needle: string | null | undefined): boolean {
   if (!needle) return true;
-  const combined = keys.map((k) => String(row[k] ?? "")).join(" ");
-  return tokenMatch(combined, needle);
+  const parts: string[] = [];
+  for (const k of keys) {
+    const v = row[k];
+    if (k === "ocr_raw" || k === "ocr_text") {
+      parts.push(extractOcrText(v));
+    } else {
+      parts.push(String(v ?? ""));
+    }
+  }
+  return tokenMatch(parts.join(" "), needle);
 }
 
 function inRange(dateStr: string | null, from?: string | null, to?: string | null): boolean {
@@ -81,7 +153,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
     const rows = data ?? [];
     const today = new Date().toISOString().slice(0, 10);
     return rows
-      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["product_name", "store", "notes"], f.query))
+      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["product_name", "store", "notes", "file_name", "ocr_raw"], f.query))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["product_name", "notes"], f.brand))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["store"], f.store))
       .filter((r) => inRange(r.purchase_date, f.dateFrom, f.dateTo))
@@ -115,7 +187,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
     const { data } = await s.from("expenses").select("*").eq("profile_id", profileId).eq("type", "expense").limit(300);
     const rows = data ?? [];
     return rows
-      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["description", "store", "category", "notes"], f.query))
+      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["description", "store", "category", "notes", "file_name", "ocr_raw"], f.query))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["description", "notes"], f.brand))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["store"], f.store))
       .filter((r) => tokenMatch(r.category ?? "", f.category))
@@ -140,7 +212,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
     const { data } = await s.from("expenses").select("*").eq("profile_id", profileId).eq("type", "income").limit(300);
     const rows = data ?? [];
     return rows
-      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["description", "store", "category", "notes"], f.query))
+      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["description", "store", "category", "notes", "file_name", "ocr_raw"], f.query))
       .filter((r) => tokenMatch(r.category ?? "", f.category))
       .filter((r) => inRange(r.expense_date, f.dateFrom, f.dateTo))
       .filter((r) => amountInRange(Number(r.amount), f.minAmount, f.maxAmount))
@@ -166,7 +238,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
     const rows = data ?? [];
     const today = new Date().toISOString().slice(0, 10);
     return rows
-      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["title", "company", "notes", "agreement_number", "payee_name"], f.query))
+      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["title", "company", "notes", "agreement_number", "payee_name", "file_name", "ocr_raw"], f.query))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["company", "payee_name"], f.store))
       .filter((r) => inRange(r.start_date, f.dateFrom, f.dateTo))
       .filter((r) => amountInRange(r.total_amount ?? r.monthly_payment, f.minAmount, f.maxAmount))
@@ -197,7 +269,7 @@ export const MODULE_SEARCHERS: Record<AssistantIntent, (s: Supa, profileId: stri
     const rows = data ?? [];
     const today = new Date().toISOString().slice(0, 10);
     return rows
-      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["title", "company", "notes", "payee_name"], f.query))
+      .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["title", "company", "notes", "payee_name", "agreement_number", "file_name", "ocr_raw"], f.query))
       .filter((r) => fuzzyText(r as unknown as Record<string, unknown>, ["company", "payee_name"], f.store))
       .filter((r) => amountInRange(r.monthly_payment, f.minAmount, f.maxAmount))
       .filter((r) => (f.activeOnly ? !r.end_date || r.end_date >= today : true))
