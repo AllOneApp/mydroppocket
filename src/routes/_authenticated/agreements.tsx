@@ -610,7 +610,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
           })(),
           (async () => {
             try {
-              await syncInstallmentAgreement({ data: { agreementId: savedRecordId, profileId: activeProfileId } });
+              await syncInstallmentAgreement({ data: { agreementId: savedRecordId } });
             } catch (err) {
               console.warn("[gcal] installment sync failed", err);
             }
