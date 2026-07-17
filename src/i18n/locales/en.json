@@ -305,7 +305,7 @@
     "pickFirst": "Add at least one file first.",
     "empty": "The selected file is empty.",
     "readFailedAt": "Could not read file {{index}}.",
-    "aiWarning": "⚠️ AI can make mistakes. Please double-check the bank account, reference number, bank, agreement number and other key details before saving. You are responsible for the accuracy of the data."
+    "aiWarning": "⚠️ AI can make mistakes. Please double-check every auto-filled field before saving (for example dates, amounts, company name, product name, agreement number, warranty end, reference number and other important fields). You are responsible for the accuracy of the data."
   },
   "notFound": {
     "title": "Page not found",

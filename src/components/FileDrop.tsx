@@ -57,9 +57,14 @@ export function FileDrop({
         />
       </div>
       {file && onScan && (
-        <Button type="button" variant="secondary" onClick={() => onScan?.()} disabled={scanning} className="mt-2 w-full">
-          {scanning ? t("file.scanning") : t("file.autoFill")}
-        </Button>
+        <>
+          <Button type="button" variant="secondary" onClick={() => onScan?.()} disabled={scanning} className="mt-2 w-full">
+            {scanning ? t("file.scanning") : t("file.autoFill")}
+          </Button>
+          <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
+            {t("file.aiWarning")}
+          </p>
+        </>
       )}
     </div>
   );

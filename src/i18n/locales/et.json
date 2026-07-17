@@ -305,7 +305,7 @@
     "pickFirst": "Lisa esmalt vähemalt üks fail.",
     "empty": "Valitud fail on tühi.",
     "readFailedAt": "Faili {{index}} sisu ei õnnestunud lugeda.",
-    "aiWarning": "⚠️ AI võib eksida. Palun kontrolli enne salvestamist üle pangakonto, viitenumber, pank, lepingu number ja muud olulised andmed. Vastutus andmete õigsuse eest jääb kasutajale."
+    "aiWarning": "⚠️ AI võib eksida. Palun kontrolli enne salvestamist üle kõik automaatselt täidetud andmed (näiteks kuupäevad, summad, ettevõtte nimi, toote nimi, lepingu number, garantii lõpp, viitenumber ning muud olulised väljad). Vastutus andmete õigsuse eest jääb kasutajale."
   },
   "notFound": {
     "title": "Lehte ei leitud",
