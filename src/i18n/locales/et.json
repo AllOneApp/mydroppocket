@@ -448,5 +448,32 @@
       "Subscription": "Tellimus",
       "Other": "Muu"
     }
+  },
+  "aiAssistant": {
+    "title": "AI Assistant",
+    "subtitle": "Küsi ükskõik mida oma dokumentide, garantiide, kulude või lepingute kohta.",
+    "placeholder": "Küsi näiteks: „Leia minu Puma tossude tšekk\", „Kas Boschi trellil on garantii veel kehtiv?\"",
+    "send": "Küsi AI-lt",
+    "thinking": "AI mõtleb...",
+    "viewAll": "Vaata kõiki",
+    "warrantyUntil": "Garantii kuni {{date}}",
+    "endsOn": "Lõppeb {{date}}",
+    "nextDue": "Järgmine makse {{date}}",
+    "privacy": "Sinu küsimused ja dokumendid jäävad privaatseks. Andmeid ei kasutata AI treenimiseks.",
+    "groups": {
+      "warranties": "Garantiiga tšekid",
+      "expenses": "Kulud",
+      "income": "Tulud",
+      "agreements": "Lepingud",
+      "installments": "Järelmaksud",
+      "recurring": "Püsimaksed"
+    },
+    "actions": {
+      "open": "Ava",
+      "openDrive": "Ava Drive'is",
+      "openModule": "Ava moodul",
+      "share": "Jaga",
+      "linkCopied": "Link kopeeritud"
+    }
   }
 }
