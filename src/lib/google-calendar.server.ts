@@ -598,6 +598,7 @@ export async function syncInstallmentForUser(opts: {
       });
       await dbAny.from("calendar_events").insert({
         user_id: opts.userId,
+        profile_id: rowProfileId,
         source_type: "installment",
         source_id: opts.agreementId,
         sequence: seq,
