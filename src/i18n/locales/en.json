@@ -40,11 +40,12 @@
   },
   "nav": {
     "dashboard": "Dashboard",
-    "warranties": "Warranties",
+    "warranties": "Receipts with warranty",
     "expenses": "Income & expenses",
     "recurring": "Recurring payments",
     "installments": "Installments",
-    "agreements": "Agreements",
+    "agreements": "Agreements / Installment contracts",
+    "agreementsInstallments": "Agreements / Installment contracts",
     "search": "Search",
     "settings": "Settings",
     "overview": "Overview",
@@ -91,6 +92,7 @@
     "thisWeek": "This week: {{amount}}",
     "onFile": "{{count}} on file",
     "contractsInstallments": "Contracts & installments",
+    "warrantiesCardTitle": "Receipts with warranty",
     "recentExpenses": "Recent expenses",
     "upcomingWarranties": "Upcoming warranties",
     "viewAll": "View all",
@@ -100,7 +102,7 @@
     "noWarranties": "No warranties yet"
   },
   "warranties": {
-    "title": "Warranties",
+    "title": "Receipts with warranty",
     "desc": "Track active warranties and be alerted before they expire.",
     "expiringSoon": "Expiring soon",
     "active": "Active",
@@ -176,7 +178,7 @@
     }
   },
   "agreements": {
-    "title": "Agreements",
+    "title": "Agreements / Installment contracts",
     "desc": "Installments, warranty extensions, contracts and service plans.",
     "empty.title": "No agreements yet",
     "empty.desc": "Upload your first contract to keep it safe.",
@@ -230,9 +232,9 @@
     "hint": "Start typing to search everything.",
     "searching": "Searching…",
     "noMatches": "No matches.",
-    "warrantiesN": "Warranties ({{count}})",
+    "warrantiesN": "Receipts with warranty ({{count}})",
     "expensesN": "Expenses ({{count}})",
-    "agreementsN": "Agreements ({{count}})"
+    "agreementsN": "Agreements / Installment contracts ({{count}})"
   },
   "settings": {
     "title": "Settings",
