@@ -595,10 +595,10 @@ async function totalEntriesForUser(
  */
 export const syncBackupCategory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { category: BackupCategory; lang?: BackupLang }) => input)
+  .inputValidator((input: { category: BackupCategory; lang?: BackupLang; profileId?: string | null }) => input)
   .handler(async ({ data, context }) => {
-    const { getValidAccessTokenForUser } = await import("./google-drive.server");
-    const conn = await getValidAccessTokenForUser(context.userId);
+    const { resolveProfileDriveTarget } = await import("./google-drive.server");
+    const conn = await resolveProfileDriveTarget(context.userId, data.profileId ?? null);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
     const lang: BackupLang = data.lang === "en" ? "en" : "et";
     await writeCategoryXlsx({
@@ -621,10 +621,10 @@ export const syncBackupCategory = createServerFn({ method: "POST" })
  */
 export const syncBackupAll = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input?: { lang?: BackupLang }) => input ?? {})
+  .inputValidator((input?: { lang?: BackupLang; profileId?: string | null }) => input ?? {})
   .handler(async ({ data, context }) => {
-    const { getValidAccessTokenForUser } = await import("./google-drive.server");
-    const conn = await getValidAccessTokenForUser(context.userId);
+    const { resolveProfileDriveTarget } = await import("./google-drive.server");
+    const conn = await resolveProfileDriveTarget(context.userId, data?.profileId ?? null);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
     const lang: BackupLang = data?.lang === "en" ? "en" : "et";
     let entries = 0;
@@ -651,10 +651,10 @@ export const syncBackupAll = createServerFn({ method: "POST" })
  */
 export const deleteGoogleDriveFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { fileId: string }) => input)
+  .inputValidator((input: { fileId: string; profileId?: string | null }) => input)
   .handler(async ({ data, context }) => {
-    const { getValidAccessTokenForUser, deleteDriveFile } = await import("./google-drive.server");
-    const conn = await getValidAccessTokenForUser(context.userId);
+    const { resolveProfileDriveTarget, deleteDriveFile } = await import("./google-drive.server");
+    const conn = await resolveProfileDriveTarget(context.userId, data.profileId ?? null);
     if (!conn) return { skipped: true as const };
     await deleteDriveFile({ accessToken: conn.accessToken, fileId: data.fileId });
     return { ok: true as const };
@@ -674,10 +674,10 @@ function sanitizeFolderName(s: string): string {
 
 export const syncAgreementAttachments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { agreementId: string }) => input)
+  .inputValidator((input: { agreementId: string; profileId?: string | null }) => input)
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { getValidAccessTokenForUser, findOrCreateFolder, uploadBytesToDriveFolder } =
+    const { resolveProfileDriveTarget, findOrCreateFolder, uploadBytesToDriveFolder } =
       await import("./google-drive.server");
 
     // Load agreement (RLS-scoped).
@@ -698,7 +698,7 @@ export const syncAgreementAttachments = createServerFn({ method: "POST" })
       .maybeSingle();
     const cachedFolderId = (extra as { gdrive_folder_id?: string | null } | null)?.gdrive_folder_id ?? null;
 
-    const conn = await getValidAccessTokenForUser(context.userId);
+    const conn = await resolveProfileDriveTarget(context.userId, data.profileId ?? null);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
     const lepingudId = conn.subfolders["Lepingud"];
     if (!lepingudId) throw new Error("Missing Drive subfolder: Lepingud");
@@ -756,10 +756,10 @@ export const syncAgreementAttachments = createServerFn({ method: "POST" })
  */
 export const deleteAgreementDriveFolder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { folderId: string }) => input)
+  .inputValidator((input: { folderId: string; profileId?: string | null }) => input)
   .handler(async ({ data, context }) => {
-    const { getValidAccessTokenForUser, deleteDriveFile } = await import("./google-drive.server");
-    const conn = await getValidAccessTokenForUser(context.userId);
+    const { resolveProfileDriveTarget, deleteDriveFile } = await import("./google-drive.server");
+    const conn = await resolveProfileDriveTarget(context.userId, data.profileId ?? null);
     if (!conn) return { skipped: true as const };
     await deleteDriveFile({ accessToken: conn.accessToken, fileId: data.folderId });
     return { ok: true as const };
