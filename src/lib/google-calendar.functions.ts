@@ -83,6 +83,7 @@ export const disconnectGoogleCalendar = createServerFn({ method: "POST" })
 export const updateCalendarSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: {
+    profileId?: string | null;
     syncInstallments?: boolean;
     syncRecurring?: boolean;
     syncWarranties?: boolean;
@@ -120,7 +121,8 @@ export const updateCalendarSettings = createServerFn({ method: "POST" })
     const { error } = await db
       .from("google_calendar_connections")
       .update(patch)
-      .eq("user_id", context.userId);
+      .eq("user_id", context.userId)
+      .filter("profile_id", data.profileId ? "eq" : "is", data.profileId ?? null);
     if (error) throw error;
     return { ok: true };
   });
@@ -131,9 +133,10 @@ export const updateCalendarSettings = createServerFn({ method: "POST" })
  */
 export const syncCalendarNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input?: { profileId?: string | null }) => input ?? {})
+  .handler(async ({ data, context }) => {
     const { syncEverythingForUser } = await import("./google-calendar.server");
-    const stats = await syncEverythingForUser(context.userId);
+    const stats = await syncEverythingForUser(context.userId, data?.profileId ?? null);
     return stats;
   });
 
