@@ -40,11 +40,12 @@
   },
   "nav": {
     "dashboard": "Töölaud",
-    "warranties": "Garantiid",
+    "warranties": "Garantiiga tšekid",
     "expenses": "Tulud ja kulud",
     "recurring": "Püsimaksed",
     "installments": "Järelmaksud",
-    "agreements": "Lepingud",
+    "agreements": "Lepingud / Järelmaksulepingud",
+    "agreementsInstallments": "Lepingud / Järelmaksulepingud",
     "search": "Otsing",
     "settings": "Seaded",
     "overview": "Ülevaade",
@@ -91,6 +92,7 @@
     "thisWeek": "See nädal: {{amount}}",
     "onFile": "{{count}} salvestatud",
     "contractsInstallments": "Lepingud ja järelmaksud",
+    "warrantiesCardTitle": "Tšekid garantiiga",
     "recentExpenses": "Hiljutised kulud",
     "upcomingWarranties": "Aeguvad garantiid",
     "viewAll": "Vaata kõiki",
@@ -100,7 +102,7 @@
     "noWarranties": "Garantiisid pole veel"
   },
   "warranties": {
-    "title": "Garantiid",
+    "title": "Garantiiga tšekid",
     "desc": "Jälgi kehtivaid garantiisid ja saa hoiatus enne aegumist.",
     "expiringSoon": "Aegub varsti",
     "active": "Kehtiv",
@@ -176,7 +178,7 @@
     }
   },
   "agreements": {
-    "title": "Lepingud",
+    "title": "Lepingud / Järelmaksulepingud",
     "desc": "Järelmaksud, garantii pikendused, lepingud ja teenusplaanid.",
     "empty.title": "Lepinguid pole veel",
     "empty.desc": "Lae üles oma esimene leping, et see turvaliselt hoida.",
@@ -230,9 +232,9 @@
     "hint": "Alusta trükkimist, et otsida kõikjalt.",
     "searching": "Otsin…",
     "noMatches": "Vasteid ei leitud.",
-    "warrantiesN": "Garantiid ({{count}})",
+    "warrantiesN": "Garantiiga tšekid ({{count}})",
     "expensesN": "Kulud ({{count}})",
-    "agreementsN": "Lepingud ({{count}})"
+    "agreementsN": "Lepingud / Järelmaksulepingud ({{count}})"
   },
   "settings": {
     "title": "Seaded",
