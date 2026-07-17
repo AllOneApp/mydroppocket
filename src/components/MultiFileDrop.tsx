@@ -130,7 +130,7 @@ export function MultiFileDrop({
         }`}
       >
         <UploadCloud className="mb-2 h-6 w-6" />
-        <p className="text-sm font-medium">➕ {addLabel}</p>
+        <p className="text-sm font-medium">{addLabel}</p>
         <p className="text-xs opacity-80">{hintLabel}</p>
         <input
           ref={inputRef}

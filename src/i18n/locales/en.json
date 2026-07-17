@@ -215,7 +215,7 @@
       "contract": "Other contract"
     },
     "attachments": "Attachments",
-    "attachmentsAdd": "Add files",
+    "attachmentsAdd": "📷 Take a photo or choose a file",
     "attachmentsCount": "{{count}} / {{max}} files added",
     "attachmentsMaxReached": "Maximum number of files is {{max}}.",
     "attachmentsEmpty": "No attachments added yet.",
