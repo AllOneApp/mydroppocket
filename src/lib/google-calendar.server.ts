@@ -971,12 +971,12 @@ export async function syncRecurringForUser(opts: {
   return { status: "ok", ...stats };
 }
 
-export async function syncAllRecurringForUser(userId: string): Promise<SyncStats & { skipped: number }> {
-  const conn = await getValidCalendarAccessTokenForUser(userId);
-  if (!conn || !conn.syncRecurring) return { created: 0, updated: 0, removed: 0, skipped: 0 };
+export async function syncAllRecurringForUser(userId: string, profileId?: string | null): Promise<SyncStats & { skipped: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
-  const { data } = await dbAny.from("recurring_payments").select("id").eq("user_id", userId);
+  let q = dbAny.from("recurring_payments").select("id").eq("user_id", userId);
+  if (profileId) q = q.eq("profile_id", profileId);
+  const { data } = await q;
   const rows = (data ?? []) as { id: string }[];
   const acc = { created: 0, updated: 0, removed: 0, skipped: 0 };
   for (const r of rows) {
@@ -1065,12 +1065,12 @@ export async function syncWarrantyForUser(opts: {
   return { status: "ok", ...stats };
 }
 
-export async function syncAllWarrantiesForUser(userId: string): Promise<SyncStats & { skipped: number }> {
-  const conn = await getValidCalendarAccessTokenForUser(userId);
-  if (!conn || !conn.syncWarranties) return { created: 0, updated: 0, removed: 0, skipped: 0 };
+export async function syncAllWarrantiesForUser(userId: string, profileId?: string | null): Promise<SyncStats & { skipped: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
-  const { data } = await dbAny.from("warranties").select("id").eq("user_id", userId);
+  let q = dbAny.from("warranties").select("id").eq("user_id", userId);
+  if (profileId) q = q.eq("profile_id", profileId);
+  const { data } = await q;
   const rows = (data ?? []) as { id: string }[];
   const acc = { created: 0, updated: 0, removed: 0, skipped: 0 };
   for (const r of rows) {
@@ -1156,15 +1156,15 @@ export async function syncAgreementEndForUser(opts: {
   return { status: "ok", ...stats };
 }
 
-export async function syncAllAgreementEndsForUser(userId: string): Promise<SyncStats & { skipped: number }> {
-  const conn = await getValidCalendarAccessTokenForUser(userId);
-  if (!conn || !conn.syncAgreements) return { created: 0, updated: 0, removed: 0, skipped: 0 };
+export async function syncAllAgreementEndsForUser(userId: string, profileId?: string | null): Promise<SyncStats & { skipped: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const dbAny = supabaseAdmin as unknown as { from: (t: string) => any };
-  const { data } = await dbAny
+  let q = dbAny
     .from("agreements")
     .select("id, agreement_type, end_date")
     .eq("user_id", userId);
+  if (profileId) q = q.eq("profile_id", profileId);
+  const { data } = await q;
   const rows = (data ?? []) as { id: string; agreement_type: string; end_date: string | null }[];
   const acc = { created: 0, updated: 0, removed: 0, skipped: 0 };
   for (const r of rows) {
@@ -1185,19 +1185,17 @@ export async function syncAllAgreementEndsForUser(userId: string): Promise<SyncS
 
 // ------------------ combined full sync ------------------
 
-export async function syncEverythingForUser(userId: string): Promise<{
+export async function syncEverythingForUser(userId: string, profileId?: string | null): Promise<{
   created: number;
   updated: number;
   removed: number;
   skipped: number;
 }> {
-  const conn = await getValidCalendarAccessTokenForUser(userId);
-  if (!conn) return { created: 0, updated: 0, removed: 0, skipped: 0 };
   const [a, b, c, d] = await Promise.all([
-    syncAllInstallmentsForUser(userId),
-    syncAllRecurringForUser(userId),
-    syncAllWarrantiesForUser(userId),
-    syncAllAgreementEndsForUser(userId),
+    syncAllInstallmentsForUser(userId, profileId ?? null),
+    syncAllRecurringForUser(userId, profileId ?? null),
+    syncAllWarrantiesForUser(userId, profileId ?? null),
+    syncAllAgreementEndsForUser(userId, profileId ?? null),
   ]);
   return {
     created: a.created + b.created + c.created + d.created,
