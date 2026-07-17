@@ -193,7 +193,7 @@ function Dashboard() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <ModuleCard to="/warranties" icon={ShieldCheck} title={t("nav.warranties")} value={t("dashboard.warrantiesTracked", { count: data?.warranties.length ?? 0 })} sub={t("dashboard.expiringSoon", { count: data?.expiring.length ?? 0 })} />
+        <ModuleCard to="/warranties" icon={ShieldCheck} title={t("dashboard.warrantiesCardTitle")} value={t("dashboard.warrantiesTracked", { count: data?.warranties.length ?? 0 })} sub={t("dashboard.expiringSoon", { count: data?.expiring.length ?? 0 })} />
         <ModuleCard to="/expenses" icon={Wallet} title={t("nav.expenses")} value={formatCurrency(totals.month.balance)} sub={t("expenses.balance") + " · " + t("expenses.thisMonth")} />
         <ModuleCard to="/agreements" icon={FileText} title={t("nav.agreements")} value={t("dashboard.onFile", { count: data?.agreements.length ?? 0 })} sub={t("dashboard.contractsInstallments")} />
       </div>
