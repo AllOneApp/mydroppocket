@@ -82,6 +82,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      // Privacy & security hardening (Zero-Trust): limit referrer leakage & feature APIs.
+      { name: "referrer", content: "strict-origin-when-cross-origin" },
+      { httpEquiv: "Permissions-Policy", content: "camera=(self), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()" },
+      { httpEquiv: "X-Content-Type-Options", content: "nosniff" },
       { title: "DropPocket — Tšekid, garantiid ja dokumendid ühes taskus" },
       { name: "description", content: "Sinu garantiitšekid, ostudokumendid ja lepingud – turvaliselt ühes kohas. Ära hoia tšekke enam sahtlis, kus need pleegivad või kaovad. Pildista, salvesta pilve" },
       { name: "author", content: "DropPocket" },
