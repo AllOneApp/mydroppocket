@@ -16,6 +16,8 @@ import {
   disconnectGoogleDrive,
   syncBackupAll,
   currentBackupLang,
+  setBackupFormat,
+  type BackupFormat,
 } from "@/lib/google-drive.functions";
 
 export const Route = createFileRoute("/_authenticated/settings/cloud-backup")({
@@ -62,6 +64,15 @@ function CloudBackupPage() {
     onError: (e: unknown) => {
       toast.error(e instanceof Error ? e.message : t("cloudBackup.disconnectFailed"));
     },
+  });
+
+  const formatMut = useMutation({
+    mutationFn: (format: BackupFormat) => setBackupFormat({ data: { profileId: null, format } }),
+    onSuccess: () => {
+      toast.success("Varunduse formaat salvestatud");
+      qc.invalidateQueries({ queryKey: ["google-drive-status"] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Salvestamine ebaõnnestus"),
   });
 
   async function runFullBackup() {
@@ -252,6 +263,25 @@ function CloudBackupPage() {
             <Switch checked={autoBackup} onCheckedChange={setAutoBackup} />
           </div>
         </section>
+
+        {gdriveConnected && (
+          <section className="card-soft p-6">
+            <h2 className="mb-1 text-lg font-semibold">Varunduse formaat</h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Kehtib ainult genereeritud koondaruannetele. Originaalfailid (PDF-tšekid, JPG/PNG) sünkroonitakse alati eraldi originaalidena.
+            </p>
+            <select
+              className="w-full max-w-sm rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={gdriveStatus?.backupFormat ?? "excel_pdf"}
+              onChange={(e) => formatMut.mutate(e.target.value as BackupFormat)}
+              disabled={formatMut.isPending}
+            >
+              <option value="excel_pdf">Excel + PDF (soovitatud)</option>
+              <option value="excel_only">Ainult Excel</option>
+              <option value="pdf_only">Ainult PDF</option>
+            </select>
+          </section>
+        )}
 
         <section className="card-soft p-6">
           <h2 className="mb-4 text-lg font-semibold">{t("cloudBackup.itemsTitle")}</h2>

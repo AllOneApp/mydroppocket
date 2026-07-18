@@ -35,6 +35,8 @@ import {
   disconnectGoogleDrive,
   getProfilePendingCloudCounts,
   syncDriveExistingBatch,
+  setBackupFormat,
+  type BackupFormat,
 } from "@/lib/google-drive.functions";
 import { Progress } from "@/components/ui/progress";
 
@@ -625,6 +627,12 @@ function DriveProfileBlock({ profile }: { profile: UserProfile }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Katkestamine ebaõnnestus"),
   });
 
+  const formatMut = useMutation({
+    mutationFn: (format: BackupFormat) => setBackupFormat({ data: { profileId: profile.id, format } }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["profile-drive-status", profile.id] }); toast.success("Varunduse formaat salvestatud"); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Salvestamine ebaõnnestus"),
+  });
+
   async function handleConnect() {
     const popup = window.open("", `mydroppocket-gdrive-${profile.id}`, "width=560,height=680");
     if (!popup) { toast.error("Palun luba hüpikaknad"); return; }
@@ -723,6 +731,25 @@ function DriveProfileBlock({ profile }: { profile: UserProfile }) {
           </Button>
         )}
       </div>
+
+      {s?.connected && (
+        <div className="mt-3 rounded-md border border-border/60 bg-background/60 p-2">
+          <div className="text-xs font-medium text-foreground/90">Varunduse formaat</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            Kehtib ainult koondaruannetele (Tulud/kulud, Garantiid, Lepingud, Püsimaksed). Originaalfailid (PDF, JPG, PNG) sünkroonitakse alati eraldi.
+          </div>
+          <select
+            className="mt-2 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+            value={s.backupFormat ?? "excel_pdf"}
+            onChange={(e) => formatMut.mutate(e.target.value as BackupFormat)}
+            disabled={formatMut.isPending}
+          >
+            <option value="excel_pdf">Excel + PDF (soovitatud)</option>
+            <option value="excel_only">Ainult Excel</option>
+            <option value="pdf_only">Ainult PDF</option>
+          </select>
+        </div>
+      )}
 
       <PostConnectSyncPrompt
         open={prompt.open}
