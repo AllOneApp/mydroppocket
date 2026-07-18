@@ -120,7 +120,7 @@ export const getProfileDriveStatus = createServerFn({ method: "POST" })
       // Kasuta põhikonto ühendust; salvestuskoht MyDropPocket/{profiili nimi}.
       const { data: prim } = await supabaseAdmin
         .from("google_drive_connections")
-        .select("google_email")
+        .select("google_email, backup_format")
         .eq("user_id", context.userId)
         .is("profile_id", null)
         .maybeSingle();
@@ -129,12 +129,13 @@ export const getProfileDriveStatus = createServerFn({ method: "POST" })
         connected: !!prim,
         email: prim ? (prim as { google_email: string }).google_email : null,
         storagePath: `MyDropPocket / ${p.name}`,
+        backupFormat: parseBackupFormat((prim as { backup_format?: string } | null)?.backup_format),
       };
     }
     // separate režiim
     const { data: own } = await supabaseAdmin
       .from("google_drive_connections")
-      .select("google_email")
+      .select("google_email, backup_format")
       .eq("user_id", context.userId)
       .eq("profile_id", data.profileId)
       .maybeSingle();
@@ -143,7 +144,70 @@ export const getProfileDriveStatus = createServerFn({ method: "POST" })
       connected: !!own,
       email: own ? (own as { google_email: string }).google_email : null,
       storagePath: `MyDropPocket`,
+      backupFormat: parseBackupFormat((own as { backup_format?: string } | null)?.backup_format),
     };
+  });
+
+/**
+ * Loe profiili varunduse formaat. Shared režiim → põhikonto ühenduse formaat;
+ * separate režiim → selle profiili enda ühenduse formaat.
+ */
+export const getBackupFormat = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input?: { profileId?: string | null }) => input ?? {})
+  .handler(async ({ data, context }): Promise<{ format: BackupFormat }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const pid = data?.profileId ?? null;
+    // Kui profileId antud, uuri selle profiili drive_mode'i.
+    let connProfileId: string | null = null;
+    if (pid) {
+      const { data: profile } = await supabaseAdmin
+        .from("user_profiles")
+        .select("drive_mode")
+        .eq("id", pid)
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if ((profile as { drive_mode?: string } | null)?.drive_mode === "separate") connProfileId = pid;
+    }
+    let q = supabaseAdmin
+      .from("google_drive_connections")
+      .select("backup_format")
+      .eq("user_id", context.userId);
+    if (connProfileId) q = q.eq("profile_id", connProfileId);
+    else q = q.is("profile_id", null);
+    const { data: row } = await q.maybeSingle();
+    return { format: parseBackupFormat((row as { backup_format?: string } | null)?.backup_format) };
+  });
+
+/**
+ * Muuda profiili varunduse formaati (Excel + PDF / Excel only / PDF only).
+ * Kirjutab õigesse ühenduse ritta vastavalt profiili drive_mode'ile.
+ */
+export const setBackupFormat = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId?: string | null; format: BackupFormat }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const format = parseBackupFormat(data.format);
+    let connProfileId: string | null = null;
+    if (data.profileId) {
+      const { data: profile } = await supabaseAdmin
+        .from("user_profiles")
+        .select("drive_mode")
+        .eq("id", data.profileId)
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      if ((profile as { drive_mode?: string } | null)?.drive_mode === "separate") connProfileId = data.profileId;
+    }
+    let q = supabaseAdmin
+      .from("google_drive_connections")
+      .update({ backup_format: format, updated_at: new Date().toISOString() })
+      .eq("user_id", context.userId);
+    if (connProfileId) q = q.eq("profile_id", connProfileId);
+    else q = q.is("profile_id", null);
+    const { error } = await q;
+    if (error) throw error;
+    return { ok: true as const, format };
   });
 
 /**
