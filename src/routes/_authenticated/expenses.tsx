@@ -58,6 +58,7 @@ function ExpensesPage() {
     const r = computeRange("thisMonth");
     return { preset: "thisMonth", from: r.from, to: r.to };
   });
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [visibleCount, setVisibleCount] = useState(30);
@@ -97,13 +98,27 @@ function ExpensesPage() {
     return () => clearTimeout(timer);
   }, [highlightId, data]);
 
-  const filtered = useMemo(() => (data ?? []).filter((r) => r.expense_date >= range.from && r.expense_date <= range.to), [data, range]);
+  const filtered = useMemo(
+    () =>
+      (data ?? []).filter(
+        (r) =>
+          r.expense_date >= range.from &&
+          r.expense_date <= range.to &&
+          (categoryFilter === "all" || r.category === categoryFilter),
+      ),
+    [data, range, categoryFilter],
+  );
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of data ?? []) set.add(r.category);
+    return Array.from(set).sort();
+  }, [data]);
   const income = filtered.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
   const expense = filtered.filter((r) => r.type === "expense").reduce((s, r) => s + Number(r.amount), 0);
   const balance = income - expense;
 
   // Reset pagination when filters or data change.
-  useEffect(() => { setVisibleCount(30); }, [range.from, range.to, activeProfileId]);
+  useEffect(() => { setVisibleCount(30); }, [range.from, range.to, activeProfileId, categoryFilter]);
   const visible = filtered.slice(0, visibleCount);
   const hasMore = filtered.length > visible.length;
 
@@ -158,7 +173,13 @@ function ExpensesPage() {
       </div>
 
       <div className="card-soft mb-6 p-3 sm:p-4">
-        <PeriodChips value={range} onChange={setRange} />
+        <FiltersBar
+          value={range}
+          onChange={setRange}
+          category={categoryFilter}
+          onCategoryChange={setCategoryFilter}
+          categories={availableCategories}
+        />
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
@@ -616,14 +637,28 @@ function normalizeDateString(input: string | null | undefined): string | null {
   return null;
 }
 
-// Compact chip-style period filter (Today / Week / Month / Year / Pick).
-function PeriodChips({ value, onChange }: { value: DateRange; onChange: (v: DateRange) => void }) {
+// Combined period + custom-range + category filter.
+// Mobile: three stacked full-width dropdowns.
+// Desktop: chip row (Today / Week / Month / Year / Pick period) + category select.
+function FiltersBar({
+  value,
+  onChange,
+  category,
+  onCategoryChange,
+  categories,
+}: {
+  value: DateRange;
+  onChange: (v: DateRange) => void;
+  category: string;
+  onCategoryChange: (v: string) => void;
+  categories: string[];
+}) {
   const { t } = useTranslation();
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState(value.from);
   const [draftTo, setDraftTo] = useState(value.to);
 
-  const chips: { key: PresetKey; label: string }[] = [
+  const presets: { key: PresetKey; label: string }[] = [
     { key: "today", label: t("dateRange.presets.today") },
     { key: "thisWeek", label: t("dateRange.presets.thisWeek") },
     { key: "thisMonth", label: t("dateRange.presets.thisMonth") },
@@ -636,96 +671,193 @@ function PeriodChips({ value, onChange }: { value: DateRange; onChange: (v: Date
   }
 
   const isCustom = value.preset === "custom";
+  const customLabel = isCustom ? `${formatDate(value.from)} – ${formatDate(value.to)}` : t("common.pickPeriod", { defaultValue: "Vali periood" });
+  const pickPeriodLabel = t("common.pickPeriod", { defaultValue: "Vali periood" });
+  const allCategoriesLabel = t("expenses.allCategories", { defaultValue: "Kõik kategooriad" });
+  const categoryLabel = t("expenses.category", { defaultValue: "Kategooria" });
+  const periodLabel = t("dateRange.period", { defaultValue: "Periood" });
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {chips.map((c) => {
-          const active = value.preset === c.key;
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => pick(c.key)}
-              className={`h-9 shrink-0 rounded-full px-4 text-sm font-medium transition-colors ${
-                active
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-accent text-foreground hover:bg-accent/80"
-              }`}
-            >
-              {c.label}
-            </button>
-          );
-        })}
-        <Popover
-          open={popoverOpen}
-          onOpenChange={(o) => {
-            setPopoverOpen(o);
-            if (o) {
-              setDraftFrom(value.from);
-              setDraftTo(value.to);
-            }
-          }}
-        >
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition-colors ${
-                isCustom
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-accent text-foreground hover:bg-accent/80"
-              }`}
-            >
-              <CalendarDays className="h-4 w-4" />
-              {t("common.pickPeriod", { defaultValue: "Vali periood" })}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-72 space-y-3 p-4">
-            <div>
-              <Label className="text-xs">{t("dateRange.from")}</Label>
-              <Input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs">{t("dateRange.to")}</Label>
-              <Input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
-            </div>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Button
-                size="sm"
-                className="flex-1"
-                onClick={() => {
-                  if (!draftFrom || !draftTo) return;
-                  const from = draftFrom <= draftTo ? draftFrom : draftTo;
-                  const to = draftFrom <= draftTo ? draftTo : draftFrom;
-                  onChange({ preset: "custom", from, to });
-                  setPopoverOpen(false);
-                }}
+    <>
+      {/* MOBILE — three stacked full-width dropdowns */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        <div>
+          <Label className="mb-1 block text-xs text-muted-foreground">{periodLabel}</Label>
+          <Select
+            value={isCustom ? "thisMonth" : value.preset}
+            onValueChange={(v) => pick(v as PresetKey)}
+          >
+            <SelectTrigger className="h-11 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {presets.map((p) => (
+                <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="mb-1 block text-xs text-muted-foreground">{pickPeriodLabel}</Label>
+          <Popover
+            open={popoverOpen}
+            onOpenChange={(o) => {
+              setPopoverOpen(o);
+              if (o) { setDraftFrom(value.from); setDraftTo(value.to); }
+            }}
+          >
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={`flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm ${
+                  isCustom ? "font-medium text-foreground" : "text-muted-foreground"
+                }`}
               >
-                {t("common.apply", { defaultValue: "Rakenda" })}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setPopoverOpen(false)}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => { pick("thisMonth"); setPopoverOpen(false); }}
-              >
-                {t("common.reset", { defaultValue: "Tühjenda" })}
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
+                <span className="flex items-center gap-2 truncate">
+                  <CalendarDays className="h-4 w-4 shrink-0" />
+                  <span className="truncate">
+                    {isCustom ? `${formatDate(value.from)} – ${formatDate(value.to)}` : t("expenses.pickRangePlaceholder", { defaultValue: "Alates – Kuni" })}
+                  </span>
+                </span>
+                <span className="text-xs opacity-60">▾</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-[calc(100vw-2rem)] max-w-sm space-y-3 p-4">
+              <div>
+                <Label className="text-xs">{t("dateRange.from")}</Label>
+                <Input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">{t("dateRange.to")}</Label>
+                <Input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    if (!draftFrom || !draftTo) return;
+                    const from = draftFrom <= draftTo ? draftFrom : draftTo;
+                    const to = draftFrom <= draftTo ? draftTo : draftFrom;
+                    onChange({ preset: "custom", from, to });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  {t("common.apply", { defaultValue: "Rakenda" })}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setPopoverOpen(false)}>
+                  {t("common.cancel")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { pick("thisMonth"); setPopoverOpen(false); }}>
+                  {t("common.reset", { defaultValue: "Tühjenda" })}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div>
+          <Label className="mb-1 block text-xs text-muted-foreground">{categoryLabel}</Label>
+          <Select value={category} onValueChange={onCategoryChange}>
+            <SelectTrigger className="h-11 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{allCategoriesLabel}</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c} value={c}>{t(`expenses.categories.${c}` as const, { defaultValue: c })}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
-      {isCustom && (
-        <p className="px-1 text-xs text-muted-foreground">
-          {formatDate(value.from)} – {formatDate(value.to)}
-        </p>
-      )}
-    </div>
+
+      {/* DESKTOP — chip row + category select */}
+      <div className="hidden sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+        <div className="flex flex-wrap gap-2">
+          {presets.map((c) => {
+            const active = value.preset === c.key;
+            return (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => pick(c.key)}
+                className={`h-9 rounded-full px-4 text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-accent text-foreground hover:bg-accent/80"
+                }`}
+              >
+                {c.label}
+              </button>
+            );
+          })}
+          <Popover
+            open={popoverOpen}
+            onOpenChange={(o) => {
+              setPopoverOpen(o);
+              if (o) { setDraftFrom(value.from); setDraftTo(value.to); }
+            }}
+          >
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={`inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition-colors ${
+                  isCustom
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-accent text-foreground hover:bg-accent/80"
+                }`}
+              >
+                <CalendarDays className="h-4 w-4" />
+                <span className="truncate">{customLabel}</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 space-y-3 p-4">
+              <div>
+                <Label className="text-xs">{t("dateRange.from")}</Label>
+                <Input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">{t("dateRange.to")}</Label>
+                <Input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    if (!draftFrom || !draftTo) return;
+                    const from = draftFrom <= draftTo ? draftFrom : draftTo;
+                    const to = draftFrom <= draftTo ? draftTo : draftFrom;
+                    onChange({ preset: "custom", from, to });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  {t("common.apply", { defaultValue: "Rakenda" })}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setPopoverOpen(false)}>
+                  {t("common.cancel")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { pick("thisMonth"); setPopoverOpen(false); }}>
+                  {t("common.reset", { defaultValue: "Tühjenda" })}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="sm:ml-auto sm:min-w-[14rem]">
+          <Select value={category} onValueChange={onCategoryChange}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{allCategoriesLabel}</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c} value={c}>{t(`expenses.categories.${c}` as const, { defaultValue: c })}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </>
   );
 }
