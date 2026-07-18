@@ -64,6 +64,7 @@ function ExpensesPage() {
   useEffect(() => {
     if (!openId || !data) return;
     const found = data.find((r) => r.id === openId);
+    if (!found) return; // wait for refetch to bring in freshly-created row
     if (found) {
       // If the target expense sits outside the current date range, widen the
       // range so it becomes visible in the list. Prefer the smallest preset
