@@ -56,19 +56,43 @@ function ExpensesPage() {
     const r = computeRange("thisMonth");
     return { preset: "thisMonth", from: r.from, to: r.to };
   });
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const { data } = useQuery(expensesQueryOptions(activeProfileId));
 
   useEffect(() => {
     if (!openId || !data) return;
     const found = data.find((r) => r.id === openId);
+    if (!found) return; // wait for refetch to bring in freshly-created row
     if (found) {
-      setEditing(found);
-      setPrefill(null);
-      setOpen(true);
+      // If the target expense sits outside the current date range, widen the
+      // range so it becomes visible in the list. Prefer the smallest preset
+      // that still contains both today and the target date.
+      if (found.expense_date < range.from || found.expense_date > range.to) {
+        const candidates: DateRange["preset"][] = ["thisMonth", "thisYear", "all"];
+        let chosen: DateRange["preset"] = "all";
+        for (const p of candidates) {
+          const r = computeRange(p);
+          if (found.expense_date >= r.from && found.expense_date <= r.to) { chosen = p; break; }
+        }
+        const r = computeRange(chosen);
+        setRange({ preset: chosen, from: r.from, to: r.to });
+      }
+      setHighlightId(found.id);
     }
     void navigate({ to: "/expenses", search: {}, replace: true });
-  }, [openId, data, navigate]);
+  }, [openId, data, navigate, range.from, range.to]);
+
+  useEffect(() => {
+    if (!highlightId) return;
+    const el = rowRefs.current[highlightId];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    const timer = setTimeout(() => setHighlightId(null), 2400);
+    return () => clearTimeout(timer);
+  }, [highlightId, data]);
 
   const filtered = useMemo(() => (data ?? []).filter((r) => r.expense_date >= range.from && r.expense_date <= range.to), [data, range]);
   const income = filtered.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
@@ -143,8 +167,13 @@ function ExpensesPage() {
         <div className="card-soft divide-y divide-border">
           {filtered.map((r) => {
             const isIncome = r.type === "income";
+            const isHighlighted = highlightId === r.id;
             return (
-              <div key={r.id} className="p-5">
+              <div
+                key={r.id}
+                ref={(el) => { rowRefs.current[r.id] = el; }}
+                className={`p-5 transition-colors ${isHighlighted ? "bg-primary/10 ring-2 ring-primary/40 ring-inset" : ""}`}
+              >
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
                   <button onClick={() => { setEditing(r); setPrefill(null); setOpen(true); }} className="min-w-0 text-left">
                     <p className="flex items-center gap-2 truncate font-medium hover:text-primary">
