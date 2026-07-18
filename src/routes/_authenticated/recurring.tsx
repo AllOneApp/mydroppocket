@@ -422,6 +422,12 @@ function RecurringPage() {
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
         onConfirm={() => { const r = pendingDelete; setPendingDelete(null); if (r) void performDelete(r); }}
       />
+      <ConfirmDeleteDialog
+        open={!!pendingHistoryDelete}
+        onOpenChange={(o) => { if (!o) setPendingHistoryDelete(null); }}
+        onConfirm={() => { const inst = pendingHistoryDelete; setPendingHistoryDelete(null); if (inst) void performDeleteHistory(inst); }}
+        description={t("recurring.confirmDeleteHistory")}
+      />
     </AppShell>
   );
 }
