@@ -35,6 +35,8 @@ import {
   disconnectGoogleDrive,
   getProfilePendingCloudCounts,
   syncDriveExistingBatch,
+  setBackupFormat,
+  type BackupFormat,
 } from "@/lib/google-drive.functions";
 import { Progress } from "@/components/ui/progress";
 
