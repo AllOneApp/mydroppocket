@@ -270,7 +270,8 @@ function RecurringPage() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold sm:text-3xl">{t("recurring.title")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground sm:text-base">{t("recurring.desc")}</p>
+          <p className="mt-0.5 text-sm font-medium text-muted-foreground sm:text-base">{t("recurring.tagline")}</p>
+          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{t("recurring.desc")}</p>
         </div>
         <Button
           onClick={() => { setEditing(null); setOpen(true); }}
