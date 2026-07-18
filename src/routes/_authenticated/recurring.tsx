@@ -241,17 +241,22 @@ function RecurringPage() {
     }
   }
 
-  async function performDeleteHistory(inst: Instance) {
+  async function performDeleteHistory(inst: Instance, opts: { alsoExpense: boolean }) {
     try {
       const { error } = await supabase.from("recurring_payment_instances").delete().eq("id", inst.id);
       if (error) throw error;
+      if (opts.alsoExpense && inst.expense_id) {
+        try { await supabase.from("expenses").delete().eq("id", inst.expense_id); } catch (e) { console.warn("[expenses] delete failed", e); }
+      }
       if (inst.receipt_file_path) { try { await deleteFile(inst.receipt_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
       if (inst.invoice_file_path) { try { await deleteFile(inst.invoice_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
       try {
         await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
+        if (opts.alsoExpense) await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["recurring_instances"], refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["expenses"], refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
       ]);
       toast.success(t("recurring.historyDeleted"));
