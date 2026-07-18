@@ -411,6 +411,12 @@
     "hideHistory": "Hide history",
     "paidOn": "Paid",
     "viewReceipt": "View receipt",
+    "deleteHistory": "Delete",
+    "confirmDeleteHistory": "Are you sure you want to delete this payment from history?",
+    "historyDeleted": "Payment entry deleted",
+    "viewAll": "View all",
+    "viewAllShort": "View",
+    "uploadHint": "Attach an invoice or contract and tap \"Auto-fill from document\" — AI will fill in the fields for you.",
     "frequencies": {
       "monthly": "Every month",
       "bimonthly": "Every 2 months",

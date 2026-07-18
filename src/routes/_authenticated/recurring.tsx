@@ -1,7 +1,8 @@
 import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Repeat, Trash2, CheckCircle2, Upload, Camera, X as XIcon, Calendar, History, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -17,10 +18,11 @@ import { FileDrop } from "@/components/FileDrop";
 import { VoiceInput } from "@/components/VoiceInput";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
-import { deleteFile, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
+import { deleteFile, fileToBase64, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
 import { syncFileToGoogleDrive, syncBackupCategory, currentBackupLang } from "@/lib/google-drive.functions";
 import { syncRecurringPayment, removeCalendarSource } from "@/lib/google-calendar.functions";
 import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
+import { extractDocument } from "@/lib/ocr.functions";
 import { useActiveProfile } from "@/hooks/useActiveProfile";
 
 export const Route = createFileRoute("/_authenticated/recurring")({
@@ -55,6 +57,7 @@ function RecurringPage() {
   const [payAsk, setPayAsk] = useState<{ instance: Instance; recurring: Recurring } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Recurring | null>(null);
+  const [pendingHistoryDelete, setPendingHistoryDelete] = useState<Instance | null>(null);
 
   const { data: recurring } = useQuery({
     queryKey: ["recurring_payments", activeProfileId],
@@ -191,6 +194,25 @@ function RecurringPage() {
       toast.success(t("common.deleted"));
     } catch (e) {
       if (prev) qc.setQueryData(["recurring_payments"], prev);
+      toast.error(e instanceof Error ? e.message : t("common.deleteFailed"));
+    }
+  }
+
+  async function performDeleteHistory(inst: Instance) {
+    try {
+      const { error } = await supabase.from("recurring_payment_instances").delete().eq("id", inst.id);
+      if (error) throw error;
+      if (inst.receipt_file_path) { try { await deleteFile(inst.receipt_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+      if (inst.invoice_file_path) { try { await deleteFile(inst.invoice_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+      try {
+        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
+      } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["recurring_instances"], refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
+      ]);
+      toast.success(t("recurring.historyDeleted"));
+    } catch (e) {
       toast.error(e instanceof Error ? e.message : t("common.deleteFailed"));
     }
   }
@@ -371,6 +393,14 @@ function RecurringPage() {
                         </button>
                       )}
                       <p className="shrink-0 text-sm font-semibold">{formatCurrency(Number(i.amount), i.currency ?? "EUR")}</p>
+                      <button
+                        onClick={() => setPendingHistoryDelete(i)}
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        title={t("recurring.deleteHistory")}
+                        aria-label={t("recurring.deleteHistory")}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </li>
                   );
                 })}
@@ -392,6 +422,12 @@ function RecurringPage() {
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
         onConfirm={() => { const r = pendingDelete; setPendingDelete(null); if (r) void performDelete(r); }}
       />
+      <ConfirmDeleteDialog
+        open={!!pendingHistoryDelete}
+        onOpenChange={(o) => { if (!o) setPendingHistoryDelete(null); }}
+        onConfirm={() => { const inst = pendingHistoryDelete; setPendingHistoryDelete(null); if (inst) void performDeleteHistory(inst); }}
+        description={t("recurring.confirmDeleteHistory")}
+      />
     </AppShell>
   );
 }
@@ -408,16 +444,65 @@ function SumCard({ tone, label, value }: { tone: "green" | "orange" | "red"; lab
 
 function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Recurring | null }) {
   const qc = useQueryClient();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { activeProfileId } = useActiveProfile();
+  const extract = useServerFn(extractDocument);
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const scanRequestRef = useRef(0);
   const [form, setForm] = useState(() => makeForm(row));
 
-  useEffect(() => { if (open) { setForm(makeForm(row)); setFile(null); } }, [open, row]);
+  useEffect(() => {
+    if (open) {
+      scanRequestRef.current += 1;
+      setForm(makeForm(row));
+      setFile(null);
+    }
+    return () => { scanRequestRef.current += 1; };
+  }, [open, row]);
   useEffect(() => {
     if (open) console.info("[VoiceInput] recurring:form-state", { filledFields: Object.values(form).filter(Boolean).length });
   }, [open, form]);
+
+  async function scan() {
+    if (!file) return;
+    const requestId = ++scanRequestRef.current;
+    setScanning(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const locale = (i18n.language?.toLowerCase().startsWith("et") ? "et" : "en") as "et" | "en";
+      const res = await extract({ data: { kind: "recurring", mime: file.type || "application/octet-stream", base64, locale } });
+      if (scanRequestRef.current !== requestId) return;
+      if (!res.ok) { toast.error(res.error); return; }
+      const d = res.data as Record<string, string | number | null>;
+      const startNorm = normalizeDate(typeof d.start_date === "string" ? d.start_date : null);
+      const nextRaw = normalizeDate(typeof d.next_due_date === "string" ? d.next_due_date : null);
+      const nextFromDay = dueDayToDate(typeof d.due_day === "number" ? d.due_day : null);
+      const endNorm = normalizeDate(typeof d.end_date === "string" ? d.end_date : null);
+      const freq = (typeof d.frequency === "string" && (FREQUENCIES as readonly string[]).includes(d.frequency)) ? (d.frequency as Frequency) : null;
+      const cat = (typeof d.category === "string" && (CATEGORIES as readonly string[]).includes(d.category)) ? (d.category as string) : null;
+      setForm((f) => ({
+        ...f,
+        service_name: (typeof d.service_name === "string" && d.service_name.trim()) || f.service_name,
+        provider: (typeof d.provider === "string" && d.provider.trim()) || f.provider,
+        category: cat || f.category,
+        amount: d.amount != null ? String(d.amount) : f.amount,
+        currency: (typeof d.currency === "string" && d.currency.trim()) || f.currency,
+        frequency: freq || f.frequency,
+        start_date: startNorm || f.start_date,
+        end_date: endNorm || f.end_date,
+        next_due_date: nextRaw || nextFromDay || startNorm || f.next_due_date,
+        notes: (typeof d.notes === "string" && d.notes.trim()) || f.notes,
+      }));
+      toast.success(t("common.autoFilled", { defaultValue: "Väljad täidetud" }));
+    } catch (e) {
+      if (scanRequestRef.current !== requestId) return;
+      toast.error(e instanceof Error ? e.message : t("common.scanFailed", { defaultValue: "Skaneerimine ebaõnnestus" }));
+    } finally {
+      if (scanRequestRef.current === requestId) setScanning(false);
+    }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -494,6 +579,10 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("recurring.editTitle") : t("recurring.addTitle")}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="space-y-4">
+          <div>
+            <Label>{t("recurring.contractFile")}</Label>
+            <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
+          </div>
           <div className="flex justify-end">
             <VoiceInput
               context="recurring_payment"
@@ -558,7 +647,6 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               </SelectContent>
             </Select>
           </div>
-          <div><Label>{t("recurring.contractFile")}</Label><FileDrop file={file} onFile={setFile} /></div>
           <div><Label>{t("recurring.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
@@ -643,6 +731,29 @@ function dueDayToDate(day: number | null | undefined): string | null {
   const target = new Date(d.getFullYear(), d.getMonth(), day);
   if (target.getTime() < Date.now() - 86400000) target.setMonth(target.getMonth() + 1);
   return target.toISOString().slice(0, 10);
+}
+
+function normalizeDate(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const s = String(input).trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
+  if (m) {
+    const d = m[1].padStart(2, "0");
+    const mo = m[2].padStart(2, "0");
+    let y = m[3];
+    if (y.length === 2) y = (Number(y) > 70 ? "19" : "20") + y;
+    return `${y}-${mo}-${d}`;
+  }
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const mo = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${d}`;
+  }
+  return null;
 }
 
 function makeForm(row: Recurring | null) {

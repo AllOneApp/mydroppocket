@@ -13,7 +13,7 @@ const DocumentFileSchema = z.object({
 });
 
 const InputSchema = z.object({
-  kind: z.enum(["warranty", "expense", "agreement"]),
+  kind: z.enum(["warranty", "expense", "agreement", "recurring"]),
   mime: z.string().optional(),
   base64: z.string().optional(),
   files: z.array(DocumentFileSchema).optional(),
@@ -66,6 +66,19 @@ export const extractDocument = createServerFn({ method: "POST" })
       currency: z.string().nullable(),
       notes: z.string().nullable(),
     });
+    const recurringSchema = z.object({
+      service_name: z.string().nullable(),
+      provider: z.string().nullable(),
+      category: z.string().nullable(),
+      amount: z.number().nullable(),
+      currency: z.string().nullable(),
+      frequency: z.string().nullable(),
+      start_date: z.string().nullable(),
+      next_due_date: z.string().nullable(),
+      end_date: z.string().nullable(),
+      due_day: z.number().nullable(),
+      notes: z.string().nullable(),
+    });
     const extractionPrompts = {
       warranty:
         `Read this receipt/invoice carefully using OCR and extract fields for a warranty record.
@@ -94,6 +107,21 @@ Return null for an unknown scalar field and never invent a value.
   * estimated_price: the row-level price if visible on the receipt, otherwise null
   Do NOT include consumables (food, beverages, tobacco, cleaning supplies, cosmetics, medicines, fuel, parking, services). Return null when nothing on the receipt looks like a warranty candidate.`,
       agreement: AGREEMENT_ANALYSIS_PROMPT,
+      recurring:
+        `Read this invoice/contract/subscription document carefully with OCR and extract fields describing a RECURRING PAYMENT (utility bill, subscription, leasing, installment, insurance, phone/internet contract, streaming, cloud/software).
+Return a JSON object with EXACTLY these keys (no others): service_name, provider, category, amount, currency, frequency, start_date, next_due_date, end_date, due_day, notes.
+Return null for any field that is not clearly present, and never invent a value.
+- service_name: short human name for the payment (e.g. "Telefoniarve", "Netflix", "Elektrileping", "Autoliising"); infer from the document heading when explicit.
+- provider: company that issues the bill/contract (e.g. Elisa, Telia, Netflix, Enefit).
+- category: one of Utilities, Electricity, Water, Waste, Phone, Internet, TV, Leasing, Installment, Mortgage, Streaming, CloudStorage, AI, Software, Insurance, Subscription, Other. Pick the best match, otherwise null.
+- amount: the recurring amount charged each period (not a one-off setup fee, not a yearly total unless the doc says the frequency is annual).
+- currency: ISO code (EUR, USD…) when explicit.
+- frequency: one of "monthly", "bimonthly", "quarterly", "semiannual", "annual". Choose the value that matches the billing cadence described on the document. Default to "monthly" ONLY when the document clearly implies a monthly cycle.
+- start_date: contract/service start date in YYYY-MM-DD when stated.
+- next_due_date: next payment due date in YYYY-MM-DD when the document lists one.
+- end_date: contract end/termination date in YYYY-MM-DD when stated.
+- due_day: monthly payment day of month (1–31) when the contract states a fixed day (e.g. "makse 10. kuupäeval"); null otherwise.
+- notes: short free-text note only when helpful (e.g. account/reference number), otherwise null.`,
     };
     const locale = data.locale ?? "en";
     const languageName = locale === "et" ? "Estonian (eesti keel)" : "English";
@@ -101,6 +129,7 @@ Return null for an unknown scalar field and never invent a value.
     extractionPrompts.warranty += languageDirective;
     extractionPrompts.expense += languageDirective;
     extractionPrompts.agreement += languageDirective;
+    extractionPrompts.recurring += languageDirective;
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
     const gateway = createLovableAiGateway(key);
@@ -111,7 +140,9 @@ Return null for an unknown scalar field and never invent a value.
         ? warrantySchema
         : data.kind === "expense"
           ? expenseSchema
-          : agreementSchema;
+          : data.kind === "agreement"
+            ? agreementSchema
+            : recurringSchema;
 
     const files = data.files?.length
       ? data.files
