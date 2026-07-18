@@ -509,6 +509,7 @@ export type Database = {
           created_at: string
           currency: string | null
           due_date: string
+          expense_id: string | null
           id: string
           invoice_file_mime: string | null
           invoice_file_name: string | null
@@ -531,6 +532,7 @@ export type Database = {
           created_at?: string
           currency?: string | null
           due_date: string
+          expense_id?: string | null
           id?: string
           invoice_file_mime?: string | null
           invoice_file_name?: string | null
@@ -553,6 +555,7 @@ export type Database = {
           created_at?: string
           currency?: string | null
           due_date?: string
+          expense_id?: string | null
           id?: string
           invoice_file_mime?: string | null
           invoice_file_name?: string | null
@@ -571,6 +574,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "recurring_payment_instances_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "recurring_payment_instances_profile_id_fkey"
             columns: ["profile_id"]
@@ -598,6 +608,7 @@ export type Database = {
           contract_gdrive_file_id: string | null
           created_at: string
           currency: string | null
+          due_day: number | null
           end_date: string | null
           frequency: string
           iban: string | null
@@ -626,6 +637,7 @@ export type Database = {
           contract_gdrive_file_id?: string | null
           created_at?: string
           currency?: string | null
+          due_day?: number | null
           end_date?: string | null
           frequency?: string
           iban?: string | null
@@ -654,6 +666,7 @@ export type Database = {
           contract_gdrive_file_id?: string | null
           created_at?: string
           currency?: string | null
+          due_day?: number | null
           end_date?: string | null
           frequency?: string
           iban?: string | null

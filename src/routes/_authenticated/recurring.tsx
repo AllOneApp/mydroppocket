@@ -1,5 +1,6 @@
 import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +31,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
 import { syncFileToGoogleDrive, syncBackupCategory, currentBackupLang } from "@/lib/google-drive.functions";
 import { syncRecurringPayment, removeCalendarSource } from "@/lib/google-calendar.functions";
-import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
+import { CATEGORIES, FREQUENCIES, firstDueOnOrAfter, nextDueFrom, statusOf, type Frequency } from "@/lib/recurring";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useActiveProfile } from "@/hooks/useActiveProfile";
 
@@ -48,6 +49,7 @@ type Recurring = {
   contract_file_path: string | null; contract_file_name: string | null; contract_file_mime: string | null;
   payee_name: string | null; bank_name: string | null; iban: string | null;
   reference_number: string | null; payment_description: string | null;
+  due_day: number | null;
 };
 
 type Instance = {
@@ -57,11 +59,13 @@ type Instance = {
   receipt_file_path: string | null; receipt_file_name: string | null;
   invoice_file_path: string | null; invoice_file_name: string | null;
   notes: string | null;
+  expense_id: string | null;
 };
 
 function RecurringPage() {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { activeProfileId } = useActiveProfile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Recurring | null>(null);
@@ -69,6 +73,7 @@ function RecurringPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Recurring | null>(null);
   const [pendingHistoryDelete, setPendingHistoryDelete] = useState<Instance | null>(null);
+  const [paidResult, setPaidResult] = useState<{ expenseId: string | null; label: string } | null>(null);
 
   const { data: recurring } = useQuery({
     queryKey: ["recurring_payments", activeProfileId],
@@ -153,28 +158,53 @@ function RecurringPage() {
 
   async function markPaid(inst: Instance, rec: Recurring) {
     try {
+      // 1) Create the linked expense entry (idempotent via existing expense_id)
+      let expenseId: string | null = inst.expense_id;
+      if (!expenseId) {
+        const { data: exp, error: expErr } = await supabase.from("expenses").insert({
+          user_id: rec.user_id,
+          profile_id: activeProfileId,
+          type: "expense",
+          amount: Number(inst.amount ?? rec.amount),
+          currency: inst.currency ?? rec.currency ?? "EUR",
+          category: rec.category ?? "Other",
+          expense_date: inst.due_date,
+          description: rec.service_name,
+          store: rec.provider ?? rec.service_name,
+          notes: `↻ ${t("recurring.title")} · ${rec.service_name}`,
+        }).select("id").single();
+        if (expErr) throw expErr;
+        expenseId = (exp as { id: string } | null)?.id ?? null;
+      }
+      // 2) Mark instance paid + link expense
       await supabase.from("recurring_payment_instances")
-        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .update({ status: "paid", paid_at: new Date().toISOString(), expense_id: expenseId })
         .eq("id", inst.id);
-      // create next instance and advance recurring.next_due_date
-      const nextDue = addFrequency(inst.due_date, rec.frequency);
+      // 3) Compute next due date (anchored to due_day, not paid_at)
+      const nextDue = nextDueFrom(inst.due_date, rec.frequency, rec.due_day);
       if (!rec.end_date || nextDue <= rec.end_date) {
-        await supabase.from("recurring_payment_instances").insert({
+        // Idempotent insert — unique index on (recurring_payment_id, due_date)
+        await supabase.from("recurring_payment_instances").upsert({
           user_id: rec.user_id,
           profile_id: activeProfileId,
           recurring_payment_id: rec.id,
           due_date: nextDue, amount: rec.amount, currency: rec.currency ?? "EUR",
           status: "pending",
-        });
+        }, { onConflict: "recurring_payment_id,due_date", ignoreDuplicates: true });
         await supabase.from("recurring_payments").update({ next_due_date: nextDue }).eq("id", rec.id);
       }
       qc.invalidateQueries({ queryKey: ["recurring_payments"] });
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success(t("recurring.paidMarked"));
+      setPaidResult({
+        expenseId,
+        label: `${rec.service_name} — ${formatCurrency(Number(inst.amount), inst.currency ?? "EUR")}`,
+      });
       try {
         await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
         await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId } });
+        await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       try { await syncRecurringPayment({ data: { recurringId: rec.id } }); } catch (e) { console.warn("[gcal] recurring sync failed", e); }
     } catch (e) {
@@ -211,17 +241,22 @@ function RecurringPage() {
     }
   }
 
-  async function performDeleteHistory(inst: Instance) {
+  async function performDeleteHistory(inst: Instance, opts: { alsoExpense: boolean }) {
     try {
       const { error } = await supabase.from("recurring_payment_instances").delete().eq("id", inst.id);
       if (error) throw error;
+      if (opts.alsoExpense && inst.expense_id) {
+        try { await supabase.from("expenses").delete().eq("id", inst.expense_id); } catch (e) { console.warn("[expenses] delete failed", e); }
+      }
       if (inst.receipt_file_path) { try { await deleteFile(inst.receipt_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
       if (inst.invoice_file_path) { try { await deleteFile(inst.invoice_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
       try {
         await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
+        if (opts.alsoExpense) await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["recurring_instances"], refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["expenses"], refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
       ]);
       toast.success(t("recurring.historyDeleted"));
@@ -467,12 +502,46 @@ function RecurringPage() {
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
         onConfirm={() => { const r = pendingDelete; setPendingDelete(null); if (r) void performDelete(r); }}
       />
-      <ConfirmDeleteDialog
-        open={!!pendingHistoryDelete}
-        onOpenChange={(o) => { if (!o) setPendingHistoryDelete(null); }}
-        onConfirm={() => { const inst = pendingHistoryDelete; setPendingHistoryDelete(null); if (inst) void performDeleteHistory(inst); }}
-        description={t("recurring.confirmDeleteHistory")}
-      />
+      <Dialog open={!!pendingHistoryDelete} onOpenChange={(o) => { if (!o) setPendingHistoryDelete(null); }}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("recurring.historyDeleteChoiceTitle")}</DialogTitle>
+            <DialogDescription>{t("recurring.historyDeleteChoiceDesc")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <Button
+              variant="outline"
+              onClick={() => { const inst = pendingHistoryDelete; setPendingHistoryDelete(null); if (inst) void performDeleteHistory(inst, { alsoExpense: false }); }}
+            >{t("recurring.historyDeleteOnly")}</Button>
+            <Button
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { const inst = pendingHistoryDelete; setPendingHistoryDelete(null); if (inst) void performDeleteHistory(inst, { alsoExpense: true }); }}
+              disabled={!pendingHistoryDelete?.expense_id}
+            >{t("recurring.historyDeleteWithExpense")}</Button>
+            <Button variant="ghost" onClick={() => setPendingHistoryDelete(null)}>{t("common.cancel")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!paidResult} onOpenChange={(o) => { if (!o) setPaidResult(null); }}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>✅ {t("recurring.paidAndExpenseCreated")}</DialogTitle>
+            <DialogDescription className="break-words">{paidResult?.label}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <Button
+              className="brand-gradient-bg text-primary-foreground"
+              onClick={() => {
+                const id = paidResult?.expenseId ?? null;
+                setPaidResult(null);
+                void navigate({ to: "/expenses", search: id ? { open: id } as never : undefined as never });
+              }}
+            >{t("recurring.viewInExpenses")}</Button>
+            <Button variant="ghost" onClick={() => setPaidResult(null)}>{t("recurring.close")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
@@ -538,6 +607,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         start_date: startNorm || f.start_date,
         end_date: endNorm || f.end_date,
         next_due_date: nextRaw || nextFromDay || startNorm || f.next_due_date,
+        due_day: typeof d.due_day === "number" && d.due_day >= 1 && d.due_day <= 31 ? String(d.due_day) : f.due_day,
         notes: (typeof d.notes === "string" && d.notes.trim()) || f.notes,
         payee_name: (typeof d.payee_name === "string" && d.payee_name.trim()) || f.payee_name,
         bank_name: (typeof d.bank_name === "string" && d.bank_name.trim()) || f.bank_name,
@@ -580,6 +650,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         next_due_date: form.next_due_date || form.start_date,
         reminder_days_before: Number(form.reminder_days_before),
         notes: form.notes || null,
+        due_day: form.due_day ? Number(form.due_day) : null,
         payee_name: form.payee_name.trim() || null,
         bank_name: form.bank_name.trim() || null,
         iban: form.iban.replace(/\s+/g, "").toUpperCase() || null,
@@ -631,9 +702,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden sm:w-full sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("recurring.editTitle") : t("recurring.addTitle")}</DialogTitle></DialogHeader>
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} className="w-full min-w-0 max-w-full space-y-4">
           <div>
             <Label>{t("recurring.contractFile")}</Label>
             <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
@@ -664,9 +735,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             />
           </div>
           <div><Label>{t("recurring.serviceName")} *</Label><Input required value={form.service_name} onChange={(e) => setForm({ ...form, service_name: e.target.value })} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>{t("recurring.provider")}</Label><Input value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} /></div>
-            <div>
+          <div className="grid min-w-0 grid-cols-2 gap-3">
+            <div className="min-w-0"><Label>{t("recurring.provider")}</Label><Input value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} /></div>
+            <div className="min-w-0">
               <Label>{t("recurring.category")}</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -674,9 +745,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>{t("recurring.amount")} *</Label><Input required type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
-            <div><Label>{t("recurring.currency")}</Label><Input value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} /></div>
+          <div className="grid min-w-0 grid-cols-2 gap-3">
+            <div className="min-w-0"><Label>{t("recurring.amount")} *</Label><Input required type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
+            <div className="min-w-0"><Label>{t("recurring.currency")}</Label><Input value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} /></div>
           </div>
           <div>
             <Label>{t("recurring.frequency")} *</Label>
@@ -685,9 +756,39 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               <SelectContent>{FREQUENCIES.map((f) => <SelectItem key={f} value={f}>{t(`recurring.frequencies.${f}` as const)}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>{t("recurring.startDate")} *</Label><Input required type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value, next_due_date: form.next_due_date || e.target.value })} /></div>
-            <div><Label>{t("recurring.endDate")}</Label><Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
+          <div>
+            <Label>{t("recurring.dueDay")}</Label>
+            <Select
+              value={form.due_day || "auto"}
+              onValueChange={(v) => {
+                const nextDay = v === "auto" ? "" : v;
+                setForm((f) => {
+                  const start = f.start_date || new Date().toISOString().slice(0, 10);
+                  const derivedNext = nextDay ? firstDueOnOrAfter(start, Number(nextDay)) : f.next_due_date;
+                  return { ...f, due_day: nextDay, next_due_date: derivedNext };
+                });
+              }}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-64">
+                <SelectItem value="auto">{t("recurring.dueDayAuto")}</SelectItem>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">{t("recurring.dueDayHint")}</p>
+          </div>
+          <div className="grid min-w-0 grid-cols-2 gap-3">
+            <div className="min-w-0"><Label>{t("recurring.startDate")} *</Label><Input required type="date" value={form.start_date} onChange={(e) => {
+              const start = e.target.value;
+              setForm((f) => ({
+                ...f,
+                start_date: start,
+                next_due_date: f.due_day ? firstDueOnOrAfter(start, Number(f.due_day)) : (f.next_due_date || start),
+              }));
+            }} /></div>
+            <div className="min-w-0"><Label>{t("recurring.endDate")}</Label><Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
           </div>
           <div><Label>{t("recurring.nextDue")} *</Label><Input required type="date" value={form.next_due_date} onChange={(e) => setForm({ ...form, next_due_date: e.target.value })} /></div>
           <div>
@@ -703,16 +804,16 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             </Select>
           </div>
           <div><Label>{t("recurring.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          <div className="mt-2 rounded-lg border border-border p-3">
+          <div className="mt-2 w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-border p-3">
             <p className="mb-2 text-sm font-semibold">{t("recurring.paymentDetails")}</p>
             <p className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
               {t("recurring.aiPaymentWarning")}
             </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div><Label>{t("recurring.payeeName")}</Label><Input value={form.payee_name} onChange={(e) => setForm({ ...form, payee_name: e.target.value })} autoComplete="off" /></div>
-              <div><Label>{t("recurring.bankName")}</Label><Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} autoComplete="off" /></div>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <div className="min-w-0"><Label>{t("recurring.payeeName")}</Label><Input value={form.payee_name} onChange={(e) => setForm({ ...form, payee_name: e.target.value })} autoComplete="off" /></div>
+              <div className="min-w-0"><Label>{t("recurring.bankName")}</Label><Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} autoComplete="off" /></div>
             </div>
-            <div className="mt-3">
+            <div className="mt-3 min-w-0">
               <Label>{t("recurring.iban")}</Label>
               <Input
                 value={form.iban}
@@ -727,9 +828,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
                 name="rp-iban"
               />
             </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div><Label>{t("recurring.referenceNumber")}</Label><Input value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} autoComplete="off" /></div>
-              <div><Label>{t("recurring.paymentDescription")}</Label><Input value={form.payment_description} onChange={(e) => setForm({ ...form, payment_description: e.target.value })} autoComplete="off" /></div>
+            <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
+              <div className="min-w-0"><Label>{t("recurring.referenceNumber")}</Label><Input value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} autoComplete="off" /></div>
+              <div className="min-w-0"><Label>{t("recurring.paymentDescription")}</Label><Input value={form.payment_description} onChange={(e) => setForm({ ...form, payment_description: e.target.value })} autoComplete="off" /></div>
             </div>
           </div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
@@ -792,5 +893,6 @@ function makeForm(row: Recurring | null) {
     iban: row?.iban ?? "",
     reference_number: row?.reference_number ?? "",
     payment_description: row?.payment_description ?? "",
+    due_day: row?.due_day != null ? String(row.due_day) : "",
   };
 }
