@@ -198,6 +198,25 @@ function RecurringPage() {
     }
   }
 
+  async function performDeleteHistory(inst: Instance) {
+    try {
+      const { error } = await supabase.from("recurring_payment_instances").delete().eq("id", inst.id);
+      if (error) throw error;
+      if (inst.receipt_file_path) { try { await deleteFile(inst.receipt_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+      if (inst.invoice_file_path) { try { await deleteFile(inst.invoice_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
+      try {
+        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
+      } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["recurring_instances"], refetchType: "active" }),
+        qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
+      ]);
+      toast.success(t("recurring.historyDeleted"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("common.deleteFailed"));
+    }
+  }
+
   return (
     <AppShell>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
