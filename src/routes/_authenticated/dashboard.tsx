@@ -214,7 +214,9 @@ function Dashboard() {
                 <p className="text-lg font-semibold">{t("recurring.monthSummary")}</p>
               </div>
             </div>
-            <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
+            <span className="flex items-center gap-1 text-xs font-medium text-primary transition group-hover:underline">
+              {t("recurring.viewDetails")} <ArrowRight className="h-3.5 w-3.5" />
+            </span>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MiniStat label={"💚 " + t("recurring.paid")} value={formatCurrency(data?.recurring.paid ?? 0)} tone="green" />
