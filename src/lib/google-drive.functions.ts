@@ -1,6 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+export type BackupFormat = "excel_pdf" | "excel_only" | "pdf_only";
+
+function parseBackupFormat(v: unknown): BackupFormat {
+  return v === "excel_only" || v === "pdf_only" ? v : "excel_pdf";
+}
+
 /**
  * Read the app's current language from the browser (i18next persists it in
  * localStorage under `dp_lang`). Falls back to Estonian — the app default.
