@@ -579,6 +579,10 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("recurring.editTitle") : t("recurring.addTitle")}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="space-y-4">
+          <div>
+            <Label>{t("recurring.contractFile")}</Label>
+            <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
+          </div>
           <div className="flex justify-end">
             <VoiceInput
               context="recurring_payment"
@@ -643,7 +647,6 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               </SelectContent>
             </Select>
           </div>
-          <div><Label>{t("recurring.contractFile")}</Label><FileDrop file={file} onFile={setFile} /></div>
           <div><Label>{t("recurring.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
