@@ -22,10 +22,11 @@ export const getGoogleCalendarStatus = createServerFn({ method: "GET" })
   .inputValidator((input?: { profileId?: string | null }) => input ?? {})
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { isCalendarScopeCurrent } = await import("./google-calendar.server");
     const db = supabaseAdmin as unknown as { from: (t: string) => any };
     let q = db
       .from("google_calendar_connections")
-      .select("google_email, calendar_id, calendar_name, sync_installments, reminder_minutes, connected_at")
+      .select("google_email, calendar_id, calendar_name, sync_installments, reminder_minutes, connected_at, scope")
       .eq("user_id", context.userId);
     if (data?.profileId) q = q.eq("profile_id", data.profileId);
     else q = q.is("profile_id", null);
@@ -40,6 +41,7 @@ export const getGoogleCalendarStatus = createServerFn({ method: "GET" })
       syncInstallments: (row.sync_installments as boolean) ?? true,
       reminderMinutes: (row.reminder_minutes as number[]) ?? [1440],
       connectedAt: row.connected_at as string,
+      needsReconnect: !isCalendarScopeCurrent(row.scope as string | null),
     };
   });
 
@@ -196,6 +198,7 @@ export const getProfileCalendarStatus = createServerFn({ method: "POST" })
   .inputValidator((input: { profileId: string }) => input)
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { isCalendarScopeCurrent } = await import("./google-calendar.server");
     const db = supabaseAdmin as unknown as { from: (t: string) => any };
     const { data: profile } = await db
       .from("user_profiles")
@@ -210,7 +213,7 @@ export const getProfileCalendarStatus = createServerFn({ method: "POST" })
     if (mode === "shared") {
       const { data: prim } = await db
         .from("google_calendar_connections")
-        .select("google_email, calendar_name")
+        .select("google_email, calendar_name, scope")
         .eq("user_id", context.userId)
         .is("profile_id", null)
         .maybeSingle();
@@ -219,11 +222,12 @@ export const getProfileCalendarStatus = createServerFn({ method: "POST" })
         connected: !!prim,
         email: prim ? (prim as { google_email: string }).google_email : null,
         calendarName: prim ? (prim as { calendar_name: string }).calendar_name : "MyDropPocket",
+        needsReconnect: prim ? !isCalendarScopeCurrent((prim as { scope: string | null }).scope) : false,
       };
     }
     const { data: own } = await db
       .from("google_calendar_connections")
-      .select("google_email, calendar_name")
+      .select("google_email, calendar_name, scope")
       .eq("user_id", context.userId)
       .eq("profile_id", data.profileId)
       .maybeSingle();
@@ -232,6 +236,7 @@ export const getProfileCalendarStatus = createServerFn({ method: "POST" })
       connected: !!own,
       email: own ? (own as { google_email: string }).google_email : null,
       calendarName: own ? (own as { calendar_name: string }).calendar_name : "MyDropPocket",
+      needsReconnect: own ? !isCalendarScopeCurrent((own as { scope: string | null }).scope) : false,
     };
   });
 
