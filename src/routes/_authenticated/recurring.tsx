@@ -748,5 +748,10 @@ function makeForm(row: Recurring | null) {
     next_due_date: row?.next_due_date ?? today,
     reminder_days_before: String(row?.reminder_days_before ?? 3),
     notes: row?.notes ?? "",
+    payee_name: row?.payee_name ?? "",
+    bank_name: row?.bank_name ?? "",
+    iban: row?.iban ?? "",
+    reference_number: row?.reference_number ?? "",
+    payment_description: row?.payment_description ?? "",
   };
 }
