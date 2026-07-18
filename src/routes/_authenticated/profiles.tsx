@@ -627,6 +627,12 @@ function DriveProfileBlock({ profile }: { profile: UserProfile }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Katkestamine ebaõnnestus"),
   });
 
+  const formatMut = useMutation({
+    mutationFn: (format: BackupFormat) => setBackupFormat({ data: { profileId: profile.id, format } }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["profile-drive-status", profile.id] }); toast.success("Varunduse formaat salvestatud"); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Salvestamine ebaõnnestus"),
+  });
+
   async function handleConnect() {
     const popup = window.open("", `mydroppocket-gdrive-${profile.id}`, "width=560,height=680");
     if (!popup) { toast.error("Palun luba hüpikaknad"); return; }
