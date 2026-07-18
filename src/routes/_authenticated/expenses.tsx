@@ -20,6 +20,8 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { computeRange, localDateString, type DateRange, type PresetKey } from "@/components/DateRangeFilter";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarDays } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import type { DateRange as CalendarDateRange } from "react-day-picker";
 import { WarrantyCandidatesBlock, makeWarrantyItem, computeExpiry, type WarrantyItem } from "@/components/WarrantyCandidatesBlock";
 import { supabase } from "@/integrations/supabase/client";
 import { expensesQueryKey, expensesQueryOptions, type ExpenseEntryType, type ExpenseRow } from "@/lib/expenses";
