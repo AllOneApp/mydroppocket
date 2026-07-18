@@ -158,28 +158,53 @@ function RecurringPage() {
 
   async function markPaid(inst: Instance, rec: Recurring) {
     try {
+      // 1) Create the linked expense entry (idempotent via existing expense_id)
+      let expenseId: string | null = inst.expense_id;
+      if (!expenseId) {
+        const { data: exp, error: expErr } = await supabase.from("expenses").insert({
+          user_id: rec.user_id,
+          profile_id: activeProfileId,
+          type: "expense",
+          amount: Number(inst.amount ?? rec.amount),
+          currency: inst.currency ?? rec.currency ?? "EUR",
+          category: rec.category ?? "Other",
+          expense_date: inst.due_date,
+          description: rec.service_name,
+          store: rec.provider ?? rec.service_name,
+          notes: `↻ ${t("recurring.title")} · ${rec.service_name}`,
+        }).select("id").single();
+        if (expErr) throw expErr;
+        expenseId = (exp as { id: string } | null)?.id ?? null;
+      }
+      // 2) Mark instance paid + link expense
       await supabase.from("recurring_payment_instances")
-        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .update({ status: "paid", paid_at: new Date().toISOString(), expense_id: expenseId })
         .eq("id", inst.id);
-      // create next instance and advance recurring.next_due_date
-      const nextDue = addFrequency(inst.due_date, rec.frequency);
+      // 3) Compute next due date (anchored to due_day, not paid_at)
+      const nextDue = nextDueFrom(inst.due_date, rec.frequency, rec.due_day);
       if (!rec.end_date || nextDue <= rec.end_date) {
-        await supabase.from("recurring_payment_instances").insert({
+        // Idempotent insert — unique index on (recurring_payment_id, due_date)
+        await supabase.from("recurring_payment_instances").upsert({
           user_id: rec.user_id,
           profile_id: activeProfileId,
           recurring_payment_id: rec.id,
           due_date: nextDue, amount: rec.amount, currency: rec.currency ?? "EUR",
           status: "pending",
-        });
+        }, { onConflict: "recurring_payment_id,due_date", ignoreDuplicates: true });
         await supabase.from("recurring_payments").update({ next_due_date: nextDue }).eq("id", rec.id);
       }
       qc.invalidateQueries({ queryKey: ["recurring_payments"] });
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success(t("recurring.paidMarked"));
+      setPaidResult({
+        expenseId,
+        label: `${rec.service_name} — ${formatCurrency(Number(inst.amount), inst.currency ?? "EUR")}`,
+      });
       try {
         await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
         await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId } });
+        await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       try { await syncRecurringPayment({ data: { recurringId: rec.id } }); } catch (e) { console.warn("[gcal] recurring sync failed", e); }
     } catch (e) {
