@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Repeat, Trash2, CheckCircle2, Upload, Camera, X as XIcon, Calendar, History, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { Plus, Repeat, Trash2, CheckCircle2, Calendar, History, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
@@ -13,6 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileDrop } from "@/components/FileDrop";
 import { VoiceInput } from "@/components/VoiceInput";
@@ -37,6 +46,8 @@ type Recurring = {
   frequency: Frequency; start_date: string; end_date: string | null;
   next_due_date: string; reminder_days_before: number; notes: string | null;
   contract_file_path: string | null; contract_file_name: string | null; contract_file_mime: string | null;
+  payee_name: string | null; bank_name: string | null; iban: string | null;
+  reference_number: string | null; payment_description: string | null;
 };
 
 type Instance = {
@@ -54,7 +65,7 @@ function RecurringPage() {
   const { activeProfileId } = useActiveProfile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Recurring | null>(null);
-  const [payAsk, setPayAsk] = useState<{ instance: Instance; recurring: Recurring } | null>(null);
+  const [pendingPay, setPendingPay] = useState<{ instance: Instance; recurring: Recurring } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Recurring | null>(null);
   const [pendingHistoryDelete, setPendingHistoryDelete] = useState<Instance | null>(null);
