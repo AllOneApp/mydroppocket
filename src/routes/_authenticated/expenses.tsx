@@ -859,6 +859,14 @@ function FiltersBar({
           </Select>
         </div>
       </div>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-md overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>{pickPeriodLabel}</DialogTitle>
+          </DialogHeader>
+          {RangePickerBody}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
