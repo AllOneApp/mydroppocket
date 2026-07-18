@@ -169,7 +169,6 @@ function RecurringPage() {
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success(t("recurring.paidMarked"));
-      setPayAsk({ instance: { ...inst, status: "paid" }, recurring: rec });
       try {
         await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
         await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId } });
