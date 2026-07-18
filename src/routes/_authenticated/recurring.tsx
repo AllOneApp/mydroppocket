@@ -1,7 +1,8 @@
 import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Repeat, Trash2, CheckCircle2, Upload, Camera, X as XIcon, Calendar, History, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -17,10 +18,11 @@ import { FileDrop } from "@/components/FileDrop";
 import { VoiceInput } from "@/components/VoiceInput";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { supabase } from "@/integrations/supabase/client";
-import { deleteFile, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
+import { deleteFile, fileToBase64, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
 import { syncFileToGoogleDrive, syncBackupCategory, currentBackupLang } from "@/lib/google-drive.functions";
 import { syncRecurringPayment, removeCalendarSource } from "@/lib/google-calendar.functions";
 import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
+import { extractDocument } from "@/lib/ocr.functions";
 import { useActiveProfile } from "@/hooks/useActiveProfile";
 
 export const Route = createFileRoute("/_authenticated/recurring")({
