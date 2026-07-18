@@ -494,6 +494,17 @@ function EmptyState({ msg }: { msg: string }) {
   return <p className="py-6 text-center text-sm text-muted-foreground">{msg}</p>;
 }
 
+const EXPENSE_CATEGORY_EMOJI: Record<string, string> = {
+  Groceries: "🛒", Fuel: "⛽", Restaurant: "🍽️", Coffee: "☕",
+  Hairdresser: "💇", Nails: "💅", Shopping: "🛍️", Healthcare: "💊",
+  Travel: "✈️", Pets: "🐾", Other: "📦",
+  Salary: "💰", Sale: "🏷️", Gift: "🎁", Investment: "📈",
+  Refund: "↩️", OtherIncome: "➕",
+};
+function expenseEmoji(category: string, type: "expense" | "income"): string {
+  return EXPENSE_CATEGORY_EMOJI[category] ?? (type === "income" ? "💰" : "💶");
+}
+
 function MiniStat({ label, value, tone }: { label: string; value: string; tone: "green" | "orange" | "red" }) {
   const color = tone === "green" ? "text-green-600" : tone === "orange" ? "text-orange-600" : "text-red-600";
   return (
