@@ -397,6 +397,24 @@ const CATEGORY_XLSX_NAME: Record<BackupLang, Record<BackupCategory, string>> = {
   },
 };
 
+// PDF-i failinimed kategooriate jaoks (samas kaustas kui Exceli fail).
+const CATEGORY_PDF_NAME: Record<BackupLang, Record<BackupCategory, string>> = {
+  et: {
+    warranties: "Garantiid.pdf",
+    expenses: "Tulud ja kulud.pdf",
+    agreements: "Lepingud.pdf",
+    recurring_payments: "Püsimaksed.pdf",
+    recurring_payment_instances: "Järelmaksulepingud.pdf",
+  },
+  en: {
+    warranties: "Warranties.pdf",
+    expenses: "Income and expenses.pdf",
+    agreements: "Contracts.pdf",
+    recurring_payments: "Recurring payments.pdf",
+    recurring_payment_instances: "Installment contracts.pdf",
+  },
+};
+
 const ALL_CATEGORIES: BackupCategory[] = [
   "warranties",
   "expenses",
