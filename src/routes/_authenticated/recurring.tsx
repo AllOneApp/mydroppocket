@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Repeat, Trash2, CheckCircle2, Upload, Camera, X as XIcon, Calendar, History, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { Plus, Repeat, Trash2, CheckCircle2, Calendar, History, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
@@ -13,6 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileDrop } from "@/components/FileDrop";
 import { VoiceInput } from "@/components/VoiceInput";
@@ -37,6 +46,8 @@ type Recurring = {
   frequency: Frequency; start_date: string; end_date: string | null;
   next_due_date: string; reminder_days_before: number; notes: string | null;
   contract_file_path: string | null; contract_file_name: string | null; contract_file_mime: string | null;
+  payee_name: string | null; bank_name: string | null; iban: string | null;
+  reference_number: string | null; payment_description: string | null;
 };
 
 type Instance = {
@@ -54,7 +65,7 @@ function RecurringPage() {
   const { activeProfileId } = useActiveProfile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Recurring | null>(null);
-  const [payAsk, setPayAsk] = useState<{ instance: Instance; recurring: Recurring } | null>(null);
+  const [pendingPay, setPendingPay] = useState<{ instance: Instance; recurring: Recurring } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Recurring | null>(null);
   const [pendingHistoryDelete, setPendingHistoryDelete] = useState<Instance | null>(null);
@@ -127,14 +138,17 @@ function RecurringPage() {
     const paidCount = inMonth.filter((i) => i.status === "paid").length;
     const totalCount = inMonth.length;
     const percent = totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0;
-    const upcomingList = list
-      .filter((i) => i.status === "pending")
-      .sort((a, b) => a.due_date.localeCompare(b.due_date))
-      .slice(0, 8);
     const history = list
       .filter((i) => i.status === "paid")
       .sort((a, b) => (b.paid_at ?? b.due_date).localeCompare(a.paid_at ?? a.due_date));
-    return { paid, toPay, overdue, upcoming, upcomingRec, paidCount, totalCount, percent, upcomingList, history };
+    // Month detail groups
+    const monthPaid = inMonth.filter((i) => i.status === "paid")
+      .sort((a, b) => (b.paid_at ?? b.due_date).localeCompare(a.paid_at ?? a.due_date));
+    const monthToPay = inMonth.filter((i) => i.status === "pending" && i.due_date >= today)
+      .sort((a, b) => a.due_date.localeCompare(b.due_date));
+    const monthOverdue = list.filter((i) => i.status === "pending" && i.due_date < today)
+      .sort((a, b) => a.due_date.localeCompare(b.due_date));
+    return { paid, toPay, overdue, upcoming, upcomingRec, paidCount, totalCount, percent, history, monthPaid, monthToPay, monthOverdue };
   }, [instances, recurring, monthStart, monthEnd, today]);
 
   async function markPaid(inst: Instance, rec: Recurring) {
@@ -158,7 +172,6 @@ function RecurringPage() {
       qc.invalidateQueries({ queryKey: ["recurring_instances"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success(t("recurring.paidMarked"));
-      setPayAsk({ instance: { ...inst, status: "paid" }, recurring: rec });
       try {
         await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
         await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId } });
@@ -270,34 +283,40 @@ function RecurringPage() {
         </div>
       )}
 
-      {/* Upcoming payments */}
-      <div className="card-soft mb-6 p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold">{t("recurring.upcomingTitle")}</h3>
+      {/* This month grouped view */}
+      {(summary.monthOverdue.length + summary.monthToPay.length + summary.monthPaid.length) > 0 && (
+        <div className="card-soft mb-6 p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">{t("recurring.monthDetailTitle")}</h3>
+          </div>
+          {([
+            { key: "overdue", label: t("recurring.sectionOverdue"), items: summary.monthOverdue, tone: "text-red-600" },
+            { key: "topay", label: t("recurring.sectionToPay"), items: summary.monthToPay, tone: "text-orange-600" },
+            { key: "paid", label: t("recurring.sectionPaid"), items: summary.monthPaid, tone: "text-green-600" },
+          ] as const).map((g) => g.items.length === 0 ? null : (
+            <div key={g.key} className="mt-3 first:mt-0">
+              <p className={`mb-1 text-xs font-semibold uppercase tracking-wide ${g.tone}`}>{g.label} · {g.items.length}</p>
+              <ul className="divide-y divide-border">
+                {g.items.map((i) => {
+                  const rec = (recurring ?? []).find((r) => r.id === i.recurring_payment_id);
+                  return (
+                    <li key={i.id} className="flex items-center gap-3 py-2">
+                      <div className={`w-16 shrink-0 text-center text-xs font-semibold ${g.tone}`}>
+                        {formatDateShort(i.paid_at ?? i.due_date)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{rec?.service_name ?? "—"}</p>
+                      </div>
+                      <p className="shrink-0 text-sm font-semibold">{formatCurrency(Number(i.amount), i.currency ?? "EUR")}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </div>
-        {summary.upcomingList.length === 0 ? (
-          <p className="py-3 text-center text-sm text-muted-foreground">{t("recurring.upcomingEmpty")}</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {summary.upcomingList.map((i) => {
-              const rec = (recurring ?? []).find((r) => r.id === i.recurring_payment_id);
-              const overdueRow = i.due_date < today;
-              return (
-                <li key={i.id} className="flex items-center gap-3 py-2.5">
-                  <div className={`w-16 shrink-0 text-center text-xs font-semibold ${overdueRow ? "text-red-600" : "text-muted-foreground"}`}>
-                    {formatDateShort(i.due_date)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{rec?.service_name ?? "—"}</p>
-                  </div>
-                  <p className="shrink-0 text-sm font-semibold">{formatCurrency(Number(i.amount), i.currency ?? "EUR")}</p>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+      )}
 
       {/* List */}
       {(recurring ?? []).length === 0 ? (
@@ -314,6 +333,8 @@ function RecurringPage() {
           {(recurring ?? []).map((r) => {
             const next = (instances ?? []).filter((i) => i.recurring_payment_id === r.id && i.status === "pending")
               .sort((a, b) => a.due_date.localeCompare(b.due_date))[0] ?? null;
+            const lastPaid = (instances ?? []).filter((i) => i.recurring_payment_id === r.id && i.status === "paid")
+              .sort((a, b) => (b.paid_at ?? b.due_date).localeCompare(a.paid_at ?? a.due_date))[0] ?? null;
             const s = next ? statusOf(next.due_date, false) : { tone: "green" as const, label: t("recurring.status.paid"), days: 0 };
             const color = s.tone === "green" ? "text-green-600 bg-green-500/10" : s.tone === "orange" ? "text-orange-600 bg-orange-500/10" : "text-red-600 bg-red-500/10";
             const catLabel = r.category ? t(`recurring.categories.${r.category}` as const, { defaultValue: r.category }) : "";
@@ -328,6 +349,11 @@ function RecurringPage() {
                     <p className="mt-1 text-sm">
                       {t("recurring.nextDue")}: <span className="font-medium">{formatDate(next ? next.due_date : r.next_due_date)}</span>
                     </p>
+                    {lastPaid && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {t("recurring.lastPaid")}: {formatDate(lastPaid.paid_at ?? lastPaid.due_date)}
+                      </p>
+                    )}
                   </button>
                   <div className="flex flex-col items-end gap-2">
                     <p className="shrink-0 text-lg font-bold">{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
@@ -336,7 +362,7 @@ function RecurringPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {next ? (
-                    <Button size="sm" onClick={() => markPaid(next, r)} className="bg-green-600 text-white hover:bg-green-600/90">
+                    <Button size="sm" onClick={() => setPendingPay({ instance: next, recurring: r })} className="bg-green-600 text-white hover:bg-green-600/90">
                       <CheckCircle2 className="mr-1.5 h-4 w-4" />{t("recurring.markPaid")}
                     </Button>
                   ) : null}
@@ -416,7 +442,26 @@ function RecurringPage() {
         onOpenChange={setOpen}
         row={editing}
       />
-      <AttachReceiptDialog data={payAsk} onClose={() => setPayAsk(null)} />
+      <AlertDialog open={!!pendingPay} onOpenChange={(o) => { if (!o) setPendingPay(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("recurring.confirmPayTitle")}</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const p = pendingPay;
+                setPendingPay(null);
+                if (p) markPaid(p.instance, p.recurring);
+              }}
+              className="bg-green-600 text-white hover:bg-green-600/90"
+            >
+              {t("recurring.confirmPayAction")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ConfirmDeleteDialog
         open={!!pendingDelete}
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
@@ -494,6 +539,11 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         end_date: endNorm || f.end_date,
         next_due_date: nextRaw || nextFromDay || startNorm || f.next_due_date,
         notes: (typeof d.notes === "string" && d.notes.trim()) || f.notes,
+        payee_name: (typeof d.payee_name === "string" && d.payee_name.trim()) || f.payee_name,
+        bank_name: (typeof d.bank_name === "string" && d.bank_name.trim()) || f.bank_name,
+        iban: (typeof d.iban === "string" && d.iban.trim()) ? (d.iban as string).replace(/\s+/g, "").toUpperCase() : f.iban,
+        reference_number: (typeof d.reference_number === "string" && d.reference_number.trim()) || f.reference_number,
+        payment_description: (typeof d.payment_description === "string" && d.payment_description.trim()) || f.payment_description,
       }));
       toast.success(t("common.autoFilled", { defaultValue: "Väljad täidetud" }));
     } catch (e) {
@@ -530,6 +580,11 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         next_due_date: form.next_due_date || form.start_date,
         reminder_days_before: Number(form.reminder_days_before),
         notes: form.notes || null,
+        payee_name: form.payee_name.trim() || null,
+        bank_name: form.bank_name.trim() || null,
+        iban: form.iban.replace(/\s+/g, "").toUpperCase() || null,
+        reference_number: form.reference_number.trim() || null,
+        payment_description: form.payment_description.trim() || null,
         ...(fileInfo ? { contract_file_path: fileInfo.path, contract_file_name: fileInfo.name, contract_file_mime: fileInfo.mime } : {}),
       };
       let recordId: string | null = null;
@@ -648,6 +703,35 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             </Select>
           </div>
           <div><Label>{t("recurring.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          <div className="mt-2 rounded-lg border border-border p-3">
+            <p className="mb-2 text-sm font-semibold">{t("recurring.paymentDetails")}</p>
+            <p className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
+              {t("recurring.aiPaymentWarning")}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div><Label>{t("recurring.payeeName")}</Label><Input value={form.payee_name} onChange={(e) => setForm({ ...form, payee_name: e.target.value })} autoComplete="off" /></div>
+              <div><Label>{t("recurring.bankName")}</Label><Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} autoComplete="off" /></div>
+            </div>
+            <div className="mt-3">
+              <Label>{t("recurring.iban")}</Label>
+              <Input
+                value={form.iban}
+                onChange={(e) => setForm({ ...form, iban: e.target.value })}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                inputMode="text"
+                data-lpignore="true"
+                data-form-type="other"
+                name="rp-iban"
+              />
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div><Label>{t("recurring.referenceNumber")}</Label><Input value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} autoComplete="off" /></div>
+              <div><Label>{t("recurring.paymentDescription")}</Label><Input value={form.payment_description} onChange={(e) => setForm({ ...form, payment_description: e.target.value })} autoComplete="off" /></div>
+            </div>
+          </div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
       </DialogContent>
@@ -655,73 +739,6 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
   );
 }
 
-function AttachReceiptDialog({ data, onClose }: { data: { instance: Instance; recurring: Recurring } | null; onClose: () => void }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const { activeProfileId } = useActiveProfile();
-  const [file, setFile] = useState<File | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => { if (!data) setFile(null); }, [data]);
-
-  if (!data) return null;
-
-  async function attach(kind: "receipt" | "invoice") {
-    if (!file || !data) return;
-    setSaving(true);
-    try {
-      const info = await uploadFile(data.recurring.user_id, "recurring", file);
-      const patch = kind === "receipt"
-        ? { receipt_file_path: info.path, receipt_file_name: info.name, receipt_file_mime: info.mime }
-        : { invoice_file_path: info.path, invoice_file_name: info.name, invoice_file_mime: info.mime };
-      await supabase.from("recurring_payment_instances").update(patch).eq("id", data.instance.id);
-      try {
-        await syncFileToGoogleDrive({
-          data: {
-            table: "recurring_payment_instances",
-            recordId: data.instance.id,
-            gdriveColumn: kind === "receipt" ? "receipt_gdrive_file_id" : "invoice_gdrive_file_id",
-            folderKey: kind,
-            filePath: info.path,
-            fileName: info.name,
-            mime: info.mime,
-            profileId: activeProfileId,
-          },
-        });
-      } catch (err) {
-        console.warn("[gdrive] instance sync failed", err);
-      }
-      try { await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
-      qc.invalidateQueries({ queryKey: ["recurring_instances"] });
-      toast.success(t("common.saved"));
-      onClose();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("common.failed"));
-    } finally { setSaving(false); }
-  }
-
-  return (
-    <Dialog open={!!data} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{t("recurring.attachReceipt")}</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <FileDrop file={file} onFile={setFile} />
-          <div className="grid grid-cols-2 gap-2">
-            <Button type="button" variant="outline" disabled={!file || saving} onClick={() => attach("receipt")}>
-              <Camera className="mr-1.5 h-4 w-4" />{t("recurring.receiptFile")}
-            </Button>
-            <Button type="button" variant="outline" disabled={!file || saving} onClick={() => attach("invoice")}>
-              <Upload className="mr-1.5 h-4 w-4" />{t("recurring.invoiceFile")}
-            </Button>
-          </div>
-          <Button type="button" variant="ghost" onClick={onClose} className="w-full">
-            <XIcon className="mr-1.5 h-4 w-4" />{t("recurring.skip")}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function dueDayToDate(day: number | null | undefined): string | null {
   if (!day || day < 1 || day > 31) return null;
@@ -770,5 +787,10 @@ function makeForm(row: Recurring | null) {
     next_due_date: row?.next_due_date ?? today,
     reminder_days_before: String(row?.reminder_days_before ?? 3),
     notes: row?.notes ?? "",
+    payee_name: row?.payee_name ?? "",
+    bank_name: row?.bank_name ?? "",
+    iban: row?.iban ?? "",
+    reference_number: row?.reference_number ?? "",
+    payment_description: row?.payment_description ?? "",
   };
 }
