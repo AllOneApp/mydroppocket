@@ -57,6 +57,7 @@ function RecurringPage() {
   const [payAsk, setPayAsk] = useState<{ instance: Instance; recurring: Recurring } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Recurring | null>(null);
+  const [pendingHistoryDelete, setPendingHistoryDelete] = useState<Instance | null>(null);
 
   const { data: recurring } = useQuery({
     queryKey: ["recurring_payments", activeProfileId],
