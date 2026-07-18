@@ -677,52 +677,6 @@ function FiltersBar({
   const categoryLabel = t("expenses.category", { defaultValue: "Kategooria" });
   const periodLabel = t("dateRange.period", { defaultValue: "Periood" });
 
-  const customPopover = (
-    <Popover
-      open={popoverOpen}
-      onOpenChange={(o) => {
-        setPopoverOpen(o);
-        if (o) { setDraftFrom(value.from); setDraftTo(value.to); }
-      }}
-    >
-      <PopoverTrigger asChild>
-        {/* trigger provided by parent */}
-        <span />
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 space-y-3 p-4">
-        <div>
-          <Label className="text-xs">{t("dateRange.from")}</Label>
-          <Input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
-        </div>
-        <div>
-          <Label className="text-xs">{t("dateRange.to")}</Label>
-          <Input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
-        </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button
-            size="sm"
-            className="flex-1"
-            onClick={() => {
-              if (!draftFrom || !draftTo) return;
-              const from = draftFrom <= draftTo ? draftFrom : draftTo;
-              const to = draftFrom <= draftTo ? draftTo : draftFrom;
-              onChange({ preset: "custom", from, to });
-              setPopoverOpen(false);
-            }}
-          >
-            {t("common.apply", { defaultValue: "Rakenda" })}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setPopoverOpen(false)}>
-            {t("common.cancel")}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => { pick("thisMonth"); setPopoverOpen(false); }}>
-            {t("common.reset", { defaultValue: "Tühjenda" })}
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-
   return (
     <>
       {/* MOBILE — three stacked full-width dropdowns */}
