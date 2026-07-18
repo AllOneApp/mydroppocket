@@ -442,7 +442,26 @@ function RecurringPage() {
         onOpenChange={setOpen}
         row={editing}
       />
-      <AttachReceiptDialog data={payAsk} onClose={() => setPayAsk(null)} />
+      <AlertDialog open={!!pendingPay} onOpenChange={(o) => { if (!o) setPendingPay(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("recurring.confirmPayTitle")}</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const p = pendingPay;
+                setPendingPay(null);
+                if (p) markPaid(p.instance, p.recurring);
+              }}
+              className="bg-green-600 text-white hover:bg-green-600/90"
+            >
+              {t("recurring.confirmPayAction")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ConfirmDeleteDialog
         open={!!pendingDelete}
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
