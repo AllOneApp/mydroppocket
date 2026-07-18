@@ -780,33 +780,21 @@ function FiltersBar({
         </div>
         <div>
           <Label className="mb-1 block text-xs text-muted-foreground">{pickPeriodLabel}</Label>
-          <Popover
-            open={mobileOpen}
-            onOpenChange={(o) => {
-              setMobileOpen(o);
-              if (o) { setDraftFrom(value.from); setDraftTo(value.to); }
-            }}
+          <button
+            type="button"
+            onClick={openPicker}
+            className={`flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm ${
+              isCustom ? "font-medium text-foreground" : "text-muted-foreground"
+            }`}
           >
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className={`flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm ${
-                  isCustom ? "font-medium text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                <span className="flex items-center gap-2 truncate">
-                  <CalendarDays className="h-4 w-4 shrink-0" />
-                  <span className="truncate">
-                    {isCustom ? `${formatDate(value.from)} – ${formatDate(value.to)}` : t("expenses.pickRangePlaceholder", { defaultValue: "Alates – Kuni" })}
-                  </span>
-                </span>
-                <span className="text-xs opacity-60">▾</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-[calc(100vw-2rem)] max-w-sm p-4">
-              {RangePickerBody}
-            </PopoverContent>
-          </Popover>
+            <span className="flex items-center gap-2 truncate">
+              <CalendarDays className="h-4 w-4 shrink-0" />
+              <span className="truncate">
+                {isCustom ? `${formatDate(value.from)} – ${formatDate(value.to)}` : t("expenses.pickRangePlaceholder", { defaultValue: "Alates – Kuni" })}
+              </span>
+            </span>
+            <span className="text-xs opacity-60">▾</span>
+          </button>
         </div>
         <div>
           <Label className="mb-1 block text-xs text-muted-foreground">{categoryLabel}</Label>
@@ -844,30 +832,18 @@ function FiltersBar({
               </button>
             );
           })}
-          <Popover
-            open={desktopOpen}
-            onOpenChange={(o) => {
-              setDesktopOpen(o);
-              if (o) { setDraftFrom(value.from); setDraftTo(value.to); }
-            }}
+          <button
+            type="button"
+            onClick={openPicker}
+            className={`inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition-colors ${
+              isCustom
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-accent text-foreground hover:bg-accent/80"
+            }`}
           >
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className={`inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition-colors ${
-                  isCustom
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-accent text-foreground hover:bg-accent/80"
-                }`}
-              >
-                <CalendarDays className="h-4 w-4" />
-                <span className="truncate">{customLabel}</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-[22rem] p-4">
-              {RangePickerBody}
-            </PopoverContent>
-          </Popover>
+            <CalendarDays className="h-4 w-4" />
+            <span className="truncate">{customLabel}</span>
+          </button>
         </div>
         <div className="sm:ml-auto sm:min-w-[14rem]">
           <Select value={category} onValueChange={onCategoryChange}>
