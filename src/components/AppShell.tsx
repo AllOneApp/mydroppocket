@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Header } from "./Header";
 import { ProfileSwitcher } from "./ProfileSwitcher";
+import { ScrollToTopButton } from "./ScrollToTopButton";
 
 const nav = [
   { to: "/dashboard", icon: LayoutDashboard, key: "dashboard" },
@@ -39,12 +40,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const Sidebar = (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-4">
+    <aside className="flex h-full w-64 shrink-0 flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar p-4">
       <div className="mb-4 px-2 pt-2"><Logo /></div>
       <div className="mb-6 px-1">
         <ProfileSwitcher variant="sidebar" />
       </div>
-      <nav className="flex-1 space-y-1">
+      <nav className="space-y-1">
         {nav.map(({ to, icon: Icon, key }) => {
           const active = location.pathname === to;
           return (
@@ -63,7 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           );
         })}
       </nav>
-      <div className="mt-4 flex flex-col gap-2">
+      <div className="mt-3 flex flex-col gap-2 border-t border-sidebar-border/60 pt-3">
         <LanguageSwitcher className="self-start" />
         <Button variant="ghost" onClick={signOut} className="justify-start gap-3">
           <LogOut className="h-4 w-4" /> {t("common.signOut")}
@@ -74,7 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <div className="hidden md:block">{Sidebar}</div>
+      <div className="sticky top-0 hidden h-screen self-start md:block">{Sidebar}</div>
       {open && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
@@ -99,6 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </main>
       </div>
+      <ScrollToTopButton />
     </div>
   );
 }

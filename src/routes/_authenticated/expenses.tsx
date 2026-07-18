@@ -20,6 +20,8 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
 import { computeRange, localDateString, type DateRange, type PresetKey } from "@/components/DateRangeFilter";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarDays } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import type { DateRange as CalendarDateRange } from "react-day-picker";
 import { WarrantyCandidatesBlock, makeWarrantyItem, computeExpiry, type WarrantyItem } from "@/components/WarrantyCandidatesBlock";
 import { supabase } from "@/integrations/supabase/client";
 import { expensesQueryKey, expensesQueryOptions, type ExpenseEntryType, type ExpenseRow } from "@/lib/expenses";
@@ -658,6 +660,79 @@ function FiltersBar({
   const [draftFrom, setDraftFrom] = useState(value.from);
   const [draftTo, setDraftTo] = useState(value.to);
 
+  function parseISO(s: string): Date | undefined {
+    if (!s) return undefined;
+    const [y, m, d] = s.split("-").map((n) => Number.parseInt(n, 10));
+    if (!y || !m || !d) return undefined;
+    return new Date(y, m - 1, d);
+  }
+  function toISO(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  const calendarSelected: CalendarDateRange | undefined = draftFrom || draftTo
+    ? { from: parseISO(draftFrom), to: parseISO(draftTo) }
+    : undefined;
+  function onCalendarSelect(r: CalendarDateRange | undefined) {
+    if (!r) { setDraftFrom(""); setDraftTo(""); return; }
+    setDraftFrom(r.from ? toISO(r.from) : "");
+    setDraftTo(r.to ? toISO(r.to) : r.from ? toISO(r.from) : "");
+  }
+  function applyDraft() {
+    if (!draftFrom || !draftTo) return;
+    const from = draftFrom <= draftTo ? draftFrom : draftTo;
+    const to = draftFrom <= draftTo ? draftTo : draftFrom;
+    onChange({ preset: "custom", from, to });
+    setPopoverOpen(false);
+  }
+  function clearDraft() {
+    setDraftFrom("");
+    setDraftTo("");
+    pick("thisMonth");
+    setPopoverOpen(false);
+  }
+
+  const RangePickerBody = (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">{t("dateRange.from")}</Label>
+          <Input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} className="h-9" />
+        </div>
+        <div>
+          <Label className="text-xs">{t("dateRange.to")}</Label>
+          <Input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} className="h-9" />
+        </div>
+      </div>
+      <div className="flex justify-center">
+        <Calendar
+          mode="range"
+          selected={calendarSelected}
+          onSelect={onCalendarSelect}
+          captionLayout="dropdown"
+          startMonth={new Date(2000, 0)}
+          endMonth={new Date(new Date().getFullYear() + 5, 11)}
+          defaultMonth={parseISO(draftFrom) ?? new Date()}
+          numberOfMonths={1}
+          className="pointer-events-auto"
+        />
+      </div>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Button size="sm" className="flex-1" onClick={applyDraft} disabled={!draftFrom || !draftTo}>
+          {t("common.apply", { defaultValue: "Rakenda" })}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setPopoverOpen(false)}>
+          {t("common.cancel")}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={clearDraft}>
+          {t("common.reset", { defaultValue: "Tühjenda valik" })}
+        </Button>
+      </div>
+    </div>
+  );
+
   const presets: { key: PresetKey; label: string }[] = [
     { key: "today", label: t("dateRange.presets.today") },
     { key: "thisWeek", label: t("dateRange.presets.thisWeek") },
@@ -722,36 +797,8 @@ function FiltersBar({
                 <span className="text-xs opacity-60">▾</span>
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-[calc(100vw-2rem)] max-w-sm space-y-3 p-4">
-              <div>
-                <Label className="text-xs">{t("dateRange.from")}</Label>
-                <Input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs">{t("dateRange.to")}</Label>
-                <Input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
-              </div>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <Button
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => {
-                    if (!draftFrom || !draftTo) return;
-                    const from = draftFrom <= draftTo ? draftFrom : draftTo;
-                    const to = draftFrom <= draftTo ? draftTo : draftFrom;
-                    onChange({ preset: "custom", from, to });
-                    setPopoverOpen(false);
-                  }}
-                >
-                  {t("common.apply", { defaultValue: "Rakenda" })}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setPopoverOpen(false)}>
-                  {t("common.cancel")}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => { pick("thisMonth"); setPopoverOpen(false); }}>
-                  {t("common.reset", { defaultValue: "Tühjenda" })}
-                </Button>
-              </div>
+            <PopoverContent align="start" className="w-[calc(100vw-2rem)] max-w-sm p-4">
+              {RangePickerBody}
             </PopoverContent>
           </Popover>
         </div>
@@ -811,36 +858,8 @@ function FiltersBar({
                 <span className="truncate">{customLabel}</span>
               </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-72 space-y-3 p-4">
-              <div>
-                <Label className="text-xs">{t("dateRange.from")}</Label>
-                <Input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs">{t("dateRange.to")}</Label>
-                <Input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
-              </div>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <Button
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => {
-                    if (!draftFrom || !draftTo) return;
-                    const from = draftFrom <= draftTo ? draftFrom : draftTo;
-                    const to = draftFrom <= draftTo ? draftTo : draftFrom;
-                    onChange({ preset: "custom", from, to });
-                    setPopoverOpen(false);
-                  }}
-                >
-                  {t("common.apply", { defaultValue: "Rakenda" })}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setPopoverOpen(false)}>
-                  {t("common.cancel")}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => { pick("thisMonth"); setPopoverOpen(false); }}>
-                  {t("common.reset", { defaultValue: "Tühjenda" })}
-                </Button>
-              </div>
+            <PopoverContent align="end" className="w-[22rem] p-4">
+              {RangePickerBody}
             </PopoverContent>
           </Popover>
         </div>
