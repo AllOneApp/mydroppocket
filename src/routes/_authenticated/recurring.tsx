@@ -283,34 +283,40 @@ function RecurringPage() {
         </div>
       )}
 
-      {/* Upcoming payments */}
-      <div className="card-soft mb-6 p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold">{t("recurring.upcomingTitle")}</h3>
+      {/* This month grouped view */}
+      {(summary.monthOverdue.length + summary.monthToPay.length + summary.monthPaid.length) > 0 && (
+        <div className="card-soft mb-6 p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">{t("recurring.monthDetailTitle")}</h3>
+          </div>
+          {([
+            { key: "overdue", label: t("recurring.sectionOverdue"), items: summary.monthOverdue, tone: "text-red-600" },
+            { key: "topay", label: t("recurring.sectionToPay"), items: summary.monthToPay, tone: "text-orange-600" },
+            { key: "paid", label: t("recurring.sectionPaid"), items: summary.monthPaid, tone: "text-green-600" },
+          ] as const).map((g) => g.items.length === 0 ? null : (
+            <div key={g.key} className="mt-3 first:mt-0">
+              <p className={`mb-1 text-xs font-semibold uppercase tracking-wide ${g.tone}`}>{g.label} · {g.items.length}</p>
+              <ul className="divide-y divide-border">
+                {g.items.map((i) => {
+                  const rec = (recurring ?? []).find((r) => r.id === i.recurring_payment_id);
+                  return (
+                    <li key={i.id} className="flex items-center gap-3 py-2">
+                      <div className={`w-16 shrink-0 text-center text-xs font-semibold ${g.tone}`}>
+                        {formatDateShort(i.paid_at ?? i.due_date)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{rec?.service_name ?? "—"}</p>
+                      </div>
+                      <p className="shrink-0 text-sm font-semibold">{formatCurrency(Number(i.amount), i.currency ?? "EUR")}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </div>
-        {summary.upcomingList.length === 0 ? (
-          <p className="py-3 text-center text-sm text-muted-foreground">{t("recurring.upcomingEmpty")}</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {summary.upcomingList.map((i) => {
-              const rec = (recurring ?? []).find((r) => r.id === i.recurring_payment_id);
-              const overdueRow = i.due_date < today;
-              return (
-                <li key={i.id} className="flex items-center gap-3 py-2.5">
-                  <div className={`w-16 shrink-0 text-center text-xs font-semibold ${overdueRow ? "text-red-600" : "text-muted-foreground"}`}>
-                    {formatDateShort(i.due_date)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{rec?.service_name ?? "—"}</p>
-                  </div>
-                  <p className="shrink-0 text-sm font-semibold">{formatCurrency(Number(i.amount), i.currency ?? "EUR")}</p>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+      )}
 
       {/* List */}
       {(recurring ?? []).length === 0 ? (
