@@ -368,6 +368,7 @@
   "recurring": {
     "title": "Püsimaksed",
     "desc": "Halda kõiki korduvaid makseid — kommunaalid, tellimused, järelmaksud ja lepingud.",
+    "tagline": "Igakuised ja regulaarsed maksed",
     "add": "Lisa püsimakse",
     "addTitle": "Lisa püsimakse",
     "editTitle": "Muuda püsimakset",
