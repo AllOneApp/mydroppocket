@@ -444,16 +444,65 @@ function SumCard({ tone, label, value }: { tone: "green" | "orange" | "red"; lab
 
 function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenChange: (b: boolean) => void; row: Recurring | null }) {
   const qc = useQueryClient();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { activeProfileId } = useActiveProfile();
+  const extract = useServerFn(extractDocument);
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const scanRequestRef = useRef(0);
   const [form, setForm] = useState(() => makeForm(row));
 
-  useEffect(() => { if (open) { setForm(makeForm(row)); setFile(null); } }, [open, row]);
+  useEffect(() => {
+    if (open) {
+      scanRequestRef.current += 1;
+      setForm(makeForm(row));
+      setFile(null);
+    }
+    return () => { scanRequestRef.current += 1; };
+  }, [open, row]);
   useEffect(() => {
     if (open) console.info("[VoiceInput] recurring:form-state", { filledFields: Object.values(form).filter(Boolean).length });
   }, [open, form]);
+
+  async function scan() {
+    if (!file) return;
+    const requestId = ++scanRequestRef.current;
+    setScanning(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const locale = (i18n.language?.toLowerCase().startsWith("et") ? "et" : "en") as "et" | "en";
+      const res = await extract({ data: { kind: "recurring", mime: file.type || "application/octet-stream", base64, locale } });
+      if (scanRequestRef.current !== requestId) return;
+      if (!res.ok) { toast.error(res.error); return; }
+      const d = res.data as Record<string, string | number | null>;
+      const startNorm = normalizeDate(typeof d.start_date === "string" ? d.start_date : null);
+      const nextRaw = normalizeDate(typeof d.next_due_date === "string" ? d.next_due_date : null);
+      const nextFromDay = dueDayToDate(typeof d.due_day === "number" ? d.due_day : null);
+      const endNorm = normalizeDate(typeof d.end_date === "string" ? d.end_date : null);
+      const freq = (typeof d.frequency === "string" && (FREQUENCIES as readonly string[]).includes(d.frequency)) ? (d.frequency as Frequency) : null;
+      const cat = (typeof d.category === "string" && (CATEGORIES as readonly string[]).includes(d.category)) ? (d.category as string) : null;
+      setForm((f) => ({
+        ...f,
+        service_name: (typeof d.service_name === "string" && d.service_name.trim()) || f.service_name,
+        provider: (typeof d.provider === "string" && d.provider.trim()) || f.provider,
+        category: cat || f.category,
+        amount: d.amount != null ? String(d.amount) : f.amount,
+        currency: (typeof d.currency === "string" && d.currency.trim()) || f.currency,
+        frequency: freq || f.frequency,
+        start_date: startNorm || f.start_date,
+        end_date: endNorm || f.end_date,
+        next_due_date: nextRaw || nextFromDay || startNorm || f.next_due_date,
+        notes: (typeof d.notes === "string" && d.notes.trim()) || f.notes,
+      }));
+      toast.success(t("common.autoFilled", { defaultValue: "Väljad täidetud" }));
+    } catch (e) {
+      if (scanRequestRef.current !== requestId) return;
+      toast.error(e instanceof Error ? e.message : t("common.scanFailed", { defaultValue: "Skaneerimine ebaõnnestus" }));
+    } finally {
+      if (scanRequestRef.current === requestId) setScanning(false);
+    }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
