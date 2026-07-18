@@ -562,7 +562,7 @@ async function rowsToXlsxBytes(
   return new Uint8Array(buf);
 }
 
-async function writeCategoryXlsx(params: {
+async function writeCategoryBackup(params: {
   userId: string;
   supabase: import("@supabase/supabase-js").SupabaseClient;
   accessToken: string;
@@ -570,6 +570,7 @@ async function writeCategoryXlsx(params: {
   subfolders: Record<string, string>;
   category: BackupCategory;
   lang: BackupLang;
+  format: BackupFormat;
 }): Promise<{ count: number }> {
   const { ensureSubfolderId, upsertBytesInFolder, deleteFilesByNameInFolder } =
     await import("./google-drive.server");
@@ -589,14 +590,54 @@ async function writeCategoryXlsx(params: {
   });
   const projected = projectRows(params.category, rows, params.lang);
   const sheetName = params.lang === "et" ? folderName : (CATEGORY_XLSX_NAME.en[params.category].replace(/\.xlsx$/, ""));
-  const bytes = await rowsToXlsxBytes(projected, sheetName);
-  await upsertBytesInFolder({
-    accessToken: params.accessToken,
-    parentId,
-    name: CATEGORY_XLSX_NAME[params.lang][params.category],
-    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    bytes,
-  });
+
+  const wantExcel = params.format !== "pdf_only";
+  const wantPdf = params.format !== "excel_only";
+  const xlsxName = CATEGORY_XLSX_NAME[params.lang][params.category];
+  const pdfName = CATEGORY_PDF_NAME[params.lang][params.category];
+
+  if (wantExcel) {
+    const bytes = await rowsToXlsxBytes(projected, sheetName);
+    await upsertBytesInFolder({
+      accessToken: params.accessToken,
+      parentId,
+      name: xlsxName,
+      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      bytes,
+    });
+  } else {
+    // Formaat on pdf_only — eemalda vana Exceli fail, kui on.
+    await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId, name: xlsxName });
+  }
+
+  if (wantPdf) {
+    try {
+      const { renderBackupPdf } = await import("./google-drive-pdf.server");
+      const columns = projected.length > 0 ? Object.keys(projected[0]) : [];
+      const summary = buildCategorySummary(params.category, rows, params.lang);
+      const bytes = await renderBackupPdf({
+        title: sheetName,
+        columns,
+        rows: projected,
+        summary,
+        lang: params.lang,
+      });
+      await upsertBytesInFolder({
+        accessToken: params.accessToken,
+        parentId,
+        name: pdfName,
+        mime: "application/pdf",
+        bytes,
+      });
+    } catch (e) {
+      // PDF genereerimise viga ei tohi katkestada Exceli/originaalfailide sünkroonimist.
+      console.error(`[backup-pdf] ${params.category} failed`, e);
+    }
+  } else {
+    // Formaat on excel_only — eemalda vana PDF fail, kui on.
+    await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId, name: pdfName });
+  }
+
   // Legacy cleanup: remove technical entries.json + xlsx from the other language.
   const otherLang: BackupLang = params.lang === "et" ? "en" : "et";
   await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId, name: "entries.json" });
@@ -605,7 +646,38 @@ async function writeCategoryXlsx(params: {
     parentId,
     name: CATEGORY_XLSX_NAME[otherLang][params.category],
   });
+  await deleteFilesByNameInFolder({
+    accessToken: params.accessToken,
+    parentId,
+    name: CATEGORY_PDF_NAME[otherLang][params.category],
+  });
   return { count: rows.length };
+}
+
+function buildCategorySummary(
+  category: BackupCategory,
+  rows: Array<Record<string, unknown>>,
+  lang: BackupLang,
+): Array<{ label: string; value: string | number }> {
+  const et = lang === "et";
+  const total = rows.length;
+  const summary: Array<{ label: string; value: string | number }> = [
+    { label: et ? "Kirjeid kokku" : "Total entries", value: total },
+  ];
+  if (category === "expenses") {
+    let income = 0;
+    let expense = 0;
+    for (const r of rows) {
+      const amt = Number(r.amount ?? 0);
+      if (!Number.isFinite(amt)) continue;
+      if (String(r.type ?? "").toLowerCase() === "income") income += amt;
+      else expense += amt;
+    }
+    summary.push({ label: et ? "Tulud kokku" : "Total income", value: income.toFixed(2) });
+    summary.push({ label: et ? "Kulud kokku" : "Total expenses", value: expense.toFixed(2) });
+    summary.push({ label: et ? "Saldo" : "Balance", value: (income - expense).toFixed(2) });
+  }
+  return summary;
 }
 
 async function writeBackupInfo(params: {
