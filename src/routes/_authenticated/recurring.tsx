@@ -1,5 +1,6 @@
 import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
 import { createFileRoute } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +31,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { deleteFile, fileToBase64, formatCurrency, signedUrl, uploadFile } from "@/lib/records";
 import { syncFileToGoogleDrive, syncBackupCategory, currentBackupLang } from "@/lib/google-drive.functions";
 import { syncRecurringPayment, removeCalendarSource } from "@/lib/google-calendar.functions";
-import { addFrequency, CATEGORIES, FREQUENCIES, statusOf, type Frequency } from "@/lib/recurring";
+import { CATEGORIES, FREQUENCIES, firstDueOnOrAfter, nextDueFrom, statusOf, type Frequency } from "@/lib/recurring";
 import { extractDocument } from "@/lib/ocr.functions";
 import { useActiveProfile } from "@/hooks/useActiveProfile";
 
@@ -48,6 +49,7 @@ type Recurring = {
   contract_file_path: string | null; contract_file_name: string | null; contract_file_mime: string | null;
   payee_name: string | null; bank_name: string | null; iban: string | null;
   reference_number: string | null; payment_description: string | null;
+  due_day: number | null;
 };
 
 type Instance = {
@@ -57,11 +59,13 @@ type Instance = {
   receipt_file_path: string | null; receipt_file_name: string | null;
   invoice_file_path: string | null; invoice_file_name: string | null;
   notes: string | null;
+  expense_id: string | null;
 };
 
 function RecurringPage() {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { activeProfileId } = useActiveProfile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Recurring | null>(null);
@@ -69,6 +73,7 @@ function RecurringPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Recurring | null>(null);
   const [pendingHistoryDelete, setPendingHistoryDelete] = useState<Instance | null>(null);
+  const [paidResult, setPaidResult] = useState<{ expenseId: string | null; label: string } | null>(null);
 
   const { data: recurring } = useQuery({
     queryKey: ["recurring_payments", activeProfileId],
