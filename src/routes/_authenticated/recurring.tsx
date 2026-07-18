@@ -539,6 +539,11 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         end_date: endNorm || f.end_date,
         next_due_date: nextRaw || nextFromDay || startNorm || f.next_due_date,
         notes: (typeof d.notes === "string" && d.notes.trim()) || f.notes,
+        payee_name: (typeof d.payee_name === "string" && d.payee_name.trim()) || f.payee_name,
+        bank_name: (typeof d.bank_name === "string" && d.bank_name.trim()) || f.bank_name,
+        iban: (typeof d.iban === "string" && d.iban.trim()) ? (d.iban as string).replace(/\s+/g, "").toUpperCase() : f.iban,
+        reference_number: (typeof d.reference_number === "string" && d.reference_number.trim()) || f.reference_number,
+        payment_description: (typeof d.payment_description === "string" && d.payment_description.trim()) || f.payment_description,
       }));
       toast.success(t("common.autoFilled", { defaultValue: "Väljad täidetud" }));
     } catch (e) {
@@ -575,6 +580,11 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         next_due_date: form.next_due_date || form.start_date,
         reminder_days_before: Number(form.reminder_days_before),
         notes: form.notes || null,
+        payee_name: form.payee_name.trim() || null,
+        bank_name: form.bank_name.trim() || null,
+        iban: form.iban.replace(/\s+/g, "").toUpperCase() || null,
+        reference_number: form.reference_number.trim() || null,
+        payment_description: form.payment_description.trim() || null,
         ...(fileInfo ? { contract_file_path: fileInfo.path, contract_file_name: fileInfo.name, contract_file_mime: fileInfo.mime } : {}),
       };
       let recordId: string | null = null;
