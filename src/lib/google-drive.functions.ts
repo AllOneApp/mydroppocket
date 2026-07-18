@@ -772,7 +772,15 @@ export const deleteAgreementDriveFolder = createServerFn({ method: "POST" })
 // ---------------------------------------------------------------------------
 
 type BulkSyncCursor = {
-  stage: "warranties" | "expenses" | "agreements" | "recurring_instances_receipt" | "recurring_instances_invoice" | "done";
+  stage:
+    | "warranties"
+    | "expenses"
+    | "agreements"
+    | "recurring_payments_contract"
+    | "recurring_instances_receipt"
+    | "recurring_instances_invoice"
+    | "agreement_attachments"
+    | "done";
   offset: number;
 };
 
@@ -807,14 +815,34 @@ export const getProfilePendingCloudCounts = createServerFn({ method: "POST" })
       return (count as number) ?? 0;
     }
 
-    const [w, e, a, ri, ri2] = await Promise.all([
+    async function countAttachmentsUnsynced(): Promise<number> {
+      // agreement_attachments has no profile_id column; scope via parent agreement.
+      const { data: ags } = await admin
+        .from("agreements")
+        .select("id")
+        .eq("user_id", uid)
+        .eq("profile_id", pid);
+      const ids = ((ags as { id: string }[] | null) ?? []).map((r) => r.id);
+      if (ids.length === 0) return 0;
+      const { count } = await admin
+        .from("agreement_attachments")
+        .select("id", { count: "exact", head: true })
+        .in("agreement_id", ids)
+        .not("file_path", "is", null)
+        .is("gdrive_file_id", null);
+      return (count as number) ?? 0;
+    }
+
+    const [w, e, a, rpc, ri, ri2, aa] = await Promise.all([
       countUnsynced("warranties", "file_path", "gdrive_file_id"),
       countUnsynced("expenses", "file_path", "gdrive_file_id"),
       countUnsynced("agreements", "file_path", "gdrive_file_id"),
+      countUnsynced("recurring_payments", "contract_file_path", "contract_gdrive_file_id"),
       countUnsynced("recurring_payment_instances", "receipt_file_path", "receipt_gdrive_file_id"),
       countUnsynced("recurring_payment_instances", "invoice_file_path", "invoice_gdrive_file_id"),
+      countAttachmentsUnsynced(),
     ]);
-    const driveUnsynced = w + e + a + ri + ri2;
+    const driveUnsynced = w + e + a + rpc + ri + ri2 + aa;
 
     const [wc, ac, rc] = await Promise.all([
       countRows("warranties"),
