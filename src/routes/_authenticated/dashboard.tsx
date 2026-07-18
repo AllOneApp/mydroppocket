@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown, Repeat, Plus, Mic, Upload, Pencil } from "lucide-react";
+import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown, Repeat, Plus, Mic, Upload, Pencil, ChevronRight } from "lucide-react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -267,49 +267,113 @@ function Dashboard() {
       )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <div className="card-soft p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold">{t("dashboard.recentExpenses")}</h3>
-            <Link to="/expenses" className="text-sm text-primary hover:underline">{t("dashboard.viewAll")}</Link>
+        <div className="card-soft p-4 sm:p-6">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-base font-semibold sm:text-lg">{t("dashboard.recentExpenses")}</h3>
+            <Link to="/expenses" className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-primary hover:underline sm:text-sm">
+              {t("dashboard.viewAll")}<ChevronRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
           {recentExpenses.length ? (
-            <ul className="divide-y divide-border">
-              {recentExpenses.map((r) => (
-                <li key={r.id} className="flex items-center justify-between py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{r.description || formatCategory("expenses", r.category)}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(r.expense_date)} · {formatCategory("expenses", r.category)}</p>
-                  </div>
-                  <p className={`text-sm font-semibold ${r.type === "income" ? "text-green-600" : "text-red-600"}`}>
-                    {r.type === "income" ? "+" : "−"}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="divide-y divide-border">
+                {recentExpenses.map((r) => {
+                  const isIncome = r.type === "income";
+                  const label = r.description || formatCategory("expenses", r.category);
+                  return (
+                    <li key={r.id}>
+                      <Link
+                        to="/expenses"
+                        search={{ open: r.id }}
+                        className="-mx-1 flex items-center gap-3 rounded-lg px-1 py-3 transition hover:bg-accent/60 active:bg-accent"
+                      >
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent text-lg leading-none">
+                          <span aria-hidden>{expenseEmoji(r.category, r.type)}</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-2 break-words text-sm font-medium leading-snug">{label}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {formatDate(r.expense_date)} · {formatCategory("expenses", r.category)}
+                          </p>
+                        </div>
+                        <p className={`shrink-0 whitespace-nowrap text-sm font-semibold ${isIncome ? "text-green-600" : "text-foreground"}`}>
+                          {isIncome ? "+" : ""}{formatCurrency(Number(r.amount), r.currency ?? "EUR")}
+                        </p>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+              <Link
+                to="/expenses"
+                className="mt-3 flex items-center justify-center gap-1 rounded-lg border border-border py-2 text-sm font-medium text-primary hover:bg-accent"
+              >
+                {t("dashboard.viewAllExpenses", { defaultValue: "Vaata kõiki kulusid" })}
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </>
           ) : <EmptyState msg={t("dashboard.noExpenses")} />}
         </div>
 
-        <div className="card-soft p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold">{t("dashboard.upcomingWarranties")}</h3>
-            <Link to="/warranties" className="text-sm text-primary hover:underline">{t("dashboard.viewAll")}</Link>
+        <div className="card-soft p-4 sm:p-6">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-base font-semibold sm:text-lg">{t("dashboard.upcomingWarranties")}</h3>
+            <Link to="/warranties" className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-primary hover:underline sm:text-sm">
+              {t("dashboard.viewAll")}<ChevronRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
           {data?.warranties.length ? (
-            <ul className="divide-y divide-border">
-              {data.warranties.map((r) => {
-                const s = warrantyStatus(r.warranty_expiry);
-                const color = s.tone === "green" ? "text-green-600" : s.tone === "orange" ? "text-orange-600" : s.tone === "red" ? "text-red-600" : "text-muted-foreground";
-                return (
-                  <li key={r.id} className="flex items-center justify-between py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{r.product_name}</p>
-                      <p className="text-xs text-muted-foreground">{r.store ?? "—"}</p>
-                    </div>
-                    <p className={`text-sm font-medium ${color}`}>{s.label}</p>
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              <ul className="divide-y divide-border">
+                {data.warranties.map((r) => {
+                  const s = warrantyStatus(r.warranty_expiry);
+                  const badgeTone =
+                    s.tone === "green"
+                      ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300"
+                      : s.tone === "orange"
+                        ? "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300"
+                        : s.tone === "red"
+                          ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                          : "bg-muted text-muted-foreground";
+                  const badgeLabel =
+                    s.tone === "red"
+                      ? t("warranties.status.expired", { defaultValue: "Aegunud" })
+                      : s.tone === "orange"
+                        ? t("warranties.status.expiringSoon", { defaultValue: "Aegumas" })
+                        : t("warranties.status.active", { defaultValue: "Aktiivne" });
+                  return (
+                    <li key={r.id}>
+                      <Link
+                        to="/warranties"
+                        search={{ open: r.id }}
+                        className="-mx-1 flex items-center gap-3 rounded-lg px-1 py-3 transition hover:bg-accent/60 active:bg-accent"
+                      >
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent text-lg leading-none">
+                          <span aria-hidden>🛡️</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-2 break-words text-sm font-medium leading-snug">{r.product_name}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {r.store ?? "—"}
+                            {r.warranty_expiry ? ` · ${t("warranties.expiresOn", { defaultValue: "Aegub" })} ${formatDate(r.warranty_expiry)}` : ""}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeTone}`}>{badgeLabel}</span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+              <Link
+                to="/warranties"
+                className="mt-3 flex items-center justify-center gap-1 rounded-lg border border-border py-2 text-sm font-medium text-primary hover:bg-accent"
+              >
+                {t("dashboard.viewAllWarranties", { defaultValue: "Vaata kõiki garantiisid" })}
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </>
           ) : <EmptyState msg={t("dashboard.noWarranties")} />}
         </div>
       </div>
@@ -428,6 +492,17 @@ function ModuleCard({ to, icon: Icon, title, value, sub }: { to: "/warranties" |
 
 function EmptyState({ msg }: { msg: string }) {
   return <p className="py-6 text-center text-sm text-muted-foreground">{msg}</p>;
+}
+
+const EXPENSE_CATEGORY_EMOJI: Record<string, string> = {
+  Groceries: "🛒", Fuel: "⛽", Restaurant: "🍽️", Coffee: "☕",
+  Hairdresser: "💇", Nails: "💅", Shopping: "🛍️", Healthcare: "💊",
+  Travel: "✈️", Pets: "🐾", Other: "📦",
+  Salary: "💰", Sale: "🏷️", Gift: "🎁", Investment: "📈",
+  Refund: "↩️", OtherIncome: "➕",
+};
+function expenseEmoji(category: string, type: "expense" | "income"): string {
+  return EXPENSE_CATEGORY_EMOJI[category] ?? (type === "income" ? "💰" : "💶");
 }
 
 function MiniStat({ label, value, tone }: { label: string; value: string; tone: "green" | "orange" | "red" }) {

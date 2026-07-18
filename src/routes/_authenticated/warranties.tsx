@@ -29,6 +29,9 @@ import { expensesQueryKey } from "@/lib/expenses";
 
 export const Route = createFileRoute("/_authenticated/warranties")({
   head: () => ({ meta: [{ title: "Warranties — DropPocket" }] }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    open: typeof s.open === "string" ? s.open : undefined,
+  }),
   component: WarrantiesPage,
 });
 
@@ -43,6 +46,7 @@ function WarrantiesPage() {
   const { t } = useTranslation();
   const { activeProfileId } = useActiveProfile();
   const navigate = useNavigate();
+  const { open: openId } = Route.useSearch();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
@@ -61,6 +65,16 @@ function WarrantiesPage() {
       return (data ?? []) as Row[];
     },
   });
+
+  useEffect(() => {
+    if (!openId || !data) return;
+    const found = data.find((r) => r.id === openId);
+    if (found) {
+      setEditing(found);
+      setOpen(true);
+    }
+    void navigate({ to: "/warranties", search: {}, replace: true });
+  }, [openId, data, navigate]);
 
   const groups = {
     active: [] as Row[], expiring: [] as Row[], expired: [] as Row[],

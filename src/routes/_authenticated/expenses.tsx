@@ -1,5 +1,5 @@
 import { formatDate, formatDateShort, formatCategory } from "@/lib/format";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Wallet, TrendingUp, TrendingDown, Upload, Pencil } from "lucide-react";
@@ -30,6 +30,9 @@ import { useActiveProfile } from "@/hooks/useActiveProfile";
 
 export const Route = createFileRoute("/_authenticated/expenses")({
   head: () => ({ meta: [{ title: "Income & expenses — MyDropPocket" }] }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    open: typeof s.open === "string" ? s.open : undefined,
+  }),
   component: ExpensesPage,
 });
 
@@ -43,6 +46,8 @@ function ExpensesPage() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { activeProfileId } = useActiveProfile();
+  const navigate = useNavigate();
+  const { open: openId } = Route.useSearch();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [prefill, setPrefill] = useState<Partial<Row> | null>(null);
@@ -53,6 +58,17 @@ function ExpensesPage() {
   });
 
   const { data } = useQuery(expensesQueryOptions(activeProfileId));
+
+  useEffect(() => {
+    if (!openId || !data) return;
+    const found = data.find((r) => r.id === openId);
+    if (found) {
+      setEditing(found);
+      setPrefill(null);
+      setOpen(true);
+    }
+    void navigate({ to: "/expenses", search: {}, replace: true });
+  }, [openId, data, navigate]);
 
   const filtered = useMemo(() => (data ?? []).filter((r) => r.expense_date >= range.from && r.expense_date <= range.to), [data, range]);
   const income = filtered.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
