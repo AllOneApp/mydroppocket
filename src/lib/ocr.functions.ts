@@ -78,6 +78,11 @@ export const extractDocument = createServerFn({ method: "POST" })
       end_date: z.string().nullable(),
       due_day: z.number().nullable(),
       notes: z.string().nullable(),
+      payee_name: z.string().nullable(),
+      bank_name: z.string().nullable(),
+      iban: z.string().nullable(),
+      reference_number: z.string().nullable(),
+      payment_description: z.string().nullable(),
     });
     const extractionPrompts = {
       warranty:
@@ -109,7 +114,7 @@ Return null for an unknown scalar field and never invent a value.
       agreement: AGREEMENT_ANALYSIS_PROMPT,
       recurring:
         `Read this invoice/contract/subscription document carefully with OCR and extract fields describing a RECURRING PAYMENT (utility bill, subscription, leasing, installment, insurance, phone/internet contract, streaming, cloud/software).
-Return a JSON object with EXACTLY these keys (no others): service_name, provider, category, amount, currency, frequency, start_date, next_due_date, end_date, due_day, notes.
+Return a JSON object with EXACTLY these keys (no others): service_name, provider, category, amount, currency, frequency, start_date, next_due_date, end_date, due_day, notes, payee_name, bank_name, iban, reference_number, payment_description.
 Return null for any field that is not clearly present, and never invent a value.
 - service_name: short human name for the payment (e.g. "Telefoniarve", "Netflix", "Elektrileping", "Autoliising"); infer from the document heading when explicit.
 - provider: company that issues the bill/contract (e.g. Elisa, Telia, Netflix, Enefit).
@@ -121,7 +126,12 @@ Return null for any field that is not clearly present, and never invent a value.
 - next_due_date: next payment due date in YYYY-MM-DD when the document lists one.
 - end_date: contract end/termination date in YYYY-MM-DD when stated.
 - due_day: monthly payment day of month (1–31) when the contract states a fixed day (e.g. "makse 10. kuupäeval"); null otherwise.
-- notes: short free-text note only when helpful (e.g. account/reference number), otherwise null.`,
+- notes: short free-text note only when helpful, otherwise null.
+- payee_name: exact legal recipient/company name to which the payment must be made (e.g. "Telia Eesti AS", "STV AS"); null when not clearly on the document.
+- bank_name: bank name of the recipient account when explicitly shown (e.g. "Swedbank", "SEB", "LHV"); null otherwise.
+- iban: recipient IBAN / bank account number exactly as printed, keep spaces removed and letters uppercase; null when not clearly present. NEVER invent an IBAN.
+- reference_number: payment reference number (viitenumber) exactly as printed; null when not clearly present. NEVER invent a reference number.
+- payment_description: payment description / explanation line (selgitus) exactly as printed on the invoice; null when not clearly present.`,
     };
     const locale = data.locale ?? "en";
     const languageName = locale === "et" ? "Estonian (eesti keel)" : "English";
