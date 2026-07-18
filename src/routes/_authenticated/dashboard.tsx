@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown, Repeat, Plus, Mic, Upload, Pencil } from "lucide-react";
+import { ShieldCheck, Wallet, FileText, ArrowRight, Bell, TrendingUp, TrendingDown, Repeat, Plus, Mic, Upload, Pencil, ChevronRight } from "lucide-react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
