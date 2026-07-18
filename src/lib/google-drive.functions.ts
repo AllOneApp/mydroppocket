@@ -799,7 +799,8 @@ export const syncBackupCategory = createServerFn({ method: "POST" })
     const conn = await resolveProfileDriveTarget(context.userId, data.profileId ?? null);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
     const lang: BackupLang = data.lang === "en" ? "en" : "et";
-    await writeCategoryXlsx({
+    const format = await resolveConnectionBackupFormat(conn.connectionId);
+    await writeCategoryBackup({
       userId: context.userId,
       supabase: context.supabase,
       accessToken: conn.accessToken,
@@ -807,10 +808,11 @@ export const syncBackupCategory = createServerFn({ method: "POST" })
       subfolders: conn.subfolders,
       category: data.category,
       lang,
+      format,
     });
     const entries = await totalEntriesForUser(context.supabase, context.userId);
     const files = await countFilesForUser(context.supabase, context.userId);
-    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files }, lang });
+    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files }, lang, format });
     return { ok: true as const };
   });
 
@@ -825,9 +827,10 @@ export const syncBackupAll = createServerFn({ method: "POST" })
     const conn = await resolveProfileDriveTarget(context.userId, data?.profileId ?? null);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
     const lang: BackupLang = data?.lang === "en" ? "en" : "et";
+    const format = await resolveConnectionBackupFormat(conn.connectionId);
     let entries = 0;
     for (const c of ALL_CATEGORIES) {
-      const r = await writeCategoryXlsx({
+      const r = await writeCategoryBackup({
         userId: context.userId,
         supabase: context.supabase,
         accessToken: conn.accessToken,
@@ -835,13 +838,24 @@ export const syncBackupAll = createServerFn({ method: "POST" })
         subfolders: conn.subfolders,
         category: c,
         lang,
+        format,
       });
       entries += r.count;
     }
     const files = await countFilesForUser(context.supabase, context.userId);
-    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files }, lang });
+    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files }, lang, format });
     return { ok: true as const, entries, files };
   });
+
+async function resolveConnectionBackupFormat(connectionId: string): Promise<BackupFormat> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin
+    .from("google_drive_connections")
+    .select("backup_format")
+    .eq("id", connectionId)
+    .maybeSingle();
+  return parseBackupFormat((data as { backup_format?: string } | null)?.backup_format);
+}
 
 /**
  * Delete a previously uploaded original file from the user's Drive.
