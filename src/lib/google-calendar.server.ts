@@ -15,11 +15,34 @@ export const GOOGLE_CALENDAR_OAUTH_SCOPES = [
   "openid",
   "email",
   "profile",
-  "https://www.googleapis.com/auth/calendar",
+  // Least-privilege: MyDropPocket võib luua ja hallata AINULT enda loodud kalendreid.
+  // Ei näe ega puuduta kasutaja muid Google Calendareid.
+  "https://www.googleapis.com/auth/calendar.app.created",
 ];
 
 export const GOOGLE_CALENDAR_CALLBACK_PATH = "/api/public/google-calendar/callback";
 export const MY_DROPPOCKET_CALENDAR_NAME = "MyDropPocket";
+
+/**
+ * Kalendri nimi profiili järgi.
+ * - Põhiprofiil (või profiil puudub): "MyDropPocket"
+ * - Lisaprofiil separate režiimis: "MyDropPocket – <profiili nimi>"
+ */
+export function calendarNameForProfile(opts: { profileName?: string | null; isDefault?: boolean }): string {
+  const name = (opts.profileName ?? "").trim();
+  if (!name || opts.isDefault) return MY_DROPPOCKET_CALENDAR_NAME;
+  return `${MY_DROPPOCKET_CALENDAR_NAME} – ${name}`;
+}
+
+/**
+ * Kontrolli, kas salvestatud OAuth scope string vastab uuele
+ * calendar.app.created scope'ile. Vana lai `auth/calendar` scope
+ * → needsReconnect=true.
+ */
+export function isCalendarScopeCurrent(scope: string | null | undefined): boolean {
+  if (!scope) return false;
+  return scope.split(/\s+/).includes("https://www.googleapis.com/auth/calendar.app.created");
+}
 
 // ---------- config ----------
 
