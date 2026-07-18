@@ -393,6 +393,14 @@ function RecurringPage() {
                         </button>
                       )}
                       <p className="shrink-0 text-sm font-semibold">{formatCurrency(Number(i.amount), i.currency ?? "EUR")}</p>
+                      <button
+                        onClick={() => setPendingHistoryDelete(i)}
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        title={t("recurring.deleteHistory")}
+                        aria-label={t("recurring.deleteHistory")}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </li>
                   );
                 })}
