@@ -179,6 +179,18 @@ function Dashboard() {
             <FileText className="h-4 w-4" />📄 {t("nav.agreementsInstallments", { defaultValue: "Lepingud / Järelmaksulepingud" })}
           </Link>
         </div>
+        <div className="mt-2">
+          <Link
+            to="/recurring"
+            className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-lg bg-sky-100 px-3 py-2 text-center text-sm font-medium text-sky-900 transition hover:bg-sky-200 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-900/50"
+          >
+            <Repeat className="h-4 w-4 shrink-0" />
+            <span className="flex flex-col leading-tight">
+              <span>🔄 {t("recurring.title")}</span>
+              <span className="text-[11px] font-normal opacity-80">{t("recurring.tagline")}</span>
+            </span>
+          </Link>
+        </div>
       </div>
 
       <ExpenseDialog open={quickOpen} onOpenChange={setQuickOpen} row={null} prefill={null} initialMode={quickMode} />
@@ -210,8 +222,8 @@ function Dashboard() {
                 <Repeat className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{t("nav.recurring")}</p>
-                <p className="text-lg font-semibold">{t("recurring.monthSummary")}</p>
+                <p className="text-lg font-semibold">{t("recurring.title")}</p>
+                <p className="text-xs text-muted-foreground">{t("recurring.tagline")}</p>
               </div>
             </div>
             <span className="flex items-center gap-1 text-xs font-medium text-primary transition group-hover:underline">
