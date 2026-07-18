@@ -700,9 +700,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden sm:w-full sm:max-w-lg">
         <DialogHeader><DialogTitle>{row ? t("recurring.editTitle") : t("recurring.addTitle")}</DialogTitle></DialogHeader>
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} className="w-full min-w-0 max-w-full space-y-4">
           <div>
             <Label>{t("recurring.contractFile")}</Label>
             <FileDrop file={file} onFile={setFile} onScan={scan} scanning={scanning} />
@@ -733,9 +733,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             />
           </div>
           <div><Label>{t("recurring.serviceName")} *</Label><Input required value={form.service_name} onChange={(e) => setForm({ ...form, service_name: e.target.value })} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>{t("recurring.provider")}</Label><Input value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} /></div>
-            <div>
+          <div className="grid min-w-0 grid-cols-2 gap-3">
+            <div className="min-w-0"><Label>{t("recurring.provider")}</Label><Input value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} /></div>
+            <div className="min-w-0">
               <Label>{t("recurring.category")}</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -743,9 +743,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>{t("recurring.amount")} *</Label><Input required type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
-            <div><Label>{t("recurring.currency")}</Label><Input value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} /></div>
+          <div className="grid min-w-0 grid-cols-2 gap-3">
+            <div className="min-w-0"><Label>{t("recurring.amount")} *</Label><Input required type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
+            <div className="min-w-0"><Label>{t("recurring.currency")}</Label><Input value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} /></div>
           </div>
           <div>
             <Label>{t("recurring.frequency")} *</Label>
@@ -754,9 +754,39 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               <SelectContent>{FREQUENCIES.map((f) => <SelectItem key={f} value={f}>{t(`recurring.frequencies.${f}` as const)}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>{t("recurring.startDate")} *</Label><Input required type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value, next_due_date: form.next_due_date || e.target.value })} /></div>
-            <div><Label>{t("recurring.endDate")}</Label><Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
+          <div>
+            <Label>{t("recurring.dueDay")}</Label>
+            <Select
+              value={form.due_day || "auto"}
+              onValueChange={(v) => {
+                const nextDay = v === "auto" ? "" : v;
+                setForm((f) => {
+                  const start = f.start_date || new Date().toISOString().slice(0, 10);
+                  const derivedNext = nextDay ? firstDueOnOrAfter(start, Number(nextDay)) : f.next_due_date;
+                  return { ...f, due_day: nextDay, next_due_date: derivedNext };
+                });
+              }}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-64">
+                <SelectItem value="auto">{t("recurring.dueDayAuto")}</SelectItem>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">{t("recurring.dueDayHint")}</p>
+          </div>
+          <div className="grid min-w-0 grid-cols-2 gap-3">
+            <div className="min-w-0"><Label>{t("recurring.startDate")} *</Label><Input required type="date" value={form.start_date} onChange={(e) => {
+              const start = e.target.value;
+              setForm((f) => ({
+                ...f,
+                start_date: start,
+                next_due_date: f.due_day ? firstDueOnOrAfter(start, Number(f.due_day)) : (f.next_due_date || start),
+              }));
+            }} /></div>
+            <div className="min-w-0"><Label>{t("recurring.endDate")}</Label><Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
           </div>
           <div><Label>{t("recurring.nextDue")} *</Label><Input required type="date" value={form.next_due_date} onChange={(e) => setForm({ ...form, next_due_date: e.target.value })} /></div>
           <div>
@@ -772,16 +802,16 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             </Select>
           </div>
           <div><Label>{t("recurring.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          <div className="mt-2 rounded-lg border border-border p-3">
+          <div className="mt-2 w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-border p-3">
             <p className="mb-2 text-sm font-semibold">{t("recurring.paymentDetails")}</p>
             <p className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
               {t("recurring.aiPaymentWarning")}
             </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div><Label>{t("recurring.payeeName")}</Label><Input value={form.payee_name} onChange={(e) => setForm({ ...form, payee_name: e.target.value })} autoComplete="off" /></div>
-              <div><Label>{t("recurring.bankName")}</Label><Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} autoComplete="off" /></div>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <div className="min-w-0"><Label>{t("recurring.payeeName")}</Label><Input value={form.payee_name} onChange={(e) => setForm({ ...form, payee_name: e.target.value })} autoComplete="off" /></div>
+              <div className="min-w-0"><Label>{t("recurring.bankName")}</Label><Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} autoComplete="off" /></div>
             </div>
-            <div className="mt-3">
+            <div className="mt-3 min-w-0">
               <Label>{t("recurring.iban")}</Label>
               <Input
                 value={form.iban}
@@ -796,9 +826,9 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
                 name="rp-iban"
               />
             </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div><Label>{t("recurring.referenceNumber")}</Label><Input value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} autoComplete="off" /></div>
-              <div><Label>{t("recurring.paymentDescription")}</Label><Input value={form.payment_description} onChange={(e) => setForm({ ...form, payment_description: e.target.value })} autoComplete="off" /></div>
+            <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
+              <div className="min-w-0"><Label>{t("recurring.referenceNumber")}</Label><Input value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} autoComplete="off" /></div>
+              <div className="min-w-0"><Label>{t("recurring.paymentDescription")}</Label><Input value={form.payment_description} onChange={(e) => setForm({ ...form, payment_description: e.target.value })} autoComplete="off" /></div>
             </div>
           </div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
