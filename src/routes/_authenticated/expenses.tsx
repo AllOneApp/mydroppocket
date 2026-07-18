@@ -17,7 +17,9 @@ import { FileDrop } from "@/components/FileDrop";
 import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
-import { DateRangeFilter, computeRange, localDateString, type DateRange } from "@/components/DateRangeFilter";
+import { computeRange, localDateString, type DateRange, type PresetKey } from "@/components/DateRangeFilter";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarDays } from "lucide-react";
 import { WarrantyCandidatesBlock, makeWarrantyItem, computeExpiry, type WarrantyItem } from "@/components/WarrantyCandidatesBlock";
 import { supabase } from "@/integrations/supabase/client";
 import { expensesQueryKey, expensesQueryOptions, type ExpenseEntryType, type ExpenseRow } from "@/lib/expenses";
@@ -58,6 +60,7 @@ function ExpensesPage() {
   });
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [visibleCount, setVisibleCount] = useState(30);
 
   const { data } = useQuery(expensesQueryOptions(activeProfileId));
 
@@ -98,6 +101,11 @@ function ExpensesPage() {
   const income = filtered.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
   const expense = filtered.filter((r) => r.type === "expense").reduce((s, r) => s + Number(r.amount), 0);
   const balance = income - expense;
+
+  // Reset pagination when filters or data change.
+  useEffect(() => { setVisibleCount(30); }, [range.from, range.to, activeProfileId]);
+  const visible = filtered.slice(0, visibleCount);
+  const hasMore = filtered.length > visible.length;
 
   async function performDelete(r: Row) {
     const prev = qc.getQueryData<Row[]>(expensesQueryKey);
@@ -149,7 +157,9 @@ function ExpensesPage() {
         </div>
       </div>
 
-      <div className="card-soft mb-6 p-4"><DateRangeFilter value={range} onChange={setRange} /></div>
+      <div className="card-soft mb-6 p-3 sm:p-4">
+        <PeriodChips value={range} onChange={setRange} />
+      </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <div className="card-soft p-6"><p className="text-sm text-muted-foreground">{t("expenses.income")}</p><p className="mt-1 text-2xl font-bold text-green-600">{formatCurrency(income)}</p></div>
@@ -164,8 +174,9 @@ function ExpensesPage() {
           <p className="mt-1 text-sm text-muted-foreground">{t("expenses.empty.desc")}</p>
         </div>
       ) : (
+        <>
         <div className="card-soft divide-y divide-border">
-          {filtered.map((r) => {
+          {visible.map((r) => {
             const isIncome = r.type === "income";
             const isHighlighted = highlightId === r.id;
             return (
@@ -189,6 +200,17 @@ function ExpensesPage() {
             );
           })}
         </div>
+        {hasMore && (
+          <div className="mt-4 flex justify-center">
+            <Button variant="outline" onClick={() => setVisibleCount((n) => n + 30)} className="h-11">
+              {t("common.showMore", { defaultValue: "Näita rohkem" })} ({filtered.length - visible.length})
+            </Button>
+          </div>
+        )}
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          {t("common.showingOf", { defaultValue: "Kuvatud {{shown}} / {{total}}", shown: visible.length, total: filtered.length })}
+        </p>
+        </>
       )}
 
       <ExpenseDialog
@@ -592,4 +614,118 @@ function normalizeDateString(input: string | null | undefined): string | null {
     return `${y}-${mo}-${d}`;
   }
   return null;
+}
+
+// Compact chip-style period filter (Today / Week / Month / Year / Pick).
+function PeriodChips({ value, onChange }: { value: DateRange; onChange: (v: DateRange) => void }) {
+  const { t } = useTranslation();
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [draftFrom, setDraftFrom] = useState(value.from);
+  const [draftTo, setDraftTo] = useState(value.to);
+
+  const chips: { key: PresetKey; label: string }[] = [
+    { key: "today", label: t("dateRange.presets.today") },
+    { key: "thisWeek", label: t("dateRange.presets.thisWeek") },
+    { key: "thisMonth", label: t("dateRange.presets.thisMonth") },
+    { key: "thisYear", label: t("dateRange.presets.thisYear") },
+  ];
+
+  function pick(preset: PresetKey) {
+    const r = computeRange(preset);
+    onChange({ preset, from: r.from, to: r.to });
+  }
+
+  const isCustom = value.preset === "custom";
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {chips.map((c) => {
+          const active = value.preset === c.key;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => pick(c.key)}
+              className={`h-9 shrink-0 rounded-full px-4 text-sm font-medium transition-colors ${
+                active
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-accent text-foreground hover:bg-accent/80"
+              }`}
+            >
+              {c.label}
+            </button>
+          );
+        })}
+        <Popover
+          open={popoverOpen}
+          onOpenChange={(o) => {
+            setPopoverOpen(o);
+            if (o) {
+              setDraftFrom(value.from);
+              setDraftTo(value.to);
+            }
+          }}
+        >
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition-colors ${
+                isCustom
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-accent text-foreground hover:bg-accent/80"
+              }`}
+            >
+              <CalendarDays className="h-4 w-4" />
+              {t("common.pickPeriod", { defaultValue: "Vali periood" })}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 space-y-3 p-4">
+            <div>
+              <Label className="text-xs">{t("dateRange.from")}</Label>
+              <Input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">{t("dateRange.to")}</Label>
+              <Input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={() => {
+                  if (!draftFrom || !draftTo) return;
+                  const from = draftFrom <= draftTo ? draftFrom : draftTo;
+                  const to = draftFrom <= draftTo ? draftTo : draftFrom;
+                  onChange({ preset: "custom", from, to });
+                  setPopoverOpen(false);
+                }}
+              >
+                {t("common.apply", { defaultValue: "Rakenda" })}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPopoverOpen(false)}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => { pick("thisMonth"); setPopoverOpen(false); }}
+              >
+                {t("common.reset", { defaultValue: "Tühjenda" })}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+      {isCustom && (
+        <p className="px-1 text-xs text-muted-foreground">
+          {formatDate(value.from)} – {formatDate(value.to)}
+        </p>
+      )}
+    </div>
+  );
 }
