@@ -62,6 +62,7 @@ export const Route = createFileRoute("/api/public/google-calendar/callback")({
             ensureMyDropPocketCalendar,
             GOOGLE_CALENDAR_CALLBACK_PATH,
             MY_DROPPOCKET_CALENDAR_NAME,
+            calendarNameForProfile,
           } = await import("@/lib/google-calendar.server");
           const { encryptToken } = await import("@/lib/google-drive.server");
 
@@ -79,15 +80,39 @@ export const Route = createFileRoute("/api/public/google-calendar/callback")({
           const email = identity.email ?? "unknown";
           const sub = identity.sub ?? "unknown";
 
-          const calendarId = await ensureMyDropPocketCalendar(
-            tokens.access_token,
-            MY_DROPPOCKET_CALENDAR_NAME,
-          );
-
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-          const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
           const db = supabaseAdmin as unknown as { from: (t: string) => any };
           const profileId = state.profileId ?? null;
+
+          // Tuletame kalendri nime profiili järgi.
+          // Separate lisaprofiili puhul: "MyDropPocket – <profiili nimi>".
+          // Muudel juhtudel (põhiprofiil, profileId puudub): "MyDropPocket".
+          let calendarName = MY_DROPPOCKET_CALENDAR_NAME;
+          if (profileId) {
+            const { data: profRow } = await db
+              .from("user_profiles")
+              .select("name, is_default")
+              .eq("id", profileId)
+              .maybeSingle();
+            if (profRow) {
+              calendarName = calendarNameForProfile({
+                profileName: (profRow as { name: string }).name,
+                isDefault: (profRow as { is_default: boolean }).is_default,
+              });
+            }
+          }
+
+          // Uus calendar.app.created scope näeb ainult selle scope'i all
+          // loodud kalendreid — vana laia `calendar` scope'i all loodud
+          // "MyDropPocket" kalender jääb kasutaja Google kontosse alles,
+          // kuid ei ole uue tokeni jaoks nähtav. ensureMyDropPocketCalendar
+          // loob seetõttu uue app-created kalendri.
+          const calendarId = await ensureMyDropPocketCalendar(
+            tokens.access_token,
+            calendarName,
+          );
+
+          const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
           // Upsert: onConflict differs by profile scope because uniqueness is a
           // partial index (user_id where profile_id IS NULL, or user_id+profile_id).
           // Do a manual find-or-insert to avoid dealing with partial-index conflict targets.
@@ -108,7 +133,7 @@ export const Route = createFileRoute("/api/public/google-calendar/callback")({
             access_token_expires_at: expiresAt,
             scope: tokens.scope,
             calendar_id: calendarId,
-            calendar_name: MY_DROPPOCKET_CALENDAR_NAME,
+            calendar_name: calendarName,
             updated_at: new Date().toISOString(),
           };
           const { error } = existing
@@ -118,6 +143,18 @@ export const Route = createFileRoute("/api/public/google-calendar/callback")({
                 .eq("id", (existing as { id: string }).id)
             : await db.from("google_calendar_connections").insert(payload);
           if (error) throw error;
+
+          // Puhasta selle profiili-ulatuse vanad event-mappingud, et uus
+          // sünkroonimine looks sündmused uude app-created kalendrisse.
+          // ÄRA kustuta Google API kaudu vanu sündmusi — jäta kasutaja
+          // vana kalender ja selle sündmused puutumata.
+          let clearQ = db
+            .from("calendar_events")
+            .delete()
+            .eq("user_id", state.userId);
+          if (profileId) clearQ = clearQ.eq("profile_id", profileId);
+          else clearQ = clearQ.is("profile_id", null);
+          await clearQ;
 
           return renderResult({ origin: state.origin, ok: true, email });
         } catch (e) {
