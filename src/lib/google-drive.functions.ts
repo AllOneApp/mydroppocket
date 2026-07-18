@@ -685,6 +685,7 @@ async function writeBackupInfo(params: {
   rootId: string;
   totals: { entries: number; files: number };
   lang: BackupLang;
+  format: BackupFormat;
 }) {
   const { upsertBytesInFolder, deleteFilesByNameInFolder } = await import("./google-drive.server");
   const et = params.lang === "et";
@@ -696,21 +697,57 @@ async function writeBackupInfo(params: {
     { [keyLabel]: et ? "Faile kokku" : "Total files", [valLabel]: params.totals.files },
     { [keyLabel]: et ? "Varunduse versioon" : "Backup version", [valLabel]: 1 },
     { [keyLabel]: et ? "Rakenduse versioon" : "App version", [valLabel]: "1.0.0" },
+    { [keyLabel]: et ? "Varunduse formaat" : "Backup format", [valLabel]: params.format },
   ];
   const sheetName = et ? "Varunduse info" : "Backup info";
-  const bytes = await rowsToXlsxBytes(info, sheetName);
   const fileName = et ? "Varunduse info.xlsx" : "Backup info.xlsx";
   const otherName = et ? "Backup info.xlsx" : "Varunduse info.xlsx";
-  await upsertBytesInFolder({
-    accessToken: params.accessToken,
-    parentId: params.rootId,
-    name: fileName,
-    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    bytes,
-  });
+  const pdfName = et ? "Varunduse info.pdf" : "Backup info.pdf";
+  const otherPdfName = et ? "Backup info.pdf" : "Varunduse info.pdf";
+
+  const wantExcel = params.format !== "pdf_only";
+  const wantPdf = params.format !== "excel_only";
+
+  if (wantExcel) {
+    const bytes = await rowsToXlsxBytes(info, sheetName);
+    await upsertBytesInFolder({
+      accessToken: params.accessToken,
+      parentId: params.rootId,
+      name: fileName,
+      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      bytes,
+    });
+  } else {
+    await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: fileName });
+  }
+  if (wantPdf) {
+    try {
+      const { renderBackupPdf } = await import("./google-drive-pdf.server");
+      const columns = info.length > 0 ? Object.keys(info[0]) : [];
+      const bytes = await renderBackupPdf({
+        title: sheetName,
+        columns,
+        rows: info,
+        lang: params.lang,
+      });
+      await upsertBytesInFolder({
+        accessToken: params.accessToken,
+        parentId: params.rootId,
+        name: pdfName,
+        mime: "application/pdf",
+        bytes,
+      });
+    } catch (e) {
+      console.error("[backup-pdf] backup-info failed", e);
+    }
+  } else {
+    await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: pdfName });
+  }
+
   // Legacy + other-language cleanup at root.
   await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: "backup-info.json" });
   await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: otherName });
+  await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: otherPdfName });
 }
 
 async function countFilesForUser(
