@@ -367,6 +367,7 @@ export type Database = {
         Row: {
           access_token_ciphertext: string
           access_token_expires_at: string
+          backup_format: string
           connected_at: string
           google_email: string
           google_sub: string
@@ -383,6 +384,7 @@ export type Database = {
         Insert: {
           access_token_ciphertext: string
           access_token_expires_at: string
+          backup_format?: string
           connected_at?: string
           google_email: string
           google_sub: string
@@ -399,6 +401,7 @@ export type Database = {
         Update: {
           access_token_ciphertext?: string
           access_token_expires_at?: string
+          backup_format?: string
           connected_at?: string
           google_email?: string
           google_sub?: string
