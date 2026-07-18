@@ -891,5 +891,6 @@ function makeForm(row: Recurring | null) {
     iban: row?.iban ?? "",
     reference_number: row?.reference_number ?? "",
     payment_description: row?.payment_description ?? "",
+    due_day: row?.due_day != null ? String(row.due_day) : "",
   };
 }
