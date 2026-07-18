@@ -138,14 +138,17 @@ function RecurringPage() {
     const paidCount = inMonth.filter((i) => i.status === "paid").length;
     const totalCount = inMonth.length;
     const percent = totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0;
-    const upcomingList = list
-      .filter((i) => i.status === "pending")
-      .sort((a, b) => a.due_date.localeCompare(b.due_date))
-      .slice(0, 8);
     const history = list
       .filter((i) => i.status === "paid")
       .sort((a, b) => (b.paid_at ?? b.due_date).localeCompare(a.paid_at ?? a.due_date));
-    return { paid, toPay, overdue, upcoming, upcomingRec, paidCount, totalCount, percent, upcomingList, history };
+    // Month detail groups
+    const monthPaid = inMonth.filter((i) => i.status === "paid")
+      .sort((a, b) => (b.paid_at ?? b.due_date).localeCompare(a.paid_at ?? a.due_date));
+    const monthToPay = inMonth.filter((i) => i.status === "pending" && i.due_date >= today)
+      .sort((a, b) => a.due_date.localeCompare(b.due_date));
+    const monthOverdue = list.filter((i) => i.status === "pending" && i.due_date < today)
+      .sort((a, b) => a.due_date.localeCompare(b.due_date));
+    return { paid, toPay, overdue, upcoming, upcomingRec, paidCount, totalCount, percent, history, monthPaid, monthToPay, monthOverdue };
   }, [instances, recurring, monthStart, monthEnd, today]);
 
   async function markPaid(inst: Instance, rec: Recurring) {
