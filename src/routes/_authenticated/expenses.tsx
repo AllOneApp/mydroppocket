@@ -656,7 +656,8 @@ function FiltersBar({
   categories: string[];
 }) {
   const { t } = useTranslation();
-  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState(value.from);
   const [draftTo, setDraftTo] = useState(value.to);
 
@@ -685,13 +686,15 @@ function FiltersBar({
     const from = draftFrom <= draftTo ? draftFrom : draftTo;
     const to = draftFrom <= draftTo ? draftTo : draftFrom;
     onChange({ preset: "custom", from, to });
-    setPopoverOpen(false);
+    setMobileOpen(false);
+    setDesktopOpen(false);
   }
   function clearDraft() {
     setDraftFrom("");
     setDraftTo("");
     pick("thisMonth");
-    setPopoverOpen(false);
+    setMobileOpen(false);
+    setDesktopOpen(false);
   }
 
   const RangePickerBody = (
@@ -723,7 +726,7 @@ function FiltersBar({
         <Button size="sm" className="flex-1" onClick={applyDraft} disabled={!draftFrom || !draftTo}>
           {t("common.apply", { defaultValue: "Rakenda" })}
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setPopoverOpen(false)}>
+        <Button size="sm" variant="outline" onClick={() => { setMobileOpen(false); setDesktopOpen(false); }}>
           {t("common.cancel")}
         </Button>
         <Button size="sm" variant="ghost" onClick={clearDraft}>
@@ -775,9 +778,9 @@ function FiltersBar({
         <div>
           <Label className="mb-1 block text-xs text-muted-foreground">{pickPeriodLabel}</Label>
           <Popover
-            open={popoverOpen}
+            open={mobileOpen}
             onOpenChange={(o) => {
-              setPopoverOpen(o);
+              setMobileOpen(o);
               if (o) { setDraftFrom(value.from); setDraftTo(value.to); }
             }}
           >
@@ -839,9 +842,9 @@ function FiltersBar({
             );
           })}
           <Popover
-            open={popoverOpen}
+            open={desktopOpen}
             onOpenChange={(o) => {
-              setPopoverOpen(o);
+              setDesktopOpen(o);
               if (o) { setDraftFrom(value.from); setDraftTo(value.to); }
             }}
           >
