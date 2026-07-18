@@ -703,6 +703,35 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
             </Select>
           </div>
           <div><Label>{t("recurring.notes")}</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          <div className="mt-2 rounded-lg border border-border p-3">
+            <p className="mb-2 text-sm font-semibold">{t("recurring.paymentDetails")}</p>
+            <p className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
+              {t("recurring.aiPaymentWarning")}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div><Label>{t("recurring.payeeName")}</Label><Input value={form.payee_name} onChange={(e) => setForm({ ...form, payee_name: e.target.value })} autoComplete="off" /></div>
+              <div><Label>{t("recurring.bankName")}</Label><Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} autoComplete="off" /></div>
+            </div>
+            <div className="mt-3">
+              <Label>{t("recurring.iban")}</Label>
+              <Input
+                value={form.iban}
+                onChange={(e) => setForm({ ...form, iban: e.target.value })}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                inputMode="text"
+                data-lpignore="true"
+                data-form-type="other"
+                name="rp-iban"
+              />
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div><Label>{t("recurring.referenceNumber")}</Label><Input value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} autoComplete="off" /></div>
+              <div><Label>{t("recurring.paymentDescription")}</Label><Input value={form.payment_description} onChange={(e) => setForm({ ...form, payment_description: e.target.value })} autoComplete="off" /></div>
+            </div>
+          </div>
           <Button type="submit" disabled={saving} className="w-full brand-gradient-bg text-primary-foreground">{saving ? t("common.saving") : t("common.save")}</Button>
         </form>
       </DialogContent>
