@@ -368,6 +368,7 @@
   "recurring": {
     "title": "Recurring payments",
     "desc": "Manage every recurring payment — utilities, subscriptions, installments and contracts.",
+    "tagline": "Monthly and regular payments",
     "add": "Add recurring payment",
     "addTitle": "Add recurring payment",
     "editTitle": "Edit recurring payment",
