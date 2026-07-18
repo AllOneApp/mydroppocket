@@ -590,6 +590,7 @@ export type Database = {
       recurring_payments: {
         Row: {
           amount: number
+          bank_name: string | null
           category: string | null
           contract_file_mime: string | null
           contract_file_name: string | null
@@ -599,12 +600,16 @@ export type Database = {
           currency: string | null
           end_date: string | null
           frequency: string
+          iban: string | null
           id: string
           linked_purchase_id: string | null
           next_due_date: string
           notes: string | null
+          payee_name: string | null
+          payment_description: string | null
           profile_id: string | null
           provider: string | null
+          reference_number: string | null
           reminder_days_before: number
           service_name: string
           start_date: string
@@ -613,6 +618,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          bank_name?: string | null
           category?: string | null
           contract_file_mime?: string | null
           contract_file_name?: string | null
@@ -622,12 +628,16 @@ export type Database = {
           currency?: string | null
           end_date?: string | null
           frequency?: string
+          iban?: string | null
           id?: string
           linked_purchase_id?: string | null
           next_due_date?: string
           notes?: string | null
+          payee_name?: string | null
+          payment_description?: string | null
           profile_id?: string | null
           provider?: string | null
+          reference_number?: string | null
           reminder_days_before?: number
           service_name: string
           start_date?: string
@@ -636,6 +646,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          bank_name?: string | null
           category?: string | null
           contract_file_mime?: string | null
           contract_file_name?: string | null
@@ -645,12 +656,16 @@ export type Database = {
           currency?: string | null
           end_date?: string | null
           frequency?: string
+          iban?: string | null
           id?: string
           linked_purchase_id?: string | null
           next_due_date?: string
           notes?: string | null
+          payee_name?: string | null
+          payment_description?: string | null
           profile_id?: string | null
           provider?: string | null
+          reference_number?: string | null
           reminder_days_before?: number
           service_name?: string
           start_date?: string
