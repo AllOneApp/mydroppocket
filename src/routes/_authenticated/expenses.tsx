@@ -656,10 +656,15 @@ function FiltersBar({
   categories: string[];
 }) {
   const { t } = useTranslation();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [desktopOpen, setDesktopOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState(value.from);
   const [draftTo, setDraftTo] = useState(value.to);
+
+  function openPicker() {
+    setDraftFrom(value.from);
+    setDraftTo(value.to);
+    setDialogOpen(true);
+  }
 
   function parseISO(s: string): Date | undefined {
     if (!s) return undefined;
@@ -686,15 +691,13 @@ function FiltersBar({
     const from = draftFrom <= draftTo ? draftFrom : draftTo;
     const to = draftFrom <= draftTo ? draftTo : draftFrom;
     onChange({ preset: "custom", from, to });
-    setMobileOpen(false);
-    setDesktopOpen(false);
+    setDialogOpen(false);
   }
   function clearDraft() {
     setDraftFrom("");
     setDraftTo("");
     pick("thisMonth");
-    setMobileOpen(false);
-    setDesktopOpen(false);
+    setDialogOpen(false);
   }
 
   const RangePickerBody = (
@@ -726,7 +729,7 @@ function FiltersBar({
         <Button size="sm" className="flex-1" onClick={applyDraft} disabled={!draftFrom || !draftTo}>
           {t("common.apply", { defaultValue: "Rakenda" })}
         </Button>
-        <Button size="sm" variant="outline" onClick={() => { setMobileOpen(false); setDesktopOpen(false); }}>
+        <Button size="sm" variant="outline" onClick={() => setDialogOpen(false)}>
           {t("common.cancel")}
         </Button>
         <Button size="sm" variant="ghost" onClick={clearDraft}>
