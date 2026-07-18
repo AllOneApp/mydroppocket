@@ -66,6 +66,15 @@ function CloudBackupPage() {
     },
   });
 
+  const formatMut = useMutation({
+    mutationFn: (format: BackupFormat) => setBackupFormat({ data: { profileId: null, format } }),
+    onSuccess: () => {
+      toast.success("Varunduse formaat salvestatud");
+      qc.invalidateQueries({ queryKey: ["google-drive-status"] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Salvestamine ebaõnnestus"),
+  });
+
   async function runFullBackup() {
     setBackingUp(true);
     try {
