@@ -42,6 +42,7 @@ function CalendarSyncPage() {
   const data = status.data;
   const connected = data?.connected === true;
   const email = data?.connected ? data.email : undefined;
+  const needsReconnect = data?.connected ? Boolean((data as unknown as { needsReconnect?: boolean }).needsReconnect) : false;
   const syncInstallments = data?.connected ? data.syncInstallments : true;
   const reminderMinutes: number[] = data?.connected ? data.reminderMinutes : [1440];
   const syncRecurring = data?.connected ? (data as unknown as { syncRecurring?: boolean }).syncRecurring ?? true : true;
@@ -179,6 +180,25 @@ function CalendarSyncPage() {
       </p>
 
       <div className="mt-8 grid gap-6">
+        {connected && needsReconnect && (
+          <section className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+            <p className="font-medium text-amber-900 dark:text-amber-200">
+              ⚠️ Google Calendari ühendus vajab uuendamist
+            </p>
+            <p className="mt-1 text-amber-900/80 dark:text-amber-200/80">
+              MyDropPocket kasutab nüüd kitsamat, turvalisemat Google Calendari luba
+              (ainult rakenduse enda loodud kalender). Ühenda Google Calendar uuesti,
+              et MyDropPocket saaks jätkata meeldetuletuste sünkroonimist.
+              Sinu olemasolev kalender ja sündmused Google'is jäävad puutumata.
+            </p>
+            <div className="mt-3">
+              <Button size="sm" onClick={handleConnect} disabled={connecting}>
+                {connecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Ühenda Google Calendar uuesti
+              </Button>
+            </div>
+          </section>
+        )}
         <section className="card-soft p-6">
           <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">

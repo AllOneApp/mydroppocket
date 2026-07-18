@@ -465,6 +465,7 @@ function CalendarProfileBlock({ profile }: { profile: UserProfile }) {
   const s = statusQ.data;
   const mode = s?.mode ?? "shared";
   const isDefault = profile.is_default;
+  const needsReconnect = Boolean(s && (s as unknown as { needsReconnect?: boolean }).needsReconnect);
 
   return (
     <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
@@ -472,6 +473,23 @@ function CalendarProfileBlock({ profile }: { profile: UserProfile }) {
         <CalendarIcon className="h-4 w-4 text-primary" />
         <span className="text-sm font-semibold">Google Calendar</span>
       </div>
+
+      {s?.connected && needsReconnect && (
+        <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+          <p className="font-medium text-amber-900 dark:text-amber-200">
+            ⚠️ Google Calendari ühendus vajab uuendamist
+          </p>
+          <p className="mt-0.5 text-amber-900/80 dark:text-amber-200/80">
+            Kasutame nüüd kitsamat luba (ainult rakenduse enda kalender). Sinu vana
+            kalender ja sündmused jäävad Google'is puutumata.
+          </p>
+          <div className="mt-2">
+            <Button size="sm" onClick={handleConnect} disabled={connecting}>
+              Ühenda Google Calendar uuesti
+            </Button>
+          </div>
+        </div>
+      )}
 
       {!isDefault && (
         <div className="mt-2 space-y-1.5">
