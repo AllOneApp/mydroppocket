@@ -649,6 +649,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         next_due_date: form.next_due_date || form.start_date,
         reminder_days_before: Number(form.reminder_days_before),
         notes: form.notes || null,
+        due_day: form.due_day ? Number(form.due_day) : null,
         payee_name: form.payee_name.trim() || null,
         bank_name: form.bank_name.trim() || null,
         iban: form.iban.replace(/\s+/g, "").toUpperCase() || null,
