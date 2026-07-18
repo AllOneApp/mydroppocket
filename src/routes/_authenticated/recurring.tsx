@@ -502,12 +502,46 @@ function RecurringPage() {
         onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
         onConfirm={() => { const r = pendingDelete; setPendingDelete(null); if (r) void performDelete(r); }}
       />
-      <ConfirmDeleteDialog
-        open={!!pendingHistoryDelete}
-        onOpenChange={(o) => { if (!o) setPendingHistoryDelete(null); }}
-        onConfirm={() => { const inst = pendingHistoryDelete; setPendingHistoryDelete(null); if (inst) void performDeleteHistory(inst); }}
-        description={t("recurring.confirmDeleteHistory")}
-      />
+      <Dialog open={!!pendingHistoryDelete} onOpenChange={(o) => { if (!o) setPendingHistoryDelete(null); }}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("recurring.historyDeleteChoiceTitle")}</DialogTitle>
+            <DialogDescription>{t("recurring.historyDeleteChoiceDesc")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <Button
+              variant="outline"
+              onClick={() => { const inst = pendingHistoryDelete; setPendingHistoryDelete(null); if (inst) void performDeleteHistory(inst, { alsoExpense: false }); }}
+            >{t("recurring.historyDeleteOnly")}</Button>
+            <Button
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { const inst = pendingHistoryDelete; setPendingHistoryDelete(null); if (inst) void performDeleteHistory(inst, { alsoExpense: true }); }}
+              disabled={!pendingHistoryDelete?.expense_id}
+            >{t("recurring.historyDeleteWithExpense")}</Button>
+            <Button variant="ghost" onClick={() => setPendingHistoryDelete(null)}>{t("common.cancel")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!paidResult} onOpenChange={(o) => { if (!o) setPaidResult(null); }}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>✅ {t("recurring.paidAndExpenseCreated")}</DialogTitle>
+            <DialogDescription className="break-words">{paidResult?.label}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <Button
+              className="brand-gradient-bg text-primary-foreground"
+              onClick={() => {
+                const id = paidResult?.expenseId ?? null;
+                setPaidResult(null);
+                void navigate({ to: "/expenses", search: id ? { open: id } as never : undefined as never });
+              }}
+            >{t("recurring.viewInExpenses")}</Button>
+            <Button variant="ghost" onClick={() => setPaidResult(null)}>{t("recurring.close")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
