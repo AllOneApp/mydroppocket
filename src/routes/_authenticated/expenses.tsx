@@ -58,6 +58,7 @@ function ExpensesPage() {
     const r = computeRange("thisMonth");
     return { preset: "thisMonth", from: r.from, to: r.to };
   });
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [visibleCount, setVisibleCount] = useState(30);
@@ -97,13 +98,27 @@ function ExpensesPage() {
     return () => clearTimeout(timer);
   }, [highlightId, data]);
 
-  const filtered = useMemo(() => (data ?? []).filter((r) => r.expense_date >= range.from && r.expense_date <= range.to), [data, range]);
+  const filtered = useMemo(
+    () =>
+      (data ?? []).filter(
+        (r) =>
+          r.expense_date >= range.from &&
+          r.expense_date <= range.to &&
+          (categoryFilter === "all" || r.category === categoryFilter),
+      ),
+    [data, range, categoryFilter],
+  );
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of data ?? []) set.add(r.category);
+    return Array.from(set).sort();
+  }, [data]);
   const income = filtered.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
   const expense = filtered.filter((r) => r.type === "expense").reduce((s, r) => s + Number(r.amount), 0);
   const balance = income - expense;
 
   // Reset pagination when filters or data change.
-  useEffect(() => { setVisibleCount(30); }, [range.from, range.to, activeProfileId]);
+  useEffect(() => { setVisibleCount(30); }, [range.from, range.to, activeProfileId, categoryFilter]);
   const visible = filtered.slice(0, visibleCount);
   const hasMore = filtered.length > visible.length;
 
@@ -158,7 +173,13 @@ function ExpensesPage() {
       </div>
 
       <div className="card-soft mb-6 p-3 sm:p-4">
-        <PeriodChips value={range} onChange={setRange} />
+        <FiltersBar
+          value={range}
+          onChange={setRange}
+          category={categoryFilter}
+          onCategoryChange={setCategoryFilter}
+          categories={availableCategories}
+        />
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
