@@ -607,6 +607,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
         start_date: startNorm || f.start_date,
         end_date: endNorm || f.end_date,
         next_due_date: nextRaw || nextFromDay || startNorm || f.next_due_date,
+        due_day: typeof d.due_day === "number" && d.due_day >= 1 && d.due_day <= 31 ? String(d.due_day) : f.due_day,
         notes: (typeof d.notes === "string" && d.notes.trim()) || f.notes,
         payee_name: (typeof d.payee_name === "string" && d.payee_name.trim()) || f.payee_name,
         bank_name: (typeof d.bank_name === "string" && d.bank_name.trim()) || f.bank_name,
