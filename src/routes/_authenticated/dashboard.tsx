@@ -108,7 +108,7 @@ function Dashboard() {
         warranties: w.data ?? [],
         agreements: a.data ?? [],
         expiring,
-        recurring: { paid: rpPaid, unpaid: rpUnpaid, overdue: rpOverdue, next: nextPending, nextRec },
+        recurring: { paid: rpPaid, unpaid: rpUnpaid, overdue: rpOverdue, next: nextPending, nextRec, count: rps.length },
       };
     },
     staleTime: 0,
@@ -211,6 +211,17 @@ function Dashboard() {
         <ModuleCard to="/warranties" icon={ShieldCheck} title={t("dashboard.warrantiesCardTitle")} value={t("dashboard.warrantiesTracked", { count: data?.warranties.length ?? 0 })} sub={t("dashboard.expiringSoon", { count: data?.expiring.length ?? 0 })} />
         <ModuleCard to="/expenses" icon={Wallet} title={t("nav.expenses")} value={formatCurrency(totals.month.balance)} sub={t("expenses.balance") + " · " + t("expenses.thisMonth")} />
         <ModuleCard to="/agreements" icon={FileText} title={t("nav.agreements")} value={t("dashboard.onFile", { count: data?.agreements.length ?? 0 })} sub={t("dashboard.contractsInstallments")} />
+      </div>
+
+      {/* Recurring payments module card */}
+      <div className="mt-6">
+        <ModuleCard
+          to="/recurring"
+          icon={Repeat}
+          title={t("recurring.title")}
+          value={t("dashboard.onFile", { count: data?.recurring.count ?? 0 })}
+          sub={t("recurring.tagline")}
+        />
       </div>
 
       {/* Recurring payments card */}
@@ -486,7 +497,7 @@ function Dashboard() {
   );
 }
 
-function ModuleCard({ to, icon: Icon, title, value, sub }: { to: "/warranties" | "/expenses" | "/agreements"; icon: React.ComponentType<{ className?: string }>; title: string; value: string; sub: string }) {
+function ModuleCard({ to, icon: Icon, title, value, sub }: { to: "/warranties" | "/expenses" | "/agreements" | "/recurring"; icon: React.ComponentType<{ className?: string }>; title: string; value: string; sub: string }) {
   return (
     <Link to={to} className="card-soft group flex flex-col justify-between p-6 transition hover:-translate-y-0.5 hover:shadow-lg">
       <div className="mb-6 flex items-center justify-between">
