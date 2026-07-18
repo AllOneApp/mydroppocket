@@ -732,6 +732,25 @@ function DriveProfileBlock({ profile }: { profile: UserProfile }) {
         )}
       </div>
 
+      {s?.connected && (
+        <div className="mt-3 rounded-md border border-border/60 bg-background/60 p-2">
+          <div className="text-xs font-medium text-foreground/90">Varunduse formaat</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            Kehtib ainult koondaruannetele (Tulud/kulud, Garantiid, Lepingud, Püsimaksed). Originaalfailid (PDF, JPG, PNG) sünkroonitakse alati eraldi.
+          </div>
+          <select
+            className="mt-2 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+            value={s.backupFormat ?? "excel_pdf"}
+            onChange={(e) => formatMut.mutate(e.target.value as BackupFormat)}
+            disabled={formatMut.isPending}
+          >
+            <option value="excel_pdf">Excel + PDF (soovitatud)</option>
+            <option value="excel_only">Ainult Excel</option>
+            <option value="pdf_only">Ainult PDF</option>
+          </select>
+        </div>
+      )}
+
       <PostConnectSyncPrompt
         open={prompt.open}
         count={prompt.count}
