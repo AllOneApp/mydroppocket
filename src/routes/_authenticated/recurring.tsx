@@ -333,6 +333,8 @@ function RecurringPage() {
           {(recurring ?? []).map((r) => {
             const next = (instances ?? []).filter((i) => i.recurring_payment_id === r.id && i.status === "pending")
               .sort((a, b) => a.due_date.localeCompare(b.due_date))[0] ?? null;
+            const lastPaid = (instances ?? []).filter((i) => i.recurring_payment_id === r.id && i.status === "paid")
+              .sort((a, b) => (b.paid_at ?? b.due_date).localeCompare(a.paid_at ?? a.due_date))[0] ?? null;
             const s = next ? statusOf(next.due_date, false) : { tone: "green" as const, label: t("recurring.status.paid"), days: 0 };
             const color = s.tone === "green" ? "text-green-600 bg-green-500/10" : s.tone === "orange" ? "text-orange-600 bg-orange-500/10" : "text-red-600 bg-red-500/10";
             const catLabel = r.category ? t(`recurring.categories.${r.category}` as const, { defaultValue: r.category }) : "";
@@ -347,6 +349,11 @@ function RecurringPage() {
                     <p className="mt-1 text-sm">
                       {t("recurring.nextDue")}: <span className="font-medium">{formatDate(next ? next.due_date : r.next_due_date)}</span>
                     </p>
+                    {lastPaid && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {t("recurring.lastPaid")}: {formatDate(lastPaid.paid_at ?? lastPaid.due_date)}
+                      </p>
+                    )}
                   </button>
                   <div className="flex flex-col items-end gap-2">
                     <p className="shrink-0 text-lg font-bold">{formatCurrency(Number(r.amount), r.currency ?? "EUR")}</p>
@@ -355,7 +362,7 @@ function RecurringPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {next ? (
-                    <Button size="sm" onClick={() => markPaid(next, r)} className="bg-green-600 text-white hover:bg-green-600/90">
+                    <Button size="sm" onClick={() => setPendingPay({ instance: next, recurring: r })} className="bg-green-600 text-white hover:bg-green-600/90">
                       <CheckCircle2 className="mr-1.5 h-4 w-4" />{t("recurring.markPaid")}
                     </Button>
                   ) : null}
