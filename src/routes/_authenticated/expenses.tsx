@@ -17,7 +17,9 @@ import { FileDrop } from "@/components/FileDrop";
 import { RecordActions } from "@/components/RecordActions";
 import { VoiceInput } from "@/components/VoiceInput";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDialog";
-import { DateRangeFilter, computeRange, localDateString, type DateRange } from "@/components/DateRangeFilter";
+import { computeRange, localDateString, type DateRange, type PresetKey } from "@/components/DateRangeFilter";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarDays } from "lucide-react";
 import { WarrantyCandidatesBlock, makeWarrantyItem, computeExpiry, type WarrantyItem } from "@/components/WarrantyCandidatesBlock";
 import { supabase } from "@/integrations/supabase/client";
 import { expensesQueryKey, expensesQueryOptions, type ExpenseEntryType, type ExpenseRow } from "@/lib/expenses";
@@ -58,6 +60,7 @@ function ExpensesPage() {
   });
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [visibleCount, setVisibleCount] = useState(30);
 
   const { data } = useQuery(expensesQueryOptions(activeProfileId));
 
@@ -98,6 +101,11 @@ function ExpensesPage() {
   const income = filtered.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
   const expense = filtered.filter((r) => r.type === "expense").reduce((s, r) => s + Number(r.amount), 0);
   const balance = income - expense;
+
+  // Reset pagination when filters or data change.
+  useEffect(() => { setVisibleCount(30); }, [range.from, range.to, activeProfileId]);
+  const visible = filtered.slice(0, visibleCount);
+  const hasMore = filtered.length > visible.length;
 
   async function performDelete(r: Row) {
     const prev = qc.getQueryData<Row[]>(expensesQueryKey);
@@ -149,7 +157,9 @@ function ExpensesPage() {
         </div>
       </div>
 
-      <div className="card-soft mb-6 p-4"><DateRangeFilter value={range} onChange={setRange} /></div>
+      <div className="card-soft mb-6 p-3 sm:p-4">
+        <PeriodChips value={range} onChange={setRange} />
+      </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <div className="card-soft p-6"><p className="text-sm text-muted-foreground">{t("expenses.income")}</p><p className="mt-1 text-2xl font-bold text-green-600">{formatCurrency(income)}</p></div>
@@ -164,8 +174,9 @@ function ExpensesPage() {
           <p className="mt-1 text-sm text-muted-foreground">{t("expenses.empty.desc")}</p>
         </div>
       ) : (
+        <>
         <div className="card-soft divide-y divide-border">
-          {filtered.map((r) => {
+          {visible.map((r) => {
             const isIncome = r.type === "income";
             const isHighlighted = highlightId === r.id;
             return (
@@ -189,6 +200,17 @@ function ExpensesPage() {
             );
           })}
         </div>
+        {hasMore && (
+          <div className="mt-4 flex justify-center">
+            <Button variant="outline" onClick={() => setVisibleCount((n) => n + 30)} className="h-11">
+              {t("common.showMore", { defaultValue: "Näita rohkem" })} ({filtered.length - visible.length})
+            </Button>
+          </div>
+        )}
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          {t("common.showingOf", { defaultValue: "Kuvatud {{shown}} / {{total}}", shown: visible.length, total: filtered.length })}
+        </p>
+        </>
       )}
 
       <ExpenseDialog
