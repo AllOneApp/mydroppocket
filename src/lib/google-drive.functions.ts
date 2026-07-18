@@ -863,7 +863,7 @@ export const syncDriveExistingBatch = createServerFn({ method: "POST" })
   .inputValidator((input: { profileId: string; cursor?: BulkSyncCursor; batchSize?: number }) => input)
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { resolveProfileDriveTarget, uploadBytesToDriveFolder, FOLDER_KEY_TO_NAME } =
+    const { resolveProfileDriveTarget, uploadBytesToDriveFolder, findOrCreateFolder, FOLDER_KEY_TO_NAME } =
       await import("./google-drive.server");
     const admin = supabaseAdmin as unknown as { from: (t: string) => any };
     const uid = context.userId;
@@ -880,9 +880,19 @@ export const syncDriveExistingBatch = createServerFn({ method: "POST" })
     let failed = 0;
     let skipped = 0;
 
-    // Helper to process one table stage with (table, pathCol, idCol, folderKey).
-    async function runTable(table: string, pathCol: string, idCol: string, folderKey: string, nameCol = "file_name", mimeCol = "file_mime"): Promise<boolean> {
-      const { data: rows } = await admin
+    // Helper to process one table stage. Uses offset-based paging so failed
+    // rows don't cause infinite loops (a row that failed once will be
+    // skipped past on the next batch instead of re-queried forever).
+    async function runTable(
+      table: string,
+      pathCol: string,
+      idCol: string,
+      folderKey: string,
+      nameCol = "file_name",
+      mimeCol = "file_mime",
+      extraFilter?: (q: any) => any,
+    ): Promise<{ stageDone: boolean; consumed: number }> {
+      let q = admin
         .from(table)
         .select(`id, ${pathCol}, ${nameCol}, ${mimeCol}`)
         .eq("user_id", uid)
@@ -890,11 +900,14 @@ export const syncDriveExistingBatch = createServerFn({ method: "POST" })
         .not(pathCol, "is", null)
         .is(idCol, null)
         .order("created_at", { ascending: true })
-        .limit(batchSize);
+        .range(cursor.offset, cursor.offset + batchSize - 1);
+      if (extraFilter) q = extraFilter(q);
+      const { data: rows } = await q;
       const list = (rows as any[]) ?? [];
-      if (list.length === 0) return true; // stage done
+      if (list.length === 0) return { stageDone: true, consumed: 0 };
+      const folderName = FOLDER_KEY_TO_NAME[folderKey as keyof typeof FOLDER_KEY_TO_NAME];
+      const parentId = conn!.subfolders[folderName];
       for (const r of list) {
-        const parentId = conn!.subfolders[FOLDER_KEY_TO_NAME[folderKey as keyof typeof FOLDER_KEY_TO_NAME]];
         if (!parentId) { failed++; continue; }
         const filePath = r[pathCol] as string;
         if (!filePath?.startsWith(`${uid}/`)) { skipped++; continue; }
@@ -911,35 +924,138 @@ export const syncDriveExistingBatch = createServerFn({ method: "POST" })
           });
           await admin.from(table).update({ [idCol]: up.id }).eq("id", r.id);
           uploaded++;
-        } catch {
+        } catch (e) {
+          console.error(`[bulk-sync] ${table}#${r.id} failed`, e);
           failed++;
         }
       }
-      return list.length < batchSize; // when fewer than batchSize returned, stage is done
+      // Advance past whatever we saw. Successful uploads clear the filter for
+      // future queries; failed rows stay past the offset so we skip them.
+      return { stageDone: list.length < batchSize, consumed: list.length };
     }
 
-    let stageDone = false;
+    // agreement_attachments has no profile_id column; scope through agreements.
+    async function runAgreementAttachments(): Promise<{ stageDone: boolean; consumed: number }> {
+      const { data: ags } = await admin
+        .from("agreements")
+        .select("id, title, gdrive_folder_id")
+        .eq("user_id", uid)
+        .eq("profile_id", pid);
+      const agreementList = ((ags as { id: string; title: string | null; gdrive_folder_id: string | null }[] | null) ?? []);
+      if (agreementList.length === 0) return { stageDone: true, consumed: 0 };
+      const agreementIds = agreementList.map((a) => a.id);
+      const { data: rows } = await admin
+        .from("agreement_attachments")
+        .select("id, agreement_id, file_path, file_name, file_mime")
+        .in("agreement_id", agreementIds)
+        .not("file_path", "is", null)
+        .is("gdrive_file_id", null)
+        .order("created_at", { ascending: true })
+        .range(cursor.offset, cursor.offset + batchSize - 1);
+      const list = (rows as any[]) ?? [];
+      if (list.length === 0) return { stageDone: true, consumed: 0 };
+      const lepingudId = conn!.subfolders["Lepingud"];
+      // Per-agreement subfolder cache within this batch.
+      const folderCache = new Map<string, string>();
+      for (const a of agreementList) if (a.gdrive_folder_id) folderCache.set(a.id, a.gdrive_folder_id);
+      for (const r of list) {
+        if (!lepingudId) { failed++; continue; }
+        const filePath = r.file_path as string;
+        if (!filePath?.startsWith(`${uid}/`)) { skipped++; continue; }
+        try {
+          let folderId = folderCache.get(r.agreement_id);
+          if (!folderId) {
+            const parent = agreementList.find((a) => a.id === r.agreement_id);
+            const rawTitle = parent?.title || "Leping";
+            const name = (rawTitle.replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim() || "Leping").slice(0, 80);
+            const f = await findOrCreateFolder({ accessToken: conn!.accessToken, name, parentId: lepingudId });
+            folderId = f.id;
+            folderCache.set(r.agreement_id, folderId);
+            await admin.from("agreements").update({ gdrive_folder_id: folderId }).eq("id", r.agreement_id);
+          }
+          const dl = await supabaseAdmin.storage.from("documents").download(filePath);
+          if (dl.error || !dl.data) { failed++; continue; }
+          const bytes = new Uint8Array(await dl.data.arrayBuffer());
+          const up = await uploadBytesToDriveFolder({
+            accessToken: conn!.accessToken,
+            parentId: folderId,
+            name: (r.file_name as string) || filePath.split("/").pop() || "fail",
+            mime: (r.file_mime as string) || "application/octet-stream",
+            bytes,
+          });
+          await admin.from("agreement_attachments").update({ gdrive_file_id: up.id }).eq("id", r.id);
+          uploaded++;
+        } catch (e) {
+          console.error(`[bulk-sync] agreement_attachments#${r.id} failed`, e);
+          failed++;
+        }
+      }
+      return { stageDone: list.length < batchSize, consumed: list.length };
+    }
+
+    const stageOrder: BulkSyncCursor["stage"][] = [
+      "warranties",
+      "expenses",
+      "agreements",
+      "recurring_payments_contract",
+      "recurring_instances_receipt",
+      "recurring_instances_invoice",
+      "agreement_attachments",
+      "done",
+    ];
+    let result: { stageDone: boolean; consumed: number } = { stageDone: true, consumed: 0 };
     switch (cursor.stage) {
       case "warranties":
-        stageDone = await runTable("warranties", "file_path", "gdrive_file_id", "warranty");
-        if (stageDone) cursor = { stage: "expenses", offset: 0 };
+        result = await runTable("warranties", "file_path", "gdrive_file_id", "warranty");
         break;
       case "expenses":
-        stageDone = await runTable("expenses", "file_path", "gdrive_file_id", "expense");
-        if (stageDone) cursor = { stage: "agreements", offset: 0 };
+        result = await runTable("expenses", "file_path", "gdrive_file_id", "expense");
         break;
       case "agreements":
-        stageDone = await runTable("agreements", "file_path", "gdrive_file_id", "agreement");
-        if (stageDone) cursor = { stage: "recurring_instances_receipt", offset: 0 };
+        result = await runTable("agreements", "file_path", "gdrive_file_id", "agreement");
+        break;
+      case "recurring_payments_contract":
+        result = await runTable(
+          "recurring_payments",
+          "contract_file_path",
+          "contract_gdrive_file_id",
+          "recurring",
+          "contract_file_name",
+          "contract_file_mime",
+        );
         break;
       case "recurring_instances_receipt":
-        stageDone = await runTable("recurring_payment_instances", "receipt_file_path", "receipt_gdrive_file_id", "receipt", "receipt_file_name", "receipt_file_mime");
-        if (stageDone) cursor = { stage: "recurring_instances_invoice", offset: 0 };
+        result = await runTable(
+          "recurring_payment_instances",
+          "receipt_file_path",
+          "receipt_gdrive_file_id",
+          "receipt",
+          "receipt_file_name",
+          "receipt_file_mime",
+        );
         break;
       case "recurring_instances_invoice":
-        stageDone = await runTable("recurring_payment_instances", "invoice_file_path", "invoice_gdrive_file_id", "invoice", "invoice_file_name", "invoice_file_mime");
-        if (stageDone) cursor = { stage: "done", offset: 0 };
+        result = await runTable(
+          "recurring_payment_instances",
+          "invoice_file_path",
+          "invoice_gdrive_file_id",
+          "invoice",
+          "invoice_file_name",
+          "invoice_file_mime",
+        );
         break;
+      case "agreement_attachments":
+        result = await runAgreementAttachments();
+        break;
+    }
+    if (result.stageDone) {
+      const idx = stageOrder.indexOf(cursor.stage);
+      const next = stageOrder[Math.min(idx + 1, stageOrder.length - 1)] ?? "done";
+      cursor = { stage: next, offset: 0 };
+    } else {
+      // Advance offset past all rows we saw (successes vanish from the filter;
+      // failures stay behind the offset and are not retried this run).
+      cursor = { stage: cursor.stage, offset: cursor.offset + result.consumed };
     }
 
     return { done: cursor.stage === "done", cursor, uploaded, failed, skipped };
