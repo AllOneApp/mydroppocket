@@ -730,6 +730,29 @@ function dueDayToDate(day: number | null | undefined): string | null {
   return target.toISOString().slice(0, 10);
 }
 
+function normalizeDate(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const s = String(input).trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);
+  if (m) {
+    const d = m[1].padStart(2, "0");
+    const mo = m[2].padStart(2, "0");
+    let y = m[3];
+    if (y.length === 2) y = (Number(y) > 70 ? "19" : "20") + y;
+    return `${y}-${mo}-${d}`;
+  }
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const mo = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${d}`;
+  }
+  return null;
+}
+
 function makeForm(row: Recurring | null) {
   const today = new Date().toISOString().slice(0, 10);
   return {
