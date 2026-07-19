@@ -191,6 +191,60 @@ export const setBackupFormat = createServerFn({ method: "POST" })
   });
 
 /**
+ * Loe / muuda profiili automaatse pilve varunduse lipp. Kui välja lülitatud,
+ * siis pärast andmemuutusi automaatset sünkroonimist ei toimu, kuid manuaalne
+ * "Varunda kohe" töötab endiselt.
+ */
+export const getAutoBackup = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string }) => input)
+  .handler(async ({ data, context }): Promise<{ enabled: boolean; connected: boolean }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin
+      .from("google_drive_connections")
+      .select("auto_backup")
+      .eq("user_id", context.userId)
+      .eq("profile_id", data.profileId)
+      .maybeSingle();
+    if (!row) return { enabled: true, connected: false };
+    return { enabled: (row as { auto_backup?: boolean }).auto_backup !== false, connected: true };
+  });
+
+export const setAutoBackup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { profileId: string; enabled: boolean }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error, data: updated } = await supabaseAdmin
+      .from("google_drive_connections")
+      .update({ auto_backup: !!data.enabled, updated_at: new Date().toISOString() })
+      .eq("user_id", context.userId)
+      .eq("profile_id", data.profileId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!updated) throw new Error("Google Drive ühendus puudub selle profiili jaoks");
+    return { ok: true as const, enabled: !!data.enabled };
+  });
+
+/**
+ * Kontrolli, kas profiili ühenduse jaoks on automaatne varundus lubatud.
+ * Kasutatud automaatse sünkroonimise otsuste tegemiseks server-poolel.
+ */
+async function isAutoBackupEnabled(userId: string, profileId: string | null | undefined): Promise<boolean> {
+  if (!profileId) return false;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin
+    .from("google_drive_connections")
+    .select("auto_backup")
+    .eq("user_id", userId)
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (!data) return false;
+  return (data as { auto_backup?: boolean }).auto_backup !== false;
+}
+
+/**
  * Muuda profiili Drive režiimi. Kui vahetatakse `separate` → `shared`, siis
  * eraldi konto ühendus jääb alles (kasutaja saab hiljem uuesti sisse lülitada).
  */
