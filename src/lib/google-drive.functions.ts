@@ -73,7 +73,7 @@ export const getGoogleDriveStatus = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin
       .from("google_drive_connections")
-      .select("google_email, root_folder_id, root_folder_name, connected_at, backup_format")
+      .select("google_email, root_folder_id, root_folder_name, connected_at, backup_format, auto_backup")
       .eq("user_id", context.userId);
     q = q.eq("profile_id", data.profileId);
     const { data: row, error } = await q.maybeSingle();
@@ -86,6 +86,7 @@ export const getGoogleDriveStatus = createServerFn({ method: "GET" })
       folderName: row.root_folder_name,
       connectedAt: row.connected_at,
       backupFormat: (row.backup_format ?? "excel_pdf") as BackupFormat,
+      autoBackup: (row as { auto_backup?: boolean }).auto_backup !== false,
     };
   });
 
