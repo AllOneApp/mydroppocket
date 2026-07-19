@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { formatDate } from "@/lib/format";
+import { useActiveProfile } from "@/hooks/useActiveProfile";
 
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ type Provider = {
 
 function CloudBackupPage() {
   const { t } = useTranslation();
+  const { activeProfileId, activeProfile } = useActiveProfile();
   const [autoBackup, setAutoBackup] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
@@ -51,12 +53,13 @@ function CloudBackupPage() {
   const qc = useQueryClient();
 
   const statusQuery = useQuery({
-    queryKey: ["google-drive-status"],
-    queryFn: () => getGoogleDriveStatus(),
+    queryKey: ["google-drive-status", activeProfileId],
+    enabled: !!activeProfileId,
+    queryFn: () => getGoogleDriveStatus({ data: { profileId: activeProfileId! } }),
   });
 
   const disconnectMut = useMutation({
-    mutationFn: () => disconnectGoogleDrive(),
+    mutationFn: () => disconnectGoogleDrive({ data: { profileId: activeProfileId! } }),
     onSuccess: () => {
       toast.success(t("cloudBackup.disconnected"));
       qc.invalidateQueries({ queryKey: ["google-drive-status"] });
@@ -67,7 +70,7 @@ function CloudBackupPage() {
   });
 
   const formatMut = useMutation({
-    mutationFn: (format: BackupFormat) => setBackupFormat({ data: { profileId: null, format } }),
+    mutationFn: (format: BackupFormat) => setBackupFormat({ data: { profileId: activeProfileId!, format } }),
     onSuccess: () => {
       toast.success("Varunduse formaat salvestatud");
       qc.invalidateQueries({ queryKey: ["google-drive-status"] });
@@ -76,9 +79,10 @@ function CloudBackupPage() {
   });
 
   async function runFullBackup() {
+    if (!activeProfileId) return;
     setBackingUp(true);
     try {
-      const res = await syncBackupAll({ data: { lang: currentBackupLang() } });
+      const res = await syncBackupAll({ data: { lang: currentBackupLang(), profileId: activeProfileId } });
       if ("skipped" in res && res.skipped) {
         toast.error(t("cloudBackup.notConnectedToast"));
         return;
@@ -86,6 +90,12 @@ function CloudBackupPage() {
       if ("ok" in res && res.ok) {
         setLastBackup({ at: new Date().toISOString(), entries: res.entries, files: res.files });
         toast.success(t("cloudBackup.backedUp", { entries: res.entries, files: res.files }));
+      } else if ("ok" in res) {
+        const failed: string[] = [];
+        if (!res.excel.success) failed.push("Excel");
+        if (!res.pdf.success) failed.push("PDF");
+        if (res.originalFiles.failed > 0) failed.push(`${res.originalFiles.failed} originaalfaili`);
+        toast.error(`Varundus jäi osaliseks: ${failed.join(", ")}`);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("cloudBackup.backupFailed"));
@@ -122,7 +132,7 @@ function CloudBackupPage() {
     setConnecting(true);
     try {
       const { authorizationUrl } = await startGoogleDriveConnect({
-        data: { origin: window.location.origin },
+        data: { origin: window.location.origin, profileId: activeProfileId! },
       });
       popup.location.href = authorizationUrl;
 
@@ -180,6 +190,7 @@ function CloudBackupPage() {
         <Cloud className="h-8 w-8 text-primary" />
         <h1 className="text-3xl font-bold">{t("cloudBackup.title")}</h1>
       </div>
+      {activeProfile && <p className="mt-1 text-sm text-muted-foreground">Profiil: {activeProfile.name}</p>}
       <p className="mt-2 max-w-2xl text-muted-foreground">{t("cloudBackup.subtitle")}</p>
 
       <div className="mt-8 grid gap-6">

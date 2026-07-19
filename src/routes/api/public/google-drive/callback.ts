@@ -67,6 +67,13 @@ export const Route = createFileRoute("/api/public/google-drive/callback")({
           } = await import("@/lib/google-drive.server");
 
           const state = verifyState(stateParam);
+          if (!state.profileId) {
+            return renderResult({
+              origin: state.origin,
+              ok: false,
+              error: "Google Drive ühendus peab olema seotud profiiliga. Alusta ühendamist uuesti.",
+            });
+          }
           const redirectUri = `${state.origin}${GOOGLE_OAUTH_CALLBACK_PATH}`;
           const tokens = await exchangeCodeForTokens({ code, redirectUri });
           if (!tokens.refresh_token) {
@@ -80,11 +87,28 @@ export const Route = createFileRoute("/api/public/google-drive/callback")({
           const email = identity.email ?? "unknown";
           const sub = identity.sub ?? "unknown";
 
-          // Ainult juurkaust — alamkategooriad luuakse laisalt esimesel salvestusel resolveri sees.
-          const root = await findOrCreateFolder({ accessToken: tokens.access_token, name: "MyDropPocket" });
-
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const { data: profile, error: profileError } = await supabaseAdmin
+            .from("user_profiles")
+            .select("id, name, is_default")
+            .eq("id", state.profileId)
+            .eq("user_id", state.userId)
+            .maybeSingle();
+          if (profileError) throw profileError;
+          if (!profile) throw new Error("Profiili ei leitud");
+          const profileRow = profile as { id: string; name: string; is_default: boolean };
+          const rootName = profileRow.is_default ? "MyDropPocket" : `MyDropPocket – ${profileRow.name}`;
+          const root = await findOrCreateFolder({ accessToken: tokens.access_token, name: rootName });
           const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+          const { data: previous } = await supabaseAdmin
+            .from("google_drive_connections")
+            .select("google_sub, root_folder_id, backup_format")
+            .eq("user_id", state.userId)
+            .eq("profile_id", state.profileId)
+            .maybeSingle();
+          const previousRow = previous as { google_sub: string; root_folder_id: string | null; backup_format?: string } | null;
+          const accountChanged = !!previousRow && (previousRow.google_sub !== sub || previousRow.root_folder_id !== root.id);
 
           // Kustuta olemasolev sama (user_id, profile_id) rida — unikaalsed indeksid on osalised, mistõttu onConflict pole stabiilne.
           let deleteQ = supabaseAdmin
@@ -97,7 +121,7 @@ export const Route = createFileRoute("/api/public/google-drive/callback")({
 
           const { error } = await supabaseAdmin.from("google_drive_connections").insert({
             user_id: state.userId,
-            profile_id: state.profileId ?? null,
+            profile_id: state.profileId,
             google_email: email,
             google_sub: sub,
             access_token_ciphertext: encryptToken(tokens.access_token),
@@ -106,10 +130,50 @@ export const Route = createFileRoute("/api/public/google-drive/callback")({
             scope: tokens.scope,
             root_folder_id: root.id,
             root_folder_name: root.name,
+            backup_format: previousRow?.backup_format ?? "excel_pdf",
             subfolders_json: null,
             updated_at: new Date().toISOString(),
           });
           if (error) throw error;
+
+          if (accountChanged) {
+            const tables = ["warranties", "expenses"] as const;
+            for (const table of tables) {
+              await supabaseAdmin
+                .from(table)
+                .update({ gdrive_file_id: null })
+                .eq("user_id", state.userId)
+                .eq("profile_id", state.profileId);
+            }
+            await supabaseAdmin
+              .from("agreements")
+              .update({ gdrive_file_id: null, gdrive_folder_id: null })
+              .eq("user_id", state.userId)
+              .eq("profile_id", state.profileId);
+            await supabaseAdmin
+              .from("recurring_payments")
+              .update({ contract_gdrive_file_id: null })
+              .eq("user_id", state.userId)
+              .eq("profile_id", state.profileId);
+            await supabaseAdmin
+              .from("recurring_payment_instances")
+              .update({ receipt_gdrive_file_id: null, invoice_gdrive_file_id: null })
+              .eq("user_id", state.userId)
+              .eq("profile_id", state.profileId);
+            const { data: agreements } = await supabaseAdmin
+              .from("agreements")
+              .select("id")
+              .eq("user_id", state.userId)
+              .eq("profile_id", state.profileId);
+            const agreementIds = ((agreements ?? []) as Array<{ id: string }>).map((row) => row.id);
+            if (agreementIds.length > 0) {
+              await supabaseAdmin
+                .from("agreement_attachments")
+                .update({ gdrive_file_id: null })
+                .eq("user_id", state.userId)
+                .in("agreement_id", agreementIds);
+            }
+          }
 
           return renderResult({ origin: state.origin, ok: true, email });
         } catch (e) {

@@ -30,7 +30,6 @@ import {
 } from "@/lib/google-calendar.functions";
 import {
   getProfileDriveStatus,
-  setProfileDriveMode,
   startGoogleDriveConnect,
   disconnectGoogleDrive,
   getProfilePendingCloudCounts,
@@ -615,12 +614,6 @@ function DriveProfileBlock({ profile }: { profile: UserProfile }) {
     return () => window.removeEventListener("message", onMessage);
   }, [qc, profile.id]);
 
-  const modeMut = useMutation({
-    mutationFn: (mode: "shared" | "separate") => setProfileDriveMode({ data: { profileId: profile.id, mode } }),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["profile-drive-status", profile.id] }); toast.success("Salvestatud"); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Salvestamine ebaõnnestus"),
-  });
-
   const disconnectMut = useMutation({
     mutationFn: () => disconnectGoogleDrive({ data: { profileId: profile.id } }),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["profile-drive-status", profile.id] }); toast.success("Ühendus katkestatud"); },
@@ -680,9 +673,6 @@ function DriveProfileBlock({ profile }: { profile: UserProfile }) {
   }
 
   const s = statusQ.data;
-  const mode = s?.mode ?? "shared";
-  const isDefault = profile.is_default;
-
   return (
     <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
       <div className="flex items-center gap-2">
@@ -690,36 +680,21 @@ function DriveProfileBlock({ profile }: { profile: UserProfile }) {
         <span className="text-sm font-semibold">Google Drive</span>
       </div>
 
-      {!isDefault && (
-        <div className="mt-2 space-y-1.5">
-          <label className="flex cursor-pointer items-center gap-2 text-sm">
-            <input type="radio" name={`drv-mode-${profile.id}`} checked={mode === "shared"} onChange={() => modeMut.mutate("shared")} />
-            <span>✅ Kasuta põhiprofiili Google Drive'i</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm">
-            <input type="radio" name={`drv-mode-${profile.id}`} checked={mode === "separate"} onChange={() => modeMut.mutate("separate")} />
-            <span>⭕ Ühenda teine Google Drive</span>
-          </label>
-        </div>
-      )}
-
       <div className="mt-2 text-xs text-muted-foreground">
         {s?.connected ? (
           <>🟢 Ühendatud{s.email ? ` – ${s.email}` : ""} · Salvestuskoht: {s.storagePath}</>
-        ) : mode === "separate" ? (
-          <>Ühendus puudub.</>
         ) : (
-          <>Salvestuskoht: {s?.storagePath ?? `MyDropPocket / ${profile.name}`}</>
+          <>Ühendus puudub. Sellel profiilil on eraldi Google Drive'i ühendus.</>
         )}
       </div>
 
       <div className="mt-2 flex flex-wrap gap-2">
-        {mode === "separate" && !s?.connected && (
+        {!s?.connected && (
           <Button size="sm" onClick={handleConnect} disabled={connecting}>
             {connecting ? "Ühendan…" : "Ühenda Google Drive"}
           </Button>
         )}
-        {mode === "separate" && s?.connected && (
+        {s?.connected && (
           <Button size="sm" variant="outline" onClick={() => disconnectMut.mutate()} disabled={disconnectMut.isPending}>
             Katkesta ühendus
           </Button>
