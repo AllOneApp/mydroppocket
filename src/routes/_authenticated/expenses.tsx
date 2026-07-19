@@ -464,6 +464,25 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
       // Best-effort calendar sync for created warranties
       for (const wid of createdWarrantyIds) {
         try { await syncWarranty({ data: { warrantyId: wid } }); } catch (err) { console.warn("[gcal] warranty sync failed", err); }
+        if (fileInfo) {
+          try {
+            await syncFileToGoogleDrive({
+              data: {
+                table: "warranties",
+                recordId: wid,
+                gdriveColumn: "gdrive_file_id",
+                folderKey: "warranty",
+                filePath: fileInfo.path,
+                fileName: fileInfo.name,
+                mime: fileInfo.mime,
+                profileId: activeProfileId,
+                auto: true,
+              },
+            });
+          } catch (err) {
+            console.warn("[gdrive] auto-warranty sync failed", err);
+          }
+        }
       }
       if (fileInfo && savedRow?.id) {
         try {
