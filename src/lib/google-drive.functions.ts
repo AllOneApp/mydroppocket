@@ -870,9 +870,12 @@ async function totalEntriesForProfile(
  */
 export const syncBackupCategory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { category: BackupCategory; lang?: BackupLang; profileId?: string | null }) => input)
+  .inputValidator((input: { category: BackupCategory; lang?: BackupLang; profileId?: string | null; auto?: boolean }) => input)
   .handler(async ({ data, context }) => {
     if (!data.profileId) return { skipped: true as const, reason: "profile_required" as const };
+    if (data.auto && !(await isAutoBackupEnabled(context.userId, data.profileId))) {
+      return { skipped: true as const, reason: "auto_backup_off" as const };
+    }
     const { resolveProfileDriveTarget } = await import("./google-drive.server");
     const conn = await resolveProfileDriveTarget(context.userId, data.profileId);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
