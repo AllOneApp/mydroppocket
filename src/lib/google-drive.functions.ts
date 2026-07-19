@@ -555,6 +555,7 @@ async function writeCategoryBackup(params: {
   accessToken: string;
   rootId: string;
   subfolders: Record<string, string>;
+  connectionId: string;
   category: BackupCategory;
   lang: BackupLang;
   format: BackupFormat;

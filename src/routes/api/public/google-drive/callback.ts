@@ -137,14 +137,19 @@ export const Route = createFileRoute("/api/public/google-drive/callback")({
           if (error) throw error;
 
           if (accountChanged) {
-            const tables = ["warranties", "expenses", "agreements"] as const;
+            const tables = ["warranties", "expenses"] as const;
             for (const table of tables) {
               await supabaseAdmin
                 .from(table)
-                .update({ gdrive_file_id: null, ...(table === "agreements" ? { gdrive_folder_id: null } : {}) })
+                .update({ gdrive_file_id: null })
                 .eq("user_id", state.userId)
                 .eq("profile_id", state.profileId);
             }
+            await supabaseAdmin
+              .from("agreements")
+              .update({ gdrive_file_id: null, gdrive_folder_id: null })
+              .eq("user_id", state.userId)
+              .eq("profile_id", state.profileId);
             await supabaseAdmin
               .from("recurring_payments")
               .update({ contract_gdrive_file_id: null })
