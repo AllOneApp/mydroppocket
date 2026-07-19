@@ -133,7 +133,7 @@ function ExpensesPage() {
       if (r.file_path) { try { await deleteFile(r.file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
       const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
       if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid, profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
-      try { await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId, auto: true } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
@@ -483,7 +483,7 @@ export function ExpenseDialog({ open, onOpenChange, row, prefill, initialMode }:
           console.warn("[gdrive] expense sync failed", err);
         }
       }
-      try { await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId, auto: true } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: expensesQueryKey, refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["warranties"], refetchType: "active" }),
