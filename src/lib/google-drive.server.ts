@@ -242,8 +242,7 @@ export const FOLDER_KEY_TO_NAME: Record<FolderKey, string> = {
 // -----------------------------------------------------------------------------
 // PROFIILIPÕHINE DRIVE RESOLVER
 //
-// Iga profiil võib olla kas 'shared' (kasutab põhikonto Drive'i profiili alam-
-// kaustaga) või 'separate' (eraldi Google konto, ilma profiili alamkaustata).
+// Igal profiilil on oma sõltumatu Google Drive'i ühendus ja OAuth tokenid.
 //
 // resolveProfileDriveTarget = üks tõesus kõigile moodulitele:
 // tagastab access-token'i + kausta ID-d juba ÕIGES kontekstis, nii et üleslaadija
@@ -437,20 +436,13 @@ export async function resolveProfileDriveTarget(
     }
   | null
 > {
-  // 1. Otsusta, milline ühendus + režiim.
-  let mode: DriveMode | "legacy" = "legacy";
-  let profileInfo: Awaited<ReturnType<typeof loadProfileInfo>> = null;
-  let connProfileId: string | null = null;
+  // Profiilita väljakutse ei tohi kunagi langeda mõne teise profiili ühendusele.
+  if (!profileId) return null;
+  const profileInfo = await loadProfileInfo(profileId);
+  if (!profileInfo || profileInfo.user_id !== userId) return null;
 
-  if (profileId) {
-    profileInfo = await loadProfileInfo(profileId);
-    if (profileInfo) {
-      mode = profileInfo.drive_mode;
-      if (mode === "separate") connProfileId = profileId;
-    }
-  }
-
-  const row = await loadConnectionRow(userId, connProfileId);
+  const mode: DriveMode = "separate";
+  const row = await loadConnectionRow(userId, profileId);
   if (!row) return null; // Not connected in this context.
 
   const accessToken = await ensureFreshAccessToken(row);
@@ -467,35 +459,10 @@ export async function resolveProfileDriveTarget(
       .eq("id", row.id);
   }
 
-  // 3. shared → veendu, et profiili alamkaust on olemas.
+  // Iga profiili ühenduse juurkaust ja alamkaustad kuuluvad ainult sellele profiilile.
   let profileFolderId: string | null = null;
-  if (mode === "shared" && profileInfo) {
-    const cached = await readFolderCache({
-      connectionId: row.id,
-      profileId,
-      category: "__profile_root__",
-    });
-    if (cached) profileFolderId = cached;
-    else {
-      const f = await findOrCreateFolder({
-        accessToken,
-        name: profileInfo.name,
-        parentId: rootId,
-      });
-      profileFolderId = f.id;
-      await writeFolderCache({
-        connectionId: row.id,
-        profileId,
-        category: "__profile_root__",
-        folderId: profileFolderId,
-        folderName: profileInfo.name,
-        parentFolderId: rootId,
-      });
-    }
-  }
-
-  const targetParent = profileFolderId ?? rootId;
-  const cacheProfileId = mode === "shared" ? profileId : null;
+  const targetParent = rootId;
+  const cacheProfileId = profileId;
 
   // 4. Ehita subfolders map — cache'ist esimesena, siis loo puuduvad.
   const subfolders: Record<string, string> = {};
@@ -506,12 +473,12 @@ export async function resolveProfileDriveTarget(
       category,
     });
     if (!folderId) {
-      // For legacy mode we may already have the folder id in subfolders_json.
-      if (mode === "legacy" && row.subfolders_json && row.subfolders_json[category]) {
+      // Vanast ühendusest pärinev sama profiili kaustakaart on turvaline taaskasutada.
+      if (row.subfolders_json && row.subfolders_json[category]) {
         folderId = row.subfolders_json[category];
         await writeFolderCache({
           connectionId: row.id,
-          profileId: null,
+          profileId: cacheProfileId,
           category,
           folderId,
           folderName: category,
@@ -759,11 +726,9 @@ export async function getValidAccessTokenForUser(userId: string): Promise<{
   rootId: string;
   subfolders: Record<string, string>;
 } | null> {
-  // Backwards-compatible wrapper — kutsub uut profiiliteadlikku resolveri
-  // legacy režiimis (profileId = null → põhikonto, MyDropPocket/{kategooria}).
-  const resolved = await resolveProfileDriveTarget(userId, null);
-  if (!resolved) return null;
-  return { accessToken: resolved.accessToken, rootId: resolved.rootId, subfolders: resolved.subfolders };
+  // Profiilita tokeni resolutsioon on teadlikult keelatud, et vältida kontode segunemist.
+  void userId;
+  return null;
 }
 
 /**
@@ -951,6 +916,7 @@ export async function deleteFilesByNameInFolder(opts: {
  */
 export async function ensureSubfolderId(opts: {
   userId: string;
+  connectionId?: string;
   accessToken: string;
   rootId: string;
   subfolders: Record<string, string>;
@@ -964,9 +930,11 @@ export async function ensureSubfolderId(opts: {
   });
   const next = { ...opts.subfolders, [opts.name]: created.id };
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  await supabaseAdmin
+  let update = supabaseAdmin
     .from("google_drive_connections")
     .update({ subfolders_json: next, updated_at: new Date().toISOString() })
     .eq("user_id", opts.userId);
+  if (opts.connectionId) update = update.eq("id", opts.connectionId);
+  await update;
   return created.id;
 }

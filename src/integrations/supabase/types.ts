@@ -372,7 +372,7 @@ export type Database = {
           google_email: string
           google_sub: string
           id: string
-          profile_id: string | null
+          profile_id: string
           refresh_token_ciphertext: string
           root_folder_id: string | null
           root_folder_name: string
@@ -389,7 +389,7 @@ export type Database = {
           google_email: string
           google_sub: string
           id?: string
-          profile_id?: string | null
+          profile_id: string
           refresh_token_ciphertext: string
           root_folder_id?: string | null
           root_folder_name?: string
@@ -406,7 +406,7 @@ export type Database = {
           google_email?: string
           google_sub?: string
           id?: string
-          profile_id?: string | null
+          profile_id?: string
           refresh_token_ciphertext?: string
           root_folder_id?: string | null
           root_folder_name?: string
@@ -417,11 +417,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "google_drive_connections_profile_id_fkey"
-            columns: ["profile_id"]
+            foreignKeyName: "google_drive_connections_profile_owner_fkey"
+            columns: ["profile_id", "user_id"]
             isOneToOne: false
             referencedRelation: "user_profiles"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }

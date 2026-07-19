@@ -3,6 +3,24 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export type BackupFormat = "excel_pdf" | "excel_only" | "pdf_only";
 
+type BackupPartResult = {
+  requested: boolean;
+  success: boolean;
+  errors: string[];
+};
+
+type OriginalFilesResult = {
+  scanned: number;
+  uploaded: number;
+  alreadySynced: number;
+  failed: number;
+  errors: string[];
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function parseBackupFormat(v: unknown): BackupFormat {
   return v === "excel_only" || v === "pdf_only" ? v : "excel_pdf";
 }
@@ -28,29 +46,36 @@ export function currentBackupLang(): "et" | "en" {
  */
 export const startGoogleDriveConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { origin: string; profileId?: string | null }) => input)
+  .inputValidator((input: { origin: string; profileId: string }) => input)
   .handler(async ({ data, context }) => {
     const { buildAuthorizationUrl, signState, GOOGLE_OAUTH_CALLBACK_PATH } = await import("./google-drive.server");
+    const { data: profile, error } = await context.supabase
+      .from("user_profiles")
+      .select("id")
+      .eq("id", data.profileId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!profile) throw new Error("Profiili ei leitud");
     // Use the browser's current origin so the redirect returns to the same host
     // that opened the popup (preview / staging / prod / custom domain).
     const origin = new URL(data.origin).origin;
     const redirectUri = `${origin}${GOOGLE_OAUTH_CALLBACK_PATH}`;
-    const state = signState({ userId: context.userId, origin, profileId: data.profileId ?? null });
+    const state = signState({ userId: context.userId, origin, profileId: data.profileId });
     const authorizationUrl = buildAuthorizationUrl({ redirectUri, state });
     return { authorizationUrl };
   });
 
 export const getGoogleDriveStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input?: { profileId?: string | null }) => input ?? {})
+  .inputValidator((input: { profileId: string }) => input)
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin
       .from("google_drive_connections")
       .select("google_email, root_folder_id, root_folder_name, connected_at, backup_format")
       .eq("user_id", context.userId);
-    if (data?.profileId) q = q.eq("profile_id", data.profileId);
-    else q = q.is("profile_id", null);
+    q = q.eq("profile_id", data.profileId);
     const { data: row, error } = await q.maybeSingle();
     if (error) throw error;
     if (!row) return { connected: false as const };
@@ -66,7 +91,7 @@ export const getGoogleDriveStatus = createServerFn({ method: "GET" })
 
 export const disconnectGoogleDrive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input?: { profileId?: string | null }) => input ?? {})
+  .inputValidator((input: { profileId: string }) => input)
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // Best-effort token revoke.
@@ -74,8 +99,7 @@ export const disconnectGoogleDrive = createServerFn({ method: "POST" })
       .from("google_drive_connections")
       .select("refresh_token_ciphertext")
       .eq("user_id", context.userId);
-    if (data?.profileId) selectQ = selectQ.eq("profile_id", data.profileId);
-    else selectQ = selectQ.is("profile_id", null);
+    selectQ = selectQ.eq("profile_id", data.profileId);
     const { data: row } = await selectQ.maybeSingle();
     if (row?.refresh_token_ciphertext) {
       try {
@@ -90,8 +114,7 @@ export const disconnectGoogleDrive = createServerFn({ method: "POST" })
       }
     }
     let delQ = supabaseAdmin.from("google_drive_connections").delete().eq("user_id", context.userId);
-    if (data?.profileId) delQ = delQ.eq("profile_id", data.profileId);
-    else delQ = delQ.is("profile_id", null);
+    delQ = delQ.eq("profile_id", data.profileId);
     await delQ;
     return { ok: true };
   });
@@ -114,25 +137,6 @@ export const getProfileDriveStatus = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!profile) throw new Error("Profiili ei leitud");
     const p = profile as { name: string; drive_mode: string; is_default: boolean };
-    const mode = (p.drive_mode === "separate" ? "separate" : "shared") as "shared" | "separate";
-
-    if (mode === "shared") {
-      // Kasuta põhikonto ühendust; salvestuskoht MyDropPocket/{profiili nimi}.
-      const { data: prim } = await supabaseAdmin
-        .from("google_drive_connections")
-        .select("google_email, backup_format")
-        .eq("user_id", context.userId)
-        .is("profile_id", null)
-        .maybeSingle();
-      return {
-        mode,
-        connected: !!prim,
-        email: prim ? (prim as { google_email: string }).google_email : null,
-        storagePath: `MyDropPocket / ${p.name}`,
-        backupFormat: parseBackupFormat((prim as { backup_format?: string } | null)?.backup_format),
-      };
-    }
-    // separate režiim
     const { data: own } = await supabaseAdmin
       .from("google_drive_connections")
       .select("google_email, backup_format")
@@ -140,7 +144,7 @@ export const getProfileDriveStatus = createServerFn({ method: "POST" })
       .eq("profile_id", data.profileId)
       .maybeSingle();
     return {
-      mode,
+      mode: "separate" as const,
       connected: !!own,
       email: own ? (own as { google_email: string }).google_email : null,
       storagePath: `MyDropPocket`,
@@ -154,28 +158,15 @@ export const getProfileDriveStatus = createServerFn({ method: "POST" })
  */
 export const getBackupFormat = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input?: { profileId?: string | null }) => input ?? {})
+  .inputValidator((input: { profileId: string }) => input)
   .handler(async ({ data, context }): Promise<{ format: BackupFormat }> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const pid = data?.profileId ?? null;
-    // Kui profileId antud, uuri selle profiili drive_mode'i.
-    let connProfileId: string | null = null;
-    if (pid) {
-      const { data: profile } = await supabaseAdmin
-        .from("user_profiles")
-        .select("drive_mode")
-        .eq("id", pid)
-        .eq("user_id", context.userId)
-        .maybeSingle();
-      if ((profile as { drive_mode?: string } | null)?.drive_mode === "separate") connProfileId = pid;
-    }
-    let q = supabaseAdmin
+    const { data: row } = await supabaseAdmin
       .from("google_drive_connections")
       .select("backup_format")
-      .eq("user_id", context.userId);
-    if (connProfileId) q = q.eq("profile_id", connProfileId);
-    else q = q.is("profile_id", null);
-    const { data: row } = await q.maybeSingle();
+      .eq("user_id", context.userId)
+      .eq("profile_id", data.profileId)
+      .maybeSingle();
     return { format: parseBackupFormat((row as { backup_format?: string } | null)?.backup_format) };
   });
 
@@ -185,27 +176,15 @@ export const getBackupFormat = createServerFn({ method: "GET" })
  */
 export const setBackupFormat = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { profileId?: string | null; format: BackupFormat }) => input)
+  .inputValidator((input: { profileId: string; format: BackupFormat }) => input)
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const format = parseBackupFormat(data.format);
-    let connProfileId: string | null = null;
-    if (data.profileId) {
-      const { data: profile } = await supabaseAdmin
-        .from("user_profiles")
-        .select("drive_mode")
-        .eq("id", data.profileId)
-        .eq("user_id", context.userId)
-        .maybeSingle();
-      if ((profile as { drive_mode?: string } | null)?.drive_mode === "separate") connProfileId = data.profileId;
-    }
-    let q = supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("google_drive_connections")
       .update({ backup_format: format, updated_at: new Date().toISOString() })
-      .eq("user_id", context.userId);
-    if (connProfileId) q = q.eq("profile_id", connProfileId);
-    else q = q.is("profile_id", null);
-    const { error } = await q;
+      .eq("user_id", context.userId)
+      .eq("profile_id", data.profileId);
     if (error) throw error;
     return { ok: true as const, format };
   });
@@ -218,10 +197,13 @@ export const setProfileDriveMode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { profileId: string; mode: "shared" | "separate" }) => input)
   .handler(async ({ data, context }) => {
+    if (data.mode !== "separate") {
+      throw new Error("Google Drive'i jagatud ühendused ei ole enam toetatud");
+    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin
       .from("user_profiles")
-      .update({ drive_mode: data.mode })
+      .update({ drive_mode: "separate" })
       .eq("id", data.profileId)
       .eq("user_id", context.userId);
     if (error) throw error;
@@ -310,11 +292,15 @@ export const syncFileToGoogleDrive = createServerFn({ method: "POST" })
     // Verify the record belongs to this user (RLS-scoped client).
     const { data: ownRow, error: ownErr } = await context.supabase
       .from(data.table)
-      .select("id, user_id")
+      .select("id, user_id, profile_id")
       .eq("id", data.recordId)
       .maybeSingle();
     if (ownErr) throw ownErr;
-    if (!ownRow || (ownRow as { user_id: string }).user_id !== context.userId) {
+    if (
+      !ownRow ||
+      (ownRow as { user_id: string }).user_id !== context.userId ||
+      (ownRow as { profile_id: string | null }).profile_id !== data.profileId
+    ) {
       throw new Error("Record not found");
     }
 
@@ -564,6 +550,7 @@ async function rowsToXlsxBytes(
 
 async function writeCategoryBackup(params: {
   userId: string;
+  profileId: string;
   supabase: import("@supabase/supabase-js").SupabaseClient;
   accessToken: string;
   rootId: string;
@@ -571,18 +558,20 @@ async function writeCategoryBackup(params: {
   category: BackupCategory;
   lang: BackupLang;
   format: BackupFormat;
-}): Promise<{ count: number }> {
+}): Promise<{ count: number; excel: BackupPartResult; pdf: BackupPartResult }> {
   const { ensureSubfolderId, upsertBytesInFolder, deleteFilesByNameInFolder } =
     await import("./google-drive.server");
   const { data, error } = await params.supabase
     .from(params.category)
     .select("*")
-    .eq("user_id", params.userId);
+    .eq("user_id", params.userId)
+    .eq("profile_id", params.profileId);
   if (error) throw error;
   const rows = (data ?? []) as Array<Record<string, unknown>>;
   const folderName = CATEGORY_TO_FOLDER[params.category];
   const parentId = await ensureSubfolderId({
     userId: params.userId,
+    connectionId: params.connectionId,
     accessToken: params.accessToken,
     rootId: params.rootId,
     subfolders: params.subfolders,
@@ -595,16 +584,25 @@ async function writeCategoryBackup(params: {
   const wantPdf = params.format !== "excel_only";
   const xlsxName = CATEGORY_XLSX_NAME[params.lang][params.category];
   const pdfName = CATEGORY_PDF_NAME[params.lang][params.category];
+  const excel: BackupPartResult = { requested: wantExcel, success: !wantExcel, errors: [] };
+  const pdf: BackupPartResult = { requested: wantPdf, success: !wantPdf, errors: [] };
 
   if (wantExcel) {
-    const bytes = await rowsToXlsxBytes(projected, sheetName);
-    await upsertBytesInFolder({
-      accessToken: params.accessToken,
-      parentId,
-      name: xlsxName,
-      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      bytes,
-    });
+    try {
+      const bytes = await rowsToXlsxBytes(projected, sheetName);
+      await upsertBytesInFolder({
+        accessToken: params.accessToken,
+        parentId,
+        name: xlsxName,
+        mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        bytes,
+      });
+      excel.success = true;
+    } catch (error) {
+      const message = `${params.category}: ${errorMessage(error)}`;
+      console.error(`[backup-excel] ${message}`);
+      excel.errors.push(message);
+    }
   } else {
     // Formaat on pdf_only — eemalda vana Exceli fail, kui on.
     await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId, name: xlsxName });
@@ -630,9 +628,10 @@ async function writeCategoryBackup(params: {
         bytes,
       });
     } catch (e) {
-      // PDF genereerimise viga ei tohi katkestada Exceli/originaalfailide sünkroonimist.
       console.error(`[backup-pdf] ${params.category} failed`, e);
+      pdf.errors.push(`${params.category}: ${errorMessage(e)}`);
     }
+    pdf.success = pdf.errors.length === 0;
   } else {
     // Formaat on excel_only — eemalda vana PDF fail, kui on.
     await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId, name: pdfName });
@@ -651,7 +650,7 @@ async function writeCategoryBackup(params: {
     parentId,
     name: CATEGORY_PDF_NAME[otherLang][params.category],
   });
-  return { count: rows.length };
+  return { count: rows.length, excel, pdf };
 }
 
 function buildCategorySummary(
@@ -686,7 +685,7 @@ async function writeBackupInfo(params: {
   totals: { entries: number; files: number };
   lang: BackupLang;
   format: BackupFormat;
-}) {
+}): Promise<{ excel: BackupPartResult; pdf: BackupPartResult }> {
   const { upsertBytesInFolder, deleteFilesByNameInFolder } = await import("./google-drive.server");
   const et = params.lang === "et";
   const keyLabel = et ? "Väli" : "Field";
@@ -707,16 +706,25 @@ async function writeBackupInfo(params: {
 
   const wantExcel = params.format !== "pdf_only";
   const wantPdf = params.format !== "excel_only";
+  const excel: BackupPartResult = { requested: wantExcel, success: !wantExcel, errors: [] };
+  const pdf: BackupPartResult = { requested: wantPdf, success: !wantPdf, errors: [] };
 
   if (wantExcel) {
-    const bytes = await rowsToXlsxBytes(info, sheetName);
-    await upsertBytesInFolder({
-      accessToken: params.accessToken,
-      parentId: params.rootId,
-      name: fileName,
-      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      bytes,
-    });
+    try {
+      const bytes = await rowsToXlsxBytes(info, sheetName);
+      await upsertBytesInFolder({
+        accessToken: params.accessToken,
+        parentId: params.rootId,
+        name: fileName,
+        mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        bytes,
+      });
+      excel.success = true;
+    } catch (error) {
+      const message = `backup-info: ${errorMessage(error)}`;
+      console.error(`[backup-excel] ${message}`);
+      excel.errors.push(message);
+    }
   } else {
     await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: fileName });
   }
@@ -739,7 +747,9 @@ async function writeBackupInfo(params: {
       });
     } catch (e) {
       console.error("[backup-pdf] backup-info failed", e);
+      pdf.errors.push(`backup-info: ${errorMessage(e)}`);
     }
+    pdf.success = pdf.errors.length === 0;
   } else {
     await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: pdfName });
   }
@@ -748,11 +758,13 @@ async function writeBackupInfo(params: {
   await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: "backup-info.json" });
   await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: otherName });
   await deleteFilesByNameInFolder({ accessToken: params.accessToken, parentId: params.rootId, name: otherPdfName });
+  return { excel, pdf };
 }
 
-async function countFilesForUser(
+async function countFilesForProfile(
   supabase: import("@supabase/supabase-js").SupabaseClient,
   userId: string,
+  profileId: string,
 ): Promise<number> {
   let total = 0;
   const tables: Array<{ table: BackupCategory; cols: string[] }> = [
@@ -762,7 +774,11 @@ async function countFilesForUser(
     { table: "recurring_payment_instances", cols: ["receipt_file_path", "invoice_file_path"] },
   ];
   for (const t of tables) {
-    const { data, error } = await supabase.from(t.table).select(t.cols.join(",")).eq("user_id", userId);
+    const { data, error } = await supabase
+      .from(t.table)
+      .select(t.cols.join(","))
+      .eq("user_id", userId)
+      .eq("profile_id", profileId);
     if (error) throw error;
     for (const row of ((data ?? []) as unknown) as Array<Record<string, unknown>>) {
       for (const c of t.cols) if (row[c]) total++;
@@ -771,16 +787,18 @@ async function countFilesForUser(
   return total;
 }
 
-async function totalEntriesForUser(
+async function totalEntriesForProfile(
   supabase: import("@supabase/supabase-js").SupabaseClient,
   userId: string,
+  profileId: string,
 ): Promise<number> {
   let total = 0;
   for (const c of ALL_CATEGORIES) {
     const { count, error } = await supabase
       .from(c)
       .select("*", { count: "exact", head: true })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("profile_id", profileId);
     if (error) throw error;
     total += count ?? 0;
   }
@@ -795,13 +813,15 @@ export const syncBackupCategory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { category: BackupCategory; lang?: BackupLang; profileId?: string | null }) => input)
   .handler(async ({ data, context }) => {
+    if (!data.profileId) return { skipped: true as const, reason: "profile_required" as const };
     const { resolveProfileDriveTarget } = await import("./google-drive.server");
-    const conn = await resolveProfileDriveTarget(context.userId, data.profileId ?? null);
+    const conn = await resolveProfileDriveTarget(context.userId, data.profileId);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
     const lang: BackupLang = data.lang === "en" ? "en" : "et";
     const format = await resolveConnectionBackupFormat(conn.connectionId);
-    await writeCategoryBackup({
+    const categoryResult = await writeCategoryBackup({
       userId: context.userId,
+      profileId: data.profileId,
       supabase: context.supabase,
       accessToken: conn.accessToken,
       rootId: conn.rootId,
@@ -810,28 +830,155 @@ export const syncBackupCategory = createServerFn({ method: "POST" })
       lang,
       format,
     });
-    const entries = await totalEntriesForUser(context.supabase, context.userId);
-    const files = await countFilesForUser(context.supabase, context.userId);
-    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files }, lang, format });
-    return { ok: true as const };
+    const entries = await totalEntriesForProfile(context.supabase, context.userId, data.profileId);
+    const files = await countFilesForProfile(context.supabase, context.userId, data.profileId);
+    const infoResult = await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files }, lang, format });
+    const errors = [...categoryResult.excel.errors, ...categoryResult.pdf.errors, ...infoResult.excel.errors, ...infoResult.pdf.errors];
+    return { ok: errors.length === 0, errors, excel: categoryResult.excel, pdf: categoryResult.pdf };
   });
+
+async function syncAllOriginalFiles(params: {
+  userId: string;
+  profileId: string;
+  accessToken: string;
+  subfolders: Record<string, string>;
+  connectionId: string;
+}): Promise<OriginalFilesResult> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { uploadBytesToDriveFolder, findOrCreateFolder } = await import("./google-drive.server");
+  const admin = supabaseAdmin as unknown as { from: (table: string) => any };
+  const result: OriginalFilesResult = { scanned: 0, uploaded: 0, alreadySynced: 0, failed: 0, errors: [] };
+
+  async function uploadRow(opts: {
+    table: string;
+    row: Record<string, unknown>;
+    pathCol: string;
+    idCol: string;
+    nameCol: string;
+    mimeCol: string;
+    parentId: string;
+  }) {
+    const path = opts.row[opts.pathCol] as string | null;
+    if (!path) return;
+    result.scanned++;
+    if (opts.row[opts.idCol]) { result.alreadySynced++; return; }
+    if (!path.startsWith(`${params.userId}/`)) {
+      result.failed++;
+      result.errors.push(`${opts.table}#${String(opts.row.id)}: faili omanik ei klapi profiiliga`);
+      return;
+    }
+    try {
+      const download = await supabaseAdmin.storage.from("documents").download(path);
+      if (download.error || !download.data) throw download.error ?? new Error("Faili allalaadimine ebaõnnestus");
+      const uploaded = await uploadBytesToDriveFolder({
+        accessToken: params.accessToken,
+        parentId: opts.parentId,
+        name: (opts.row[opts.nameCol] as string | null) || path.split("/").pop() || "fail",
+        mime: (opts.row[opts.mimeCol] as string | null) || "application/octet-stream",
+        bytes: new Uint8Array(await download.data.arrayBuffer()),
+      });
+      const { error } = await admin.from(opts.table).update({ [opts.idCol]: uploaded.id }).eq("id", opts.row.id);
+      if (error) throw error;
+      result.uploaded++;
+    } catch (error) {
+      const message = `${opts.table}#${String(opts.row.id)}: ${errorMessage(error)}`;
+      console.error(`[backup-original] ${message}`);
+      result.failed++;
+      result.errors.push(message);
+    }
+  }
+
+  const sources = [
+    { table: "warranties", fields: "id,file_path,file_name,file_mime,gdrive_file_id", folder: "Garantiid", path: "file_path", id: "gdrive_file_id", name: "file_name", mime: "file_mime" },
+    { table: "expenses", fields: "id,file_path,file_name,file_mime,gdrive_file_id", folder: "Tšekid", path: "file_path", id: "gdrive_file_id", name: "file_name", mime: "file_mime" },
+    { table: "agreements", fields: "id,file_path,file_name,file_mime,gdrive_file_id", folder: "Lepingud", path: "file_path", id: "gdrive_file_id", name: "file_name", mime: "file_mime" },
+    { table: "recurring_payments", fields: "id,contract_file_path,contract_file_name,contract_file_mime,contract_gdrive_file_id", folder: "Püsimaksed", path: "contract_file_path", id: "contract_gdrive_file_id", name: "contract_file_name", mime: "contract_file_mime" },
+    { table: "recurring_payment_instances", fields: "id,receipt_file_path,receipt_file_name,receipt_file_mime,receipt_gdrive_file_id", folder: "Tšekid", path: "receipt_file_path", id: "receipt_gdrive_file_id", name: "receipt_file_name", mime: "receipt_file_mime" },
+    { table: "recurring_payment_instances", fields: "id,invoice_file_path,invoice_file_name,invoice_file_mime,invoice_gdrive_file_id", folder: "Püsimaksed", path: "invoice_file_path", id: "invoice_gdrive_file_id", name: "invoice_file_name", mime: "invoice_file_mime" },
+  ];
+  for (const source of sources) {
+    const parentId = params.subfolders[source.folder];
+    if (!parentId) {
+      result.failed++;
+      result.errors.push(`${source.table}: Google Drive'i kaust ${source.folder} puudub`);
+      continue;
+    }
+    const { data, error } = await admin
+      .from(source.table)
+      .select(source.fields)
+      .eq("user_id", params.userId)
+      .eq("profile_id", params.profileId)
+      .not(source.path, "is", null);
+    if (error) {
+      result.failed++;
+      result.errors.push(`${source.table}: ${errorMessage(error)}`);
+      continue;
+    }
+    for (const row of (data ?? []) as Record<string, unknown>[]) {
+      await uploadRow({ table: source.table, row, pathCol: source.path, idCol: source.id, nameCol: source.name, mimeCol: source.mime, parentId });
+    }
+  }
+
+  const { data: agreements, error: agreementError } = await admin
+    .from("agreements")
+    .select("id,title,gdrive_folder_id")
+    .eq("user_id", params.userId)
+    .eq("profile_id", params.profileId);
+  if (agreementError) {
+    result.failed++;
+    result.errors.push(`agreement_attachments: ${errorMessage(agreementError)}`);
+    return result;
+  }
+  const agreementRows = (agreements ?? []) as Array<{ id: string; title: string | null; gdrive_folder_id: string | null }>;
+  if (agreementRows.length > 0) {
+    const { data: attachments, error } = await admin
+      .from("agreement_attachments")
+      .select("id,agreement_id,file_path,file_name,file_mime,gdrive_file_id")
+      .eq("user_id", params.userId)
+      .in("agreement_id", agreementRows.map((row) => row.id));
+    if (error) {
+      result.failed++;
+      result.errors.push(`agreement_attachments: ${errorMessage(error)}`);
+    } else {
+      const root = params.subfolders["Lepingud"];
+      const folderCache = new Map<string, string>();
+      for (const agreement of agreementRows) if (agreement.gdrive_folder_id) folderCache.set(agreement.id, agreement.gdrive_folder_id);
+      for (const row of (attachments ?? []) as Record<string, unknown>[]) {
+        const agreement = agreementRows.find((item) => item.id === row.agreement_id);
+        if (!agreement || !root) { result.failed++; result.errors.push(`agreement_attachments#${String(row.id)}: lepingu kaust puudub`); continue; }
+        let parentId = folderCache.get(agreement.id);
+        if (!parentId) {
+          const folder = await findOrCreateFolder({ accessToken: params.accessToken, parentId: root, name: sanitizeFolderName(agreement.title || "Leping") });
+          parentId = folder.id;
+          folderCache.set(agreement.id, parentId);
+          await admin.from("agreements").update({ gdrive_folder_id: parentId }).eq("id", agreement.id);
+        }
+        await uploadRow({ table: "agreement_attachments", row, pathCol: "file_path", idCol: "gdrive_file_id", nameCol: "file_name", mimeCol: "file_mime", parentId });
+      }
+    }
+  }
+  return result;
+}
 
 /**
  * Full backup — writes every category's entries.json plus backup-info.json.
  */
 export const syncBackupAll = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input?: { lang?: BackupLang; profileId?: string | null }) => input ?? {})
+  .inputValidator((input: { lang?: BackupLang; profileId: string }) => input)
   .handler(async ({ data, context }) => {
     const { resolveProfileDriveTarget } = await import("./google-drive.server");
-    const conn = await resolveProfileDriveTarget(context.userId, data?.profileId ?? null);
+    const conn = await resolveProfileDriveTarget(context.userId, data.profileId);
     if (!conn) return { skipped: true as const, reason: "not_connected" };
     const lang: BackupLang = data?.lang === "en" ? "en" : "et";
     const format = await resolveConnectionBackupFormat(conn.connectionId);
     let entries = 0;
+    const excel: BackupPartResult = { requested: format !== "pdf_only", success: true, errors: [] };
+    const pdf: BackupPartResult = { requested: format !== "excel_only", success: true, errors: [] };
     for (const c of ALL_CATEGORIES) {
       const r = await writeCategoryBackup({
         userId: context.userId,
+        profileId: data.profileId,
         supabase: context.supabase,
         accessToken: conn.accessToken,
         rootId: conn.rootId,
@@ -841,10 +988,24 @@ export const syncBackupAll = createServerFn({ method: "POST" })
         format,
       });
       entries += r.count;
+      excel.errors.push(...r.excel.errors);
+      pdf.errors.push(...r.pdf.errors);
     }
-    const files = await countFilesForUser(context.supabase, context.userId);
-    await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files }, lang, format });
-    return { ok: true as const, entries, files };
+    const files = await countFilesForProfile(context.supabase, context.userId, data.profileId);
+    const info = await writeBackupInfo({ accessToken: conn.accessToken, rootId: conn.rootId, totals: { entries, files }, lang, format });
+    excel.errors.push(...info.excel.errors);
+    pdf.errors.push(...info.pdf.errors);
+    excel.success = !excel.requested || excel.errors.length === 0;
+    pdf.success = !pdf.requested || pdf.errors.length === 0;
+    const originalFiles = await syncAllOriginalFiles({
+      userId: context.userId,
+      profileId: data.profileId,
+      accessToken: conn.accessToken,
+      subfolders: conn.subfolders,
+      connectionId: conn.connectionId,
+    });
+    const ok = excel.success && pdf.success && originalFiles.failed === 0;
+    return { ok, entries, files, excel, pdf, originalFiles };
   });
 
 async function resolveConnectionBackupFormat(connectionId: string): Promise<BackupFormat> {
