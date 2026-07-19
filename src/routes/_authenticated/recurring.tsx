@@ -680,7 +680,7 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               filePath: fileInfo.path,
               fileName: fileInfo.name,
               mime: fileInfo.mime,
-              profileId: activeProfileId,
+              profileId: activeProfileId, auto: true,
             },
           });
         } catch (err) {
