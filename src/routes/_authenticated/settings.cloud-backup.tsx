@@ -18,6 +18,7 @@ import {
   syncBackupAll,
   currentBackupLang,
   setBackupFormat,
+  setAutoBackup,
   type BackupFormat,
 } from "@/lib/google-drive.functions";
 
@@ -46,7 +47,6 @@ type Provider = {
 function CloudBackupPage() {
   const { t } = useTranslation();
   const { activeProfileId, activeProfile } = useActiveProfile();
-  const [autoBackup, setAutoBackup] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [lastBackup, setLastBackup] = useState<{ at: string; entries: number; files: number } | null>(null);
@@ -76,6 +76,26 @@ function CloudBackupPage() {
       qc.invalidateQueries({ queryKey: ["google-drive-status"] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Salvestamine ebaõnnestus"),
+  });
+
+  const autoBackupMut = useMutation({
+    mutationFn: (enabled: boolean) => setAutoBackup({ data: { profileId: activeProfileId!, enabled } }),
+    onMutate: (enabled) => {
+      // Optimistic update so the switch feels instant.
+      qc.setQueryData(["google-drive-status", activeProfileId], (prev: unknown) => {
+        if (!prev || typeof prev !== "object") return prev;
+        const p = prev as { connected?: boolean };
+        if (!p.connected) return prev;
+        return { ...p, autoBackup: enabled };
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["google-drive-status"] });
+    },
+    onError: (e: unknown) => {
+      qc.invalidateQueries({ queryKey: ["google-drive-status"] });
+      toast.error(e instanceof Error ? e.message : "Salvestamine ebaõnnestus");
+    },
   });
 
   async function runFullBackup() {
@@ -157,6 +177,7 @@ function CloudBackupPage() {
   const gdriveConnected = gdriveStatus?.connected === true;
   const gdriveEmail = gdriveStatus?.connected ? gdriveStatus.email : undefined;
   const gdriveFolder = gdriveStatus?.connected ? gdriveStatus.folderName : undefined;
+  const autoBackup = gdriveStatus?.connected ? gdriveStatus.autoBackup !== false : false;
 
   const providers: Provider[] = [
     { id: "gdrive", name: "Google Drive", platform: t("cloudBackup.platform.androidIosWeb"), connected: gdriveConnected },
