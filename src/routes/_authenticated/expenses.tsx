@@ -112,7 +112,11 @@ function ExpensesPage() {
   );
   const availableCategories = useMemo(() => {
     const set = new Set<string>();
-    for (const r of data ?? []) set.add(r.category);
+    for (const r of data ?? []) {
+      // Radix Select disallows empty string values, so skip missing categories
+      // to prevent a runtime crash when a profile has expenses with null/"" category.
+      if (r.category && r.category.trim() !== "") set.add(r.category);
+    }
     return Array.from(set).sort();
   }, [data]);
   const income = filtered.filter((r) => r.type === "income").reduce((s, r) => s + Number(r.amount), 0);
