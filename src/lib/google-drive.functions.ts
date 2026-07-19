@@ -340,7 +340,9 @@ export const syncFileToGoogleDrive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: SyncInput & { auto?: boolean }) => input)
   .handler(async ({ data, context }) => {
+    const logCtx = `[gdrive.syncFile] table=${data.table} rec=${data.recordId} profile=${data.profileId ?? "null"} auto=${!!data.auto}`;
     if (data.auto && !(await isAutoBackupEnabled(context.userId, data.profileId ?? null))) {
+      console.log(`${logCtx} skipped=auto_backup_off`);
       return { skipped: true as const, reason: "auto_backup_off" as const };
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -359,11 +361,17 @@ export const syncFileToGoogleDrive = createServerFn({ method: "POST" })
       (ownRow as { user_id: string }).user_id !== context.userId ||
       (ownRow as { profile_id: string | null }).profile_id !== data.profileId
     ) {
+      console.error(
+        `${logCtx} ownership_mismatch found=${!!ownRow} rowProfile=${(ownRow as { profile_id?: string | null } | null)?.profile_id ?? "null"}`,
+      );
       throw new Error("Record not found");
     }
 
     const conn = await resolveProfileDriveTarget(context.userId, data.profileId ?? null);
-    if (!conn) return { skipped: true as const, reason: "not_connected" };
+    if (!conn) {
+      console.log(`${logCtx} skipped=not_connected`);
+      return { skipped: true as const, reason: "not_connected" };
+    }
 
     const folderName = FOLDER_KEY_TO_NAME[data.folderKey];
     const parentId = conn.subfolders[folderName];
@@ -384,6 +392,7 @@ export const syncFileToGoogleDrive = createServerFn({ method: "POST" })
       mime: data.mime,
       bytes,
     });
+    console.log(`${logCtx} uploaded=${uploaded.id} folder=${folderName}`);
 
     // Persist the drive file id on the record using the admin client to avoid
     // fighting the generated types for the new column.
