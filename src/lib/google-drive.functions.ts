@@ -338,8 +338,11 @@ interface SyncInput {
  */
 export const syncFileToGoogleDrive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: SyncInput) => input)
+  .inputValidator((input: SyncInput & { auto?: boolean }) => input)
   .handler(async ({ data, context }) => {
+    if (data.auto && !(await isAutoBackupEnabled(context.userId, data.profileId ?? null))) {
+      return { skipped: true as const, reason: "auto_backup_off" as const };
+    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { resolveProfileDriveTarget, uploadBytesToDriveFolder, FOLDER_KEY_TO_NAME } =
       await import("./google-drive.server");
