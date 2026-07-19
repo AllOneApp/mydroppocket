@@ -292,7 +292,11 @@ function CloudBackupPage() {
               <h2 className="text-lg font-semibold">{t("cloudBackup.autoTitle")}</h2>
               <p className="text-sm text-muted-foreground">{t("cloudBackup.autoDesc")}</p>
             </div>
-            <Switch checked={autoBackup} onCheckedChange={setAutoBackup} />
+            <Switch
+              checked={autoBackup}
+              disabled={!gdriveConnected || autoBackupMut.isPending}
+              onCheckedChange={(v) => autoBackupMut.mutate(!!v)}
+            />
           </div>
         </section>
 
