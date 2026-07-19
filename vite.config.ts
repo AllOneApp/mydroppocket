@@ -12,4 +12,16 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    // Force tslib to its ESM build so named helper imports like `__extends`
+    // resolve correctly under the Cloudflare Worker SSR ESM bundler.
+    // Without this, pdf-lib (which uses `import { __extends } from "tslib"`)
+    // fails at runtime with:
+    //   TypeError: Cannot destructure property '__extends' of '__toESM(...).default'
+    resolve: {
+      alias: {
+        tslib: "tslib/tslib.es6.js",
+      },
+    },
+  },
 });

@@ -155,7 +155,7 @@ function AgreementsPage() {
         const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
         if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid, profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
       }
-      try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang(), profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang(), profileId: activeProfileId, auto: true } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["agreements"], refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
@@ -603,7 +603,7 @@ function AgreementDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               console.warn("[gdrive] agreement attachments sync failed", err);
             }
             try {
-              await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang(), profileId: activeProfileId } });
+              await syncBackupCategory({ data: { category: "agreements", lang: currentBackupLang(), profileId: activeProfileId, auto: true } });
             } catch (err) {
               console.warn("[gdrive] backup sync failed", err);
             }

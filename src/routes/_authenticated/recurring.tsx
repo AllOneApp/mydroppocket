@@ -202,9 +202,9 @@ function RecurringPage() {
         label: `${rec.service_name} — ${formatCurrency(Number(inst.amount), inst.currency ?? "EUR")}`,
       });
       try {
-        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
-        await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId } });
-        await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId } });
+        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId, auto: true } });
+        await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId, auto: true } });
+        await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId, auto: true } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       try { await syncRecurringPayment({ data: { recurringId: rec.id } }); } catch (e) { console.warn("[gcal] recurring sync failed", e); }
     } catch (e) {
@@ -226,8 +226,8 @@ function RecurringPage() {
       }
       try { await removeCalendarSource({ data: { sourceType: "recurring", sourceId: r.id } }); } catch (e) { console.warn("[gcal] recurring remove failed", e); }
       try {
-        await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId } });
-        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
+        await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId, auto: true } });
+        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId, auto: true } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["recurring_payments"], refetchType: "active" }),
@@ -251,8 +251,8 @@ function RecurringPage() {
       if (inst.receipt_file_path) { try { await deleteFile(inst.receipt_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
       if (inst.invoice_file_path) { try { await deleteFile(inst.invoice_file_path); } catch (e) { console.warn("[storage] delete failed", e); } }
       try {
-        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId } });
-        if (opts.alsoExpense) await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId } });
+        await syncBackupCategory({ data: { category: "recurring_payment_instances", lang: currentBackupLang(), profileId: activeProfileId, auto: true } });
+        if (opts.alsoExpense) await syncBackupCategory({ data: { category: "expenses", lang: currentBackupLang(), profileId: activeProfileId, auto: true } });
       } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["recurring_instances"], refetchType: "active" }),
@@ -680,14 +680,14 @@ function RecurringDialog({ open, onOpenChange, row }: { open: boolean; onOpenCha
               filePath: fileInfo.path,
               fileName: fileInfo.name,
               mime: fileInfo.mime,
-              profileId: activeProfileId,
+              profileId: activeProfileId, auto: true,
             },
           });
         } catch (err) {
           console.warn("[gdrive] recurring sync failed", err);
         }
       }
-      try { await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "recurring_payments", lang: currentBackupLang(), profileId: activeProfileId, auto: true } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       if (recordId) {
         try { await syncRecurringPayment({ data: { recurringId: recordId } }); } catch (e) { console.warn("[gcal] recurring sync failed", e); }
       }

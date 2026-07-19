@@ -96,7 +96,7 @@ function WarrantiesPage() {
       const gdid = (r as unknown as { gdrive_file_id?: string | null }).gdrive_file_id;
       if (gdid) { try { await deleteGoogleDriveFile({ data: { fileId: gdid, profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] delete file failed", e); } }
       try { await removeCalendarSource({ data: { sourceType: "warranty", sourceId: r.id } }); } catch (e) { console.warn("[gcal] warranty remove failed", e); }
-      try { await syncBackupCategory({ data: { category: "warranties", lang: currentBackupLang(), profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "warranties", lang: currentBackupLang(), profileId: activeProfileId, auto: true } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["warranties"], refetchType: "active" }),
         qc.invalidateQueries({ queryKey: ["dashboard"], refetchType: "active" }),
@@ -401,14 +401,14 @@ function WarrantyDialog({ open, onOpenChange, row, onSaved }: { open: boolean; o
               filePath: fileInfo.path,
               fileName: fileInfo.name,
               mime: fileInfo.mime,
-              profileId: activeProfileId,
+              profileId: activeProfileId, auto: true,
             },
           });
         } catch (err) {
           console.warn("[gdrive] warranty sync failed", err);
         }
       }
-      try { await syncBackupCategory({ data: { category: "warranties", lang: currentBackupLang(), profileId: activeProfileId } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
+      try { await syncBackupCategory({ data: { category: "warranties", lang: currentBackupLang(), profileId: activeProfileId, auto: true } }); } catch (e) { console.warn("[gdrive] backup sync failed", e); }
       if (recordId) {
         try { await syncWarranty({ data: { warrantyId: recordId } }); } catch (e) { console.warn("[gcal] warranty sync failed", e); }
       }
